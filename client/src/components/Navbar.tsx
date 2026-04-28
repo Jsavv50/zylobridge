@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Menu, X, ChevronDown, Briefcase, LayoutDashboard, Shield, MessageSquare, ShieldCheck, ShoppingBag, Phone } from "lucide-react";
+import { Menu, X, ChevronDown, Briefcase, LayoutDashboard, Shield, MessageSquare, ShieldCheck, ShoppingBag } from "lucide-react";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { trpc } from "@/lib/trpc";
 
@@ -187,18 +187,12 @@ export default function Navbar() {
               </>
             ) : (
               <>
-                <Link href="/login/phone">
-                  <Button variant="ghost" size="sm" className="text-gray-300 hover:text-white hover:bg-white/5">
-                    <Phone className="h-3.5 w-3.5 mr-1.5" />
-                    Phone Login
-                  </Button>
-                </Link>
-                <a href={getLoginUrl()}>
+                <Link href="/sign-in">
                   <Button variant="ghost" size="sm" className="text-gray-300 hover:text-white hover:bg-white/5">
                     Sign In
                   </Button>
-                </a>
-                <a href={getLoginUrl()}>
+                </Link>
+                <Link href="/sign-in">
                   <Button
                     size="sm"
                     className="font-semibold"
@@ -209,7 +203,7 @@ export default function Navbar() {
                   >
                     Get Started
                   </Button>
-                </a>
+                </Link>
               </>
             )}
           </div>
@@ -285,14 +279,14 @@ export default function Navbar() {
               </>
             ) : (
               <>
-                <a href={getLoginUrl()} className="block">
+                <Link href="/sign-in" className="block" onClick={() => setMobileOpen(false)}>
                   <Button variant="outline" size="sm" className="w-full border-white/10 text-gray-300">Sign In</Button>
-                </a>
-                <a href={getLoginUrl()} className="block">
+                </Link>
+                <Link href="/sign-in" className="block" onClick={() => setMobileOpen(false)}>
                   <Button size="sm" className="w-full" style={{ background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)" }}>
                     Get Started
                   </Button>
-                </a>
+                </Link>
               </>
             )}
           </div>

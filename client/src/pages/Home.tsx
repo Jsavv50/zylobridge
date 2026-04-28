@@ -431,7 +431,7 @@ export default function Home() {
                 </>
               ) : (
                 <>
-                  <a href={getLoginUrl()}>
+                  <Link href="/sign-in">
                     <Button
                       size="lg"
                       className="font-bold px-8 h-12 text-base"
@@ -439,7 +439,7 @@ export default function Home() {
                     >
                       Post a Job <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
-                  </a>
+                  </Link>
                   <Link href="/marketplace">
                     <Button
                       variant="outline"
@@ -623,7 +623,7 @@ export default function Home() {
             Join thousands of contractors and professionals already building the future with ZYLOBRIDGE.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <a href={getLoginUrl()}>
+            <Link href="/sign-in">
               <Button
                 size="lg"
                 className="font-bold px-10 h-12"
@@ -631,8 +631,8 @@ export default function Home() {
               >
                 Join as Contractor <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
-            </a>
-            <a href={getLoginUrl()}>
+            </Link>
+            <Link href="/sign-in">
               <Button
                 variant="outline"
                 size="lg"
@@ -640,7 +640,7 @@ export default function Home() {
               >
                 Join as Professional
               </Button>
-            </a>
+            </Link>
           </div>
         </div>
       </section>

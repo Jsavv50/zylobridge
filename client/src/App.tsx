@@ -17,6 +17,7 @@ import HowItWorks from "./pages/HowItWorks";
 import Shop from "./pages/Shop";
 import Orders from "./pages/Orders";
 import PhoneLogin from "./pages/PhoneLogin";
+import SignIn from "./pages/SignIn";
 
 function Router() {
   return (
@@ -35,6 +36,7 @@ function Router() {
       <Route path="/orders" component={Orders} />
       <Route path="/orders/verify" component={Orders} />
       <Route path="/login/phone" component={PhoneLogin} />
+      <Route path="/sign-in" component={SignIn} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
