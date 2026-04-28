@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { VOCATION_KEYS, VOCATION_LABELS, VOCATION_ICONS, type VocationKey } from "@shared/vocations";
+import EscrowPaymentModal from "@/components/EscrowPaymentModal";
+import { VerificationBadge } from "@/components/VerificationBadge";
 
 const STATUS_STYLES: Record<string, string> = {
   open: "bg-emerald-500/15 text-emerald-400 border-emerald-500/25",
@@ -37,6 +39,7 @@ export default function ClientDashboard() {
   const [activeTab, setActiveTab] = useState<"overview" | "jobs" | "applications">("overview");
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
   const [postJobOpen, setPostJobOpen] = useState(false);
+  const [escrowTarget, setEscrowTarget] = useState<{ jobId: number; professionalId: number; bidAmount: number; jobTitle: string } | null>(null);
 
   // Post job form state
   const [form, setForm] = useState({
@@ -86,11 +89,20 @@ export default function ClientDashboard() {
   });
 
   const { mutate: updateAppStatus } = trpc.applications.updateStatus.useMutation({
-    onSuccess: () => {
+    onSuccess: (_, vars) => {
       toast.success("Application status updated.");
       utils.applications.listForJob.invalidate({ jobId: selectedJobId! });
+      utils.jobs.myJobs.invalidate();
     },
     onError: (err) => toast.error(err.message),
+  });
+
+  const { mutate: startConversation } = trpc.messaging.getOrCreateConversation.useMutation({
+    onSuccess: (conv: { id: number }) => {
+      toast.success("Conversation started!");
+      window.location.href = `/messages?conv=${conv.id}`;
+    },
+    onError: (err: { message: string }) => toast.error(err.message),
   });
 
   if (!isAuthenticated) {
@@ -432,21 +444,37 @@ export default function ClientDashboard() {
                         </div>
                       </div>
                       <p className="text-sm text-gray-400 leading-relaxed mb-4">{app.coverLetter}</p>
-                      {app.status === "pending" && (
-                        <div className="flex gap-2">
-                          <Button size="sm"
-                            onClick={() => updateAppStatus({ id: app.id, status: "accepted" })}
-                            className="text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white border-0">
-                            <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
-                            Accept
-                          </Button>
-                          <Button size="sm" variant="ghost"
-                            onClick={() => updateAppStatus({ id: app.id, status: "rejected" })}
-                            className="text-xs text-red-400 hover:text-red-300 border border-red-500/20 hover:border-red-500/40">
-                            Reject
-                          </Button>
-                        </div>
-                      )}
+                      <div className="flex gap-2 flex-wrap">
+                        {app.status === "pending" && (
+                          <>
+                            <Button size="sm"
+                              onClick={() => updateAppStatus({ id: app.id, status: "accepted" })}
+                              className="text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white border-0">
+                              <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
+                              Accept
+                            </Button>
+                            <Button size="sm" variant="ghost"
+                              onClick={() => updateAppStatus({ id: app.id, status: "rejected" })}
+                              className="text-xs text-red-400 hover:text-red-300 border border-red-500/20 hover:border-red-500/40">
+                              Reject
+                            </Button>
+                          </>
+                        )}
+                        {app.status === "accepted" && (
+                          <>
+                            <Button size="sm" variant="ghost"
+                              onClick={() => setEscrowTarget({ jobId: selectedJobId!, professionalId: app.professionalId, bidAmount: Number(app.bidAmount), jobTitle: myJobs?.find(j => j.id === selectedJobId)?.title ?? "Job" })}
+                              className="text-xs text-violet-400 hover:text-violet-300 border border-violet-500/20">
+                              <DollarSign className="h-3.5 w-3.5 mr-1" /> Fund Escrow
+                            </Button>
+                            <Button size="sm" variant="ghost"
+                              onClick={() => startConversation({ otherUserId: app.professionalId, jobId: selectedJobId! })}
+                              className="text-xs text-cyan-400 hover:text-cyan-300 border border-cyan-500/20">
+                              Message Pro
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -464,6 +492,18 @@ export default function ClientDashboard() {
           </div>
         )}
       </div>
+
+      {/* Escrow Payment Modal */}
+      {escrowTarget && (
+        <EscrowPaymentModal
+          open={!!escrowTarget}
+          jobId={escrowTarget.jobId}
+          professionalId={escrowTarget.professionalId}
+          bidAmount={escrowTarget.bidAmount}
+          jobTitle={escrowTarget.jobTitle}
+          onClose={() => setEscrowTarget(null)}
+        />
+      )}
     </div>
   );
 }

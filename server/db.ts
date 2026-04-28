@@ -1,4 +1,4 @@
-import { and, desc, eq, like, gte, lte, sql } from "drizzle-orm";
+import { and, or, desc, asc, eq, like, gte, lte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser,
@@ -11,6 +11,14 @@ import {
   InsertApplication,
   InsertProfile,
   InsertReview,
+  conversations,
+  messages,
+  escrowPayments,
+  verificationRequests,
+  InsertEscrowPayment,
+  InsertVerificationRequest,
+  EscrowPayment,
+  VerificationRequest,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -303,4 +311,106 @@ export async function getAdminStats() {
     verifiedUsers: Number(verifiedRows[0]?.count ?? 0),
     totalReviews: Number(reviewRows[0]?.count ?? 0),
   };
+}
+
+// ─── Conversations & Messages ─────────────────────────────────────────────────
+export async function getOrCreateConversation(jobId: number, clientId: number, professionalId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  const existing = await db.select().from(conversations).where(
+    and(eq(conversations.jobId, jobId), eq(conversations.clientId, clientId), eq(conversations.professionalId, professionalId))
+  ).limit(1);
+  if (existing[0]) return existing[0];
+  const [result] = await db.insert(conversations).values({ jobId, clientId, professionalId, lastMessageAt: new Date() });
+  const id = (result as { insertId: number }).insertId;
+  return { id, jobId, clientId, professionalId, lastMessageAt: new Date(), createdAt: new Date() };
+}
+
+export async function getConversationsByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(conversations).where(
+    or(eq(conversations.clientId, userId), eq(conversations.professionalId, userId))
+  ).orderBy(desc(conversations.lastMessageAt));
+}
+
+export async function getMessagesByConversationId(conversationId: number, limit = 50) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(messages).where(eq(messages.conversationId, conversationId)).orderBy(asc(messages.createdAt)).limit(limit);
+}
+
+export async function getUnreadMessageCount(userId: number) {
+  const db = await getDb();
+  if (!db) return 0;
+  const userConvs = await db.select().from(conversations).where(
+    or(eq(conversations.clientId, userId), eq(conversations.professionalId, userId))
+  );
+  if (!userConvs.length) return 0;
+  const convIds = userConvs.map(c => c.id);
+  let count = 0;
+  for (const cid of convIds) {
+    const unread = await db.select().from(messages).where(
+      and(eq(messages.conversationId, cid), eq(messages.isRead, false))
+    );
+    const conv = userConvs.find(c => c.id === cid)!;
+    const unreadFromOthers = unread.filter(m => m.senderId !== userId);
+    count += unreadFromOthers.length;
+  }
+  return count;
+}
+
+// ─── Escrow Payments ──────────────────────────────────────────────────────────
+export async function createEscrowPayment(data: InsertEscrowPayment) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  const [result] = await db.insert(escrowPayments).values(data);
+  const id = (result as { insertId: number }).insertId;
+  return { ...data, id };
+}
+
+export async function getEscrowByJobId(jobId: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(escrowPayments).where(eq(escrowPayments.jobId, jobId)).limit(1);
+  return result[0] ?? null;
+}
+
+export async function updateEscrowStatus(id: number, status: EscrowPayment["status"], extra?: Partial<EscrowPayment>) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.update(escrowPayments).set({ status, ...extra }).where(eq(escrowPayments.id, id));
+}
+
+export async function getAllEscrowPayments() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(escrowPayments).orderBy(desc(escrowPayments.createdAt));
+}
+
+// ─── Verification Requests ────────────────────────────────────────────────────
+export async function createVerificationRequest(data: InsertVerificationRequest) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  const [result] = await db.insert(verificationRequests).values(data);
+  const id = (result as { insertId: number }).insertId;
+  return { ...data, id };
+}
+
+export async function getVerificationRequestsByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(verificationRequests).where(eq(verificationRequests.userId, userId)).orderBy(desc(verificationRequests.createdAt));
+}
+
+export async function getAllVerificationRequests() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(verificationRequests).orderBy(desc(verificationRequests.createdAt));
+}
+
+export async function updateVerificationRequest(id: number, data: Partial<VerificationRequest>) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.update(verificationRequests).set(data).where(eq(verificationRequests.id, id));
 }

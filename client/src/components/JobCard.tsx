@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import { MapPin, Clock, DollarSign, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { VOCATION_LABELS, VOCATION_ICONS, type VocationKey } from "@shared/vocations";
+import { VerificationBadge } from "@/components/VerificationBadge";
 
 interface JobCardProps {
   id: number;
@@ -13,6 +14,8 @@ interface JobCardProps {
   isUrgent: boolean;
   createdAt: Date | string;
   description?: string;
+  clientVerified?: boolean;
+  clientName?: string;
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -39,6 +42,8 @@ export default function JobCard({
   isUrgent,
   createdAt,
   description,
+  clientVerified,
+  clientName,
 }: JobCardProps) {
   const vKey = vocation as VocationKey;
   const icon = VOCATION_ICONS[vKey] ?? "🔧";
@@ -91,13 +96,22 @@ export default function JobCard({
             </span>
             <span className="flex items-center gap-1">
               <DollarSign className="h-3 w-3 text-gray-600" />
-              ${Number(budget).toLocaleString()}
+              ₦{Number(budget).toLocaleString()}
             </span>
             <span className="flex items-center gap-1 ml-auto">
               <Clock className="h-3 w-3 text-gray-600" />
               {timeAgo}
             </span>
           </div>
+
+          {/* Client info with verification badge */}
+          {clientName && (
+            <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-white/5">
+              <span className="text-xs text-gray-600">Posted by</span>
+              <span className="text-xs text-gray-400 font-medium">{clientName}</span>
+              {clientVerified && <VerificationBadge isVerified size="sm" />}
+            </div>
+          )}
         </div>
       </div>
     </Link>

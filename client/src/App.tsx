@@ -11,6 +11,8 @@ import Onboarding from "./pages/Onboarding";
 import ClientDashboard from "./pages/ClientDashboard";
 import ProfessionalDashboard from "./pages/ProfessionalDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
+import Messaging from "./pages/Messaging";
+import VerificationRequest from "./pages/VerificationRequest";
 
 function Router() {
   return (
@@ -22,6 +24,8 @@ function Router() {
       <Route path="/dashboard/contractor" component={ClientDashboard} />
       <Route path="/dashboard/professional" component={ProfessionalDashboard} />
       <Route path="/dashboard/admin" component={AdminDashboard} />
+      <Route path="/messages" component={Messaging} />
+      <Route path="/verification" component={VerificationRequest} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

@@ -11,7 +11,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Menu, X, ChevronDown, Briefcase, LayoutDashboard, Shield } from "lucide-react";
+import { Menu, X, ChevronDown, Briefcase, LayoutDashboard, Shield, MessageSquare, ShieldCheck } from "lucide-react";
+import { VerificationBadge } from "@/components/VerificationBadge";
 import { trpc } from "@/lib/trpc";
 
 const LOGO_URL = "/manus-storage/ZYLO_7d32e9f2.png";
@@ -31,6 +32,12 @@ export default function Navbar() {
   const isAdmin = user?.role === "admin";
   const isClient = user?.userType === "client";
   const isProfessional = user?.userType === "professional";
+
+  const { data: unreadData } = trpc.messaging.unreadCount.useQuery(undefined, {
+    enabled: isAuthenticated,
+    refetchInterval: 30000, // poll every 30s
+  });
+  const unreadCount = unreadData?.count ?? 0;
 
   const navLinks = [
     { href: "/marketplace", label: "Browse Jobs" },
@@ -132,12 +139,31 @@ export default function Navbar() {
                       <ChevronDown className="h-3.5 w-3.5 text-gray-500" />
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48 bg-[#131a26] border-white/10">
+                  <DropdownMenuContent align="end" className="w-52 bg-[#131a26] border-white/10">
+                    <div className="px-3 py-2 border-b border-white/10">
+                      <p className="text-xs text-gray-500">Signed in as</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <p className="text-sm font-medium text-white truncate">{user?.name}</p>
+                        <VerificationBadge isVerified={!!user?.isVerified} size="sm" />
+                      </div>
+                    </div>
                     <DropdownMenuItem asChild>
-                      <Link href="/profile" className="cursor-pointer text-gray-300 hover:text-white">
-                        My Profile
+                      <Link href="/messages" className="cursor-pointer text-gray-300 hover:text-white flex items-center gap-2 justify-between">
+                        <span className="flex items-center gap-2"><MessageSquare className="h-4 w-4" /> Messages</span>
+                        {unreadCount > 0 && (
+                          <span className="ml-auto bg-violet-600 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center">
+                            {unreadCount > 99 ? "99+" : unreadCount}
+                          </span>
+                        )}
                       </Link>
                     </DropdownMenuItem>
+                    {isProfessional && (
+                      <DropdownMenuItem asChild>
+                        <Link href="/verification" className="cursor-pointer text-gray-300 hover:text-white flex items-center gap-2">
+                          <ShieldCheck className="h-4 w-4" /> Get Verified
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuSeparator className="bg-white/10" />
                     <DropdownMenuItem
                       onClick={() => doLogout()}
@@ -216,6 +242,18 @@ export default function Navbar() {
                   <Link href="/dashboard/professional" onClick={() => setMobileOpen(false)}>
                     <Button variant="outline" size="sm" className="w-full border-white/10 text-gray-300">
                       Professional Dashboard
+                    </Button>
+                  </Link>
+                )}
+                <Link href="/messages" onClick={() => setMobileOpen(false)}>
+                  <Button variant="outline" size="sm" className="w-full border-white/10 text-gray-300">
+                    <MessageSquare className="h-4 w-4 mr-2" /> Messages
+                  </Button>
+                </Link>
+                {isProfessional && (
+                  <Link href="/verification" onClick={() => setMobileOpen(false)}>
+                    <Button variant="outline" size="sm" className="w-full border-emerald-500/30 text-emerald-400">
+                      <ShieldCheck className="h-4 w-4 mr-2" /> Get Verified
                     </Button>
                   </Link>
                 )}

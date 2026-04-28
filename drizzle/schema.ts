@@ -7,6 +7,7 @@ import {
   varchar,
   decimal,
   boolean,
+  bigint,
 } from "drizzle-orm/mysql-core";
 
 // ─── Users ───────────────────────────────────────────────────────────────────
@@ -24,7 +25,6 @@ export const users = mysqlTable("users", {
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
 });
-
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
@@ -59,7 +59,6 @@ export const profiles = mysqlTable("profiles", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
-
 export type Profile = typeof profiles.$inferSelect;
 export type InsertProfile = typeof profiles.$inferInsert;
 
@@ -94,7 +93,6 @@ export const jobs = mysqlTable("jobs", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
-
 export type Job = typeof jobs.$inferSelect;
 export type InsertJob = typeof jobs.$inferInsert;
 
@@ -111,7 +109,6 @@ export const applications = mysqlTable("applications", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
-
 export type Application = typeof applications.$inferSelect;
 export type InsertApplication = typeof applications.$inferInsert;
 
@@ -125,6 +122,87 @@ export const reviews = mysqlTable("reviews", {
   comment: text("comment"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
-
 export type Review = typeof reviews.$inferSelect;
 export type InsertReview = typeof reviews.$inferInsert;
+
+// ─── Conversations ────────────────────────────────────────────────────────────
+export const conversations = mysqlTable("conversations", {
+  id: int("id").autoincrement().primaryKey(),
+  jobId: int("jobId").notNull(),
+  clientId: int("clientId").notNull(),
+  professionalId: int("professionalId").notNull(),
+  lastMessageAt: timestamp("lastMessageAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type Conversation = typeof conversations.$inferSelect;
+export type InsertConversation = typeof conversations.$inferInsert;
+
+// ─── Messages ─────────────────────────────────────────────────────────────────
+export const messages = mysqlTable("messages", {
+  id: int("id").autoincrement().primaryKey(),
+  conversationId: int("conversationId").notNull(),
+  senderId: int("senderId").notNull(),
+  content: text("content").notNull(),
+  isRead: boolean("isRead").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type Message = typeof messages.$inferSelect;
+export type InsertMessage = typeof messages.$inferInsert;
+
+// ─── Escrow Payments ──────────────────────────────────────────────────────────
+export const escrowPayments = mysqlTable("escrow_payments", {
+  id: int("id").autoincrement().primaryKey(),
+  jobId: int("jobId").notNull(),
+  clientId: int("clientId").notNull(),
+  professionalId: int("professionalId").notNull(),
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  currency: varchar("currency", { length: 10 }).default("NGN").notNull(),
+  paymentMethod: mysqlEnum("paymentMethod", ["paystack", "bank_transfer"]).notNull(),
+  status: mysqlEnum("status", ["pending", "funded", "released", "refunded", "disputed"])
+    .default("pending")
+    .notNull(),
+  // Paystack fields
+  paystackReference: varchar("paystackReference", { length: 255 }),
+  paystackAccessCode: varchar("paystackAccessCode", { length: 255 }),
+  paystackAuthorizationUrl: text("paystackAuthorizationUrl"),
+  // Bank transfer fields
+  bankAccountNumber: varchar("bankAccountNumber", { length: 20 }),
+  bankAccountName: varchar("bankAccountName", { length: 255 }),
+  bankName: varchar("bankName", { length: 255 }),
+  transferProofUrl: text("transferProofUrl"),
+  transferProofKey: text("transferProofKey"),
+  adminConfirmedBy: int("adminConfirmedBy"),
+  // Timestamps
+  paidAt: timestamp("paidAt"),
+  releasedAt: timestamp("releasedAt"),
+  refundedAt: timestamp("refundedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type EscrowPayment = typeof escrowPayments.$inferSelect;
+export type InsertEscrowPayment = typeof escrowPayments.$inferInsert;
+
+// ─── Verification Requests ────────────────────────────────────────────────────
+export const verificationRequests = mysqlTable("verification_requests", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  documentType: mysqlEnum("documentType", [
+    "trade_licence",
+    "certification",
+    "government_id",
+    "insurance_certificate",
+    "guild_membership",
+  ]).notNull(),
+  documentUrl: text("documentUrl").notNull(),
+  documentKey: text("documentKey").notNull(),
+  status: mysqlEnum("status", ["pending", "approved", "rejected"])
+    .default("pending")
+    .notNull(),
+  adminNote: text("adminNote"),
+  reviewedAt: timestamp("reviewedAt"),
+  reviewedBy: int("reviewedBy"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type VerificationRequest = typeof verificationRequests.$inferSelect;
+export type InsertVerificationRequest = typeof verificationRequests.$inferInsert;

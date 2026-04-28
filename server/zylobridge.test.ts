@@ -244,3 +244,75 @@ describe("auth.setUserType", () => {
     await expect(caller.auth.setUserType({ userType: "client" })).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
 });
+
+// ── Messaging Tests ──────────────────────────────────────────────────────────
+describe("messaging.unreadCount", () => {
+  it("returns unread count for authenticated user", async () => {
+    const { ctx } = createClientCtx();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.messaging.unreadCount();
+    expect(result).toHaveProperty("count");
+    expect(typeof result.count).toBe("number");
+  });
+});
+
+describe("messaging.myConversations", () => {
+  it("returns conversations for authenticated user", async () => {
+    const { ctx } = createClientCtx();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.messaging.myConversations();
+    expect(Array.isArray(result)).toBe(true);
+  });
+});
+
+// ── Escrow Tests ──────────────────────────────────────────────────────────────
+describe("escrow.listBanks", () => {
+  it("returns bank list as public procedure", async () => {
+    const ctx = createUnauthCtx();
+    const caller = appRouter.createCaller(ctx);
+    // Should not throw (public procedure)
+    await expect(caller.escrow.listBanks()).resolves.toBeDefined();
+  });
+});
+
+describe("escrow.initBankTransfer RBAC", () => {
+  it("rejects professional trying to fund escrow", async () => {
+    const { ctx } = createProfessionalCtx();
+    const caller = appRouter.createCaller(ctx);
+    await expect(
+      caller.escrow.initBankTransfer({
+        jobId: 1,
+        professionalId: 2,
+        amount: 5000,
+        bankAccountNumber: "0123456789",
+        bankAccountName: "Test User",
+        bankName: "Zenith Bank",
+      })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+// ── Verification Tests ──────────────────────────────────────────────────────────────
+describe("verification.myRequests", () => {
+  it("returns verification requests for authenticated user", async () => {
+    const { ctx } = createProfessionalCtx();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.verification.myRequests();
+    expect(Array.isArray(result)).toBe(true);
+  });
+});
+
+describe("verification.adminList RBAC", () => {
+  it("rejects non-admin from listing verification requests", async () => {
+    const { ctx } = createProfessionalCtx();
+    const caller = appRouter.createCaller(ctx);
+    await expect(caller.verification.adminList()).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("allows admin to list verification requests", async () => {
+    const { ctx } = createAdminCtx();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.verification.adminList();
+    expect(Array.isArray(result)).toBe(true);
+  });
+});

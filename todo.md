@@ -71,3 +71,36 @@
 - [x] Verify admin routes are inaccessible to non-admins
 - [x] Mobile-first responsive check on all pages
 - [x] Save checkpoint
+
+## Phase 10: Real-Time Messaging
+- [x] Install socket.io (server) and socket.io-client (client)
+- [x] Create conversations table (jobId, clientId, professionalId, lastMessageAt)
+- [x] Create messages table (conversationId, senderId, content, isRead, createdAt)
+- [x] Register Socket.io server in server/_core/index.ts with JWT auth guard
+- [x] Build tRPC procedures: conversations.list, conversations.getMessages, conversations.create
+- [x] Build MessagingPage with conversation list sidebar and message thread view
+- [x] Real-time delivery: emit new_message event, update conversation list live
+- [x] Unread message badge in Navbar
+- [x] Wire messaging into contractor and professional dashboards
+
+## Phase 11: Escrow Payments (Paystack + Bank Transfer)
+- [x] Install paystack SDK or use Paystack REST API via fetch
+- [x] Create escrow_payments table (jobId, clientId, professionalId, amount, currency, status, paystackRef, bankTransferRef, accountNumber, bankName, accountName, paidAt, releasedAt, refundedAt)
+- [x] Paystack payment flow: initialize transaction → webhook verify → mark escrow funded
+- [x] Bank transfer flow: admin-generated virtual account or manual account details, client uploads proof, admin confirms
+- [x] Escrow release: contractor marks job complete → funds released to professional
+- [x] Escrow refund: job cancelled → funds returned to client
+- [x] Add PAYSTACK_SECRET_KEY to secrets
+- [x] Build PaymentModal component (choose Paystack card or bank transfer)
+- [x] Build EscrowStatusCard showing funded/released/refunded state
+- [x] Admin can view and manage all escrow transactions
+- [x] Wire payment into contractor dashboard (fund escrow after accepting application)
+
+## Phase 12: Professional Verification Badges
+- [x] Create verification_requests table (userId, documentType, documentUrl, status, adminNote, reviewedAt, reviewedBy)
+- [x] Build VerificationRequestForm: upload licence/cert document, select document type
+- [x] Store document in S3 via storagePut, save key in DB
+- [x] Admin dashboard: list pending verification requests, approve/reject with note
+- [x] On approval: set users.isVerified = true
+- [x] Display VerifiedBadge (shield-check icon) on professional profiles, job applications, and marketplace cards
+- [x] Notify professional via toast/notification on approval or rejection

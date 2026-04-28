@@ -4,6 +4,7 @@ import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { storagePut } from "./storage";
 import {
   upsertUser,
   getUserByOpenId,
@@ -31,7 +32,26 @@ import {
   createReview,
   getReviewsByRevieweeId,
   getAdminStats,
+  getOrCreateConversation,
+  getConversationsByUserId,
+  getMessagesByConversationId,
+  getUnreadMessageCount,
+  createEscrowPayment,
+  getEscrowByJobId,
+  updateEscrowStatus,
+  getAllEscrowPayments,
+  createVerificationRequest,
+  getVerificationRequestsByUserId,
+  getAllVerificationRequests,
+  updateVerificationRequest,
 } from "./db";
+import {
+  initializePaystackTransaction,
+  verifyPaystackTransaction,
+  listPaystackBanks,
+  resolveAccountNumber,
+  generatePaystackReference,
+} from "./paystack";
 
 // ── Admin guard ────────────────────────────────────────────────────────────────
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -282,6 +302,283 @@ export const appRouter = router({
       }),
   }),
 
+  // ── Messaging ─────────────────────────────────────────────────────────────
+  messaging: router({
+    getOrCreateConversation: protectedProcedure
+      .input(z.object({
+        jobId: z.number().int().positive(),
+        otherUserId: z.number().int().positive(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const job = await getJobById(input.jobId);
+        if (!job) throw new TRPCError({ code: "NOT_FOUND" });
+        const isClient = job.clientId === ctx.user.id;
+        const isProfessional = job.assignedProfessionalId === ctx.user.id || input.otherUserId === job.clientId;
+        const clientId = isClient ? ctx.user.id : input.otherUserId;
+        const professionalId = isClient ? input.otherUserId : ctx.user.id;
+        return getOrCreateConversation(input.jobId, clientId, professionalId);
+      }),
+
+    myConversations: protectedProcedure.query(async ({ ctx }) => {
+      return getConversationsByUserId(ctx.user.id);
+    }),
+
+    getMessages: protectedProcedure
+      .input(z.object({
+        conversationId: z.number().int().positive(),
+        limit: z.number().int().min(1).max(200).optional().default(50),
+      }))
+      .query(async ({ ctx, input }) => {
+        return getMessagesByConversationId(input.conversationId, input.limit);
+      }),
+
+    unreadCount: protectedProcedure.query(async ({ ctx }) => {
+      return { count: await getUnreadMessageCount(ctx.user.id) };
+    }),
+  }),
+
+  // ── Escrow Payments ───────────────────────────────────────────────────────
+  escrow: router({
+    // Initialize Paystack payment
+    initPaystack: protectedProcedure
+      .input(z.object({
+        jobId: z.number().int().positive(),
+        professionalId: z.number().int().positive(),
+        amount: z.number().positive(),
+        callbackUrl: z.string().url().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.userType !== "client" && ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Only contractors can fund escrow." });
+        }
+        if (!ctx.user.email) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Account email required for payment." });
+        }
+        const existing = await getEscrowByJobId(input.jobId);
+        if (existing && existing.status === "funded") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Escrow already funded for this job." });
+        }
+        const reference = generatePaystackReference("ZB-ESC");
+        const result = await initializePaystackTransaction({
+          email: ctx.user.email,
+          amount: input.amount,
+          reference,
+          metadata: { jobId: input.jobId, clientId: ctx.user.id, professionalId: input.professionalId },
+          callback_url: input.callbackUrl,
+        });
+        await createEscrowPayment({
+          jobId: input.jobId,
+          clientId: ctx.user.id,
+          professionalId: input.professionalId,
+          amount: String(input.amount),
+          currency: "NGN",
+          paymentMethod: "paystack",
+          status: "pending",
+          paystackReference: reference,
+          paystackAccessCode: result.access_code,
+          paystackAuthorizationUrl: result.authorization_url,
+        });
+        return { authorizationUrl: result.authorization_url, reference };
+      }),
+
+    // Verify Paystack payment after redirect
+    verifyPaystack: protectedProcedure
+      .input(z.object({ reference: z.string().min(1).max(255) }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await verifyPaystackTransaction(input.reference);
+        if (result.status !== "success") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Payment not successful." });
+        }
+        // Find escrow by reference
+        const allEscrow = await getAllEscrowPayments();
+        const escrow = allEscrow.find((e) => e.paystackReference === input.reference);
+        if (!escrow) throw new TRPCError({ code: "NOT_FOUND", message: "Escrow record not found." });
+        await updateEscrowStatus(escrow.id, "funded", { paidAt: new Date() });
+        return { success: true, amount: result.amount / 100 };
+      }),
+
+    // Initiate bank transfer escrow
+    initBankTransfer: protectedProcedure
+      .input(z.object({
+        jobId: z.number().int().positive(),
+        professionalId: z.number().int().positive(),
+        amount: z.number().positive(),
+        bankAccountNumber: z.string().min(10).max(20),
+        bankAccountName: z.string().min(2).max(255),
+        bankName: z.string().min(2).max(255),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.userType !== "client" && ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Only contractors can fund escrow." });
+        }
+        const existing = await getEscrowByJobId(input.jobId);
+        if (existing && existing.status === "funded") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Escrow already funded." });
+        }
+        await createEscrowPayment({
+          jobId: input.jobId,
+          clientId: ctx.user.id,
+          professionalId: input.professionalId,
+          amount: String(input.amount),
+          currency: "NGN",
+          paymentMethod: "bank_transfer",
+          status: "pending",
+          bankAccountNumber: input.bankAccountNumber,
+          bankAccountName: input.bankAccountName,
+          bankName: input.bankName,
+        });
+        return {
+          success: true,
+          instructions: {
+            bankName: "Zenith Bank",
+            accountNumber: "1234567890",
+            accountName: "ZYLOBRIDGE ESCROW SERVICES LTD",
+            amount: input.amount,
+            narration: `ZYLOBRIDGE-JOB-${input.jobId}`,
+          },
+        };
+      }),
+
+    // Upload bank transfer proof
+    uploadTransferProof: protectedProcedure
+      .input(z.object({
+        jobId: z.number().int().positive(),
+        fileBase64: z.string().min(1),
+        fileName: z.string().min(1).max(255),
+        mimeType: z.string().min(1).max(100),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const escrow = await getEscrowByJobId(input.jobId);
+        if (!escrow) throw new TRPCError({ code: "NOT_FOUND" });
+        if (escrow.clientId !== ctx.user.id) throw new TRPCError({ code: "FORBIDDEN" });
+        const buffer = Buffer.from(input.fileBase64, "base64");
+        const key = `escrow-proofs/${ctx.user.id}-${input.jobId}-${Date.now()}-${input.fileName}`;
+        const { url } = await storagePut(key, buffer, input.mimeType);
+        await updateEscrowStatus(escrow.id, "pending", {
+          transferProofUrl: url,
+          transferProofKey: key,
+        });
+        return { success: true, url };
+      }),
+
+    // Get escrow for a job
+    getByJobId: protectedProcedure
+      .input(z.object({ jobId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const escrow = await getEscrowByJobId(input.jobId);
+        if (!escrow) return null;
+        if (escrow.clientId !== ctx.user.id && escrow.professionalId !== ctx.user.id && ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+        return escrow;
+      }),
+
+    // Release funds to professional (contractor confirms job done)
+    release: protectedProcedure
+      .input(z.object({ jobId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const escrow = await getEscrowByJobId(input.jobId);
+        if (!escrow) throw new TRPCError({ code: "NOT_FOUND" });
+        if (escrow.clientId !== ctx.user.id && ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+        if (escrow.status !== "funded") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Escrow is not in funded state." });
+        }
+        await updateEscrowStatus(escrow.id, "released", { releasedAt: new Date() });
+        await updateJob(input.jobId, { status: "completed" });
+        return { success: true };
+      }),
+
+    // Refund to client (job cancelled)
+    refund: adminProcedure
+      .input(z.object({ jobId: z.number().int().positive() }))
+      .mutation(async ({ input }) => {
+        const escrow = await getEscrowByJobId(input.jobId);
+        if (!escrow) throw new TRPCError({ code: "NOT_FOUND" });
+        await updateEscrowStatus(escrow.id, "refunded", { refundedAt: new Date() });
+        return { success: true };
+      }),
+
+    // List banks (for bank transfer form)
+    listBanks: publicProcedure.query(async () => {
+      return listPaystackBanks("nigeria");
+    }),
+
+    // Resolve account number
+    resolveAccount: protectedProcedure
+      .input(z.object({
+        accountNumber: z.string().min(10).max(20),
+        bankCode: z.string().min(1).max(20),
+      }))
+      .mutation(async ({ input }) => {
+        return resolveAccountNumber({ account_number: input.accountNumber, bank_code: input.bankCode });
+      }),
+  }),
+
+  // ── Verification ──────────────────────────────────────────────────────────
+  verification: router({
+    submit: protectedProcedure
+      .input(z.object({
+        documentType: z.enum(["trade_licence", "certification", "government_id", "insurance_certificate", "guild_membership"]),
+        fileBase64: z.string().min(1),
+        fileName: z.string().min(1).max(255),
+        mimeType: z.string().min(1).max(100),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const buffer = Buffer.from(input.fileBase64, "base64");
+        const key = `verification-docs/${ctx.user.id}-${Date.now()}-${input.fileName}`;
+        const { url } = await storagePut(key, buffer, input.mimeType);
+        await createVerificationRequest({
+          userId: ctx.user.id,
+          documentType: input.documentType,
+          documentUrl: url,
+          documentKey: key,
+          status: "pending",
+        });
+        return { success: true };
+      }),
+
+    myRequests: protectedProcedure.query(async ({ ctx }) => {
+      return getVerificationRequestsByUserId(ctx.user.id);
+    }),
+
+    // Admin: list all pending
+    adminList: adminProcedure.query(async () => {
+      return getAllVerificationRequests();
+    }),
+
+    // Admin: approve or reject
+    adminReview: adminProcedure
+      .input(z.object({
+        requestId: z.number().int().positive(),
+        status: z.enum(["approved", "rejected"]),
+        adminNote: z.string().max(1000).trim().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const requests = await getAllVerificationRequests();
+        const req = requests.find((r) => r.id === input.requestId);
+        if (!req) throw new TRPCError({ code: "NOT_FOUND" });
+        await updateVerificationRequest(input.requestId, {
+          status: input.status,
+          adminNote: input.adminNote,
+          reviewedAt: new Date(),
+          reviewedBy: ctx.user.id,
+        });
+        if (input.status === "approved") {
+          // Mark user as verified in users table
+          const { getDb } = await import("./db");
+          const { users } = await import("../drizzle/schema");
+          const { eq } = await import("drizzle-orm");
+          const db = await getDb();
+          if (db) {
+            await db.update(users).set({ isVerified: true }).where(eq(users.id, req.userId));
+          }
+        }
+        return { success: true };
+      }),
+  }),
+
   // ── Admin ─────────────────────────────────────────────────────────────────
   admin: router({
     stats: adminProcedure.query(async () => {
@@ -313,6 +610,23 @@ export const appRouter = router({
       .input(z.object({ id: z.number().int().positive() }))
       .mutation(async ({ input }) => {
         await deleteJob(input.id);
+        return { success: true };
+      }),
+    listEscrow: adminProcedure.query(async () => {
+      return getAllEscrowPayments();
+    }),
+    confirmBankTransfer: adminProcedure
+      .input(z.object({ jobId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const escrow = await getEscrowByJobId(input.jobId);
+        if (!escrow) throw new TRPCError({ code: "NOT_FOUND" });
+        if (escrow.paymentMethod !== "bank_transfer") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Not a bank transfer escrow." });
+        }
+        await updateEscrowStatus(escrow.id, "funded", {
+          paidAt: new Date(),
+          adminConfirmedBy: ctx.user.id,
+        });
         return { success: true };
       }),
   }),

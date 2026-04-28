@@ -8,7 +8,8 @@ import { toast } from "sonner";
 import {
   Loader2, Users, Briefcase, Shield, BarChart3,
   CheckCircle, Clock, AlertTriangle, Trash2,
-  ChevronRight, Star, TrendingUp, Activity
+  ChevronRight, Star, TrendingUp, Activity,
+  ShieldCheck, CreditCard, Building2, CheckCircle2, XCircle, Eye
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { VOCATION_LABELS, type VocationKey } from "@shared/vocations";
@@ -29,7 +30,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 export default function AdminDashboard() {
   const { user, isAuthenticated } = useAuth();
-  const [activeTab, setActiveTab] = useState<"overview" | "users" | "jobs" | "analytics">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "users" | "jobs" | "escrow" | "verification" | "analytics">("overview");
   const utils = trpc.useUtils();
 
   const { data: adminStats, isLoading: statsLoading } = trpc.admin.stats.useQuery(undefined, {
@@ -40,6 +41,12 @@ export default function AdminDashboard() {
   });
   const { data: allJobs, isLoading: jobsLoading } = trpc.admin.listAllJobs.useQuery({ limit: 200 }, {
     enabled: !!user && user.role === "admin" && activeTab === "jobs",
+  });
+  const { data: allEscrow, isLoading: escrowLoading, refetch: refetchEscrow } = trpc.admin.listEscrow.useQuery(undefined, {
+    enabled: !!user && user.role === "admin" && activeTab === "escrow",
+  });
+  const { data: allVerifications, isLoading: verificationLoading, refetch: refetchVerifications } = trpc.verification.adminList.useQuery(undefined, {
+    enabled: !!user && user.role === "admin" && activeTab === "verification",
   });
 
   const { mutate: updateUserRole } = trpc.admin.updateUserRole.useMutation({
@@ -57,6 +64,15 @@ export default function AdminDashboard() {
       utils.admin.stats.invalidate();
     },
     onError: (err) => toast.error(err.message),
+  });
+
+  const { mutate: confirmBankTransfer } = trpc.admin.confirmBankTransfer.useMutation({
+    onSuccess: () => { toast.success("Bank transfer confirmed. Escrow funded."); refetchEscrow(); },
+    onError: (e) => toast.error(e.message),
+  });
+  const { mutate: reviewVerification } = trpc.verification.adminReview.useMutation({
+    onSuccess: () => { toast.success("Verification decision saved."); refetchVerifications(); utils.admin.stats.invalidate(); },
+    onError: (e) => toast.error(e.message),
   });
 
   const { mutate: updateJobStatus } = trpc.jobs.updateStatus.useMutation({
@@ -124,7 +140,7 @@ export default function AdminDashboard() {
 
         {/* Tabs */}
         <div className="flex gap-1 mb-6 bg-[#131a26] rounded-xl p-1 w-fit border border-white/5 flex-wrap">
-          {(["overview", "users", "jobs", "analytics"] as const).map((tab) => (
+          {(["overview", "users", "jobs", "escrow", "verification", "analytics"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -371,6 +387,156 @@ export default function AdminDashboard() {
               <div className="text-center py-20">
                 <Briefcase className="h-12 w-12 text-gray-700 mx-auto mb-4" />
                 <p className="text-gray-500">No jobs found.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Escrow Tab */}
+        {activeTab === "escrow" && (
+          <div>
+            {escrowLoading ? (
+              <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-violet-400" /></div>
+            ) : allEscrow && allEscrow.length > 0 ? (
+              <div className="rounded-xl border border-white/8 bg-[#131a26] overflow-hidden">
+                <div className="px-5 py-4 border-b border-white/5 flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-violet-400" />
+                  <h3 className="font-semibold text-white text-sm">Escrow Payments</h3>
+                  <span className="ml-auto text-xs text-gray-500">{allEscrow.length} records</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-white/5">
+                        <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-5 py-3">Job</th>
+                        <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-5 py-3">Amount</th>
+                        <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-5 py-3">Method</th>
+                        <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-5 py-3">Status</th>
+                        <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-5 py-3">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allEscrow.map((e: any) => (
+                        <tr key={e.id} className="border-b border-white/5 last:border-0 hover:bg-white/2 transition-colors">
+                          <td className="px-5 py-4">
+                            <p className="text-sm font-medium text-white">Job #{e.jobId}</p>
+                            <p className="text-xs text-gray-500">Client #{e.clientId} → Pro #{e.professionalId}</p>
+                          </td>
+                          <td className="px-5 py-4 text-sm font-semibold text-white">₦{Number(e.amount).toLocaleString()}</td>
+                          <td className="px-5 py-4">
+                            <span className="flex items-center gap-1.5 text-xs text-gray-400">
+                              {e.paymentMethod === "paystack" ? <CreditCard className="h-3.5 w-3.5 text-violet-400" /> : <Building2 className="h-3.5 w-3.5 text-cyan-400" />}
+                              {e.paymentMethod === "paystack" ? "Paystack" : "Bank Transfer"}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4">
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
+                              e.status === "funded" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/25" :
+                              e.status === "released" ? "bg-purple-500/15 text-purple-400 border-purple-500/25" :
+                              e.status === "refunded" ? "bg-blue-500/15 text-blue-400 border-blue-500/25" :
+                              "bg-amber-500/15 text-amber-400 border-amber-500/25"
+                            }`}>{e.status}</span>
+                          </td>
+                          <td className="px-5 py-4">
+                            {e.paymentMethod === "bank_transfer" && e.status === "pending" && (
+                              <div className="flex items-center gap-2">
+                                {e.transferProofUrl && (
+                                  <a href={e.transferProofUrl} target="_blank" rel="noopener noreferrer">
+                                    <Button size="sm" variant="ghost" className="h-7 text-xs text-cyan-400 border border-cyan-500/20">
+                                      <Eye className="h-3 w-3 mr-1" /> Proof
+                                    </Button>
+                                  </a>
+                                )}
+                                <Button
+                                  size="sm" variant="ghost"
+                                  onClick={() => { if (confirm("Confirm bank transfer received?")) confirmBankTransfer({ jobId: e.jobId }); }}
+                                  className="h-7 text-xs text-emerald-400 border border-emerald-500/20"
+                                >
+                                  <CheckCircle2 className="h-3 w-3 mr-1" /> Confirm
+                                </Button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-20">
+                <CreditCard className="h-12 w-12 text-gray-700 mx-auto mb-4" />
+                <p className="text-gray-500">No escrow records yet.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Verification Tab */}
+        {activeTab === "verification" && (
+          <div>
+            {verificationLoading ? (
+              <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-violet-400" /></div>
+            ) : allVerifications && allVerifications.length > 0 ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <ShieldCheck className="h-4 w-4 text-emerald-400" />
+                  <h3 className="font-semibold text-white text-sm">Verification Requests</h3>
+                  <span className="ml-auto text-xs text-gray-500">
+                    {allVerifications.filter((v: any) => v.status === "pending").length} pending
+                  </span>
+                </div>
+                {allVerifications.map((v: any) => (
+                  <div key={v.id} className="rounded-xl border border-white/8 bg-[#131a26] p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <p className="text-sm font-semibold text-white">User #{v.userId}</p>
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
+                            v.status === "approved" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/25" :
+                            v.status === "rejected" ? "bg-red-500/15 text-red-400 border-red-500/25" :
+                            "bg-amber-500/15 text-amber-400 border-amber-500/25"
+                          }`}>{v.status}</span>
+                        </div>
+                        <p className="text-xs text-gray-400 capitalize">{v.documentType.replace(/_/g, " ")}</p>
+                        <p className="text-xs text-gray-600 mt-1">{new Date(v.createdAt).toLocaleDateString()}</p>
+                        {v.adminNote && (
+                          <p className="text-xs text-gray-400 mt-2 bg-white/5 rounded-lg px-3 py-2">Note: {v.adminNote}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <a href={v.documentUrl} target="_blank" rel="noopener noreferrer">
+                          <Button size="sm" variant="ghost" className="h-8 text-xs text-cyan-400 border border-cyan-500/20">
+                            <Eye className="h-3 w-3 mr-1" /> View Doc
+                          </Button>
+                        </a>
+                        {v.status === "pending" && (
+                          <>
+                            <Button
+                              size="sm" variant="ghost"
+                              onClick={() => reviewVerification({ requestId: v.id, status: "approved" })}
+                              className="h-8 text-xs text-emerald-400 border border-emerald-500/20"
+                            >
+                              <CheckCircle2 className="h-3 w-3 mr-1" /> Approve
+                            </Button>
+                            <Button
+                              size="sm" variant="ghost"
+                              onClick={() => reviewVerification({ requestId: v.id, status: "rejected" })}
+                              className="h-8 text-xs text-red-400 border border-red-500/20"
+                            >
+                              <XCircle className="h-3 w-3 mr-1" /> Reject
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-20">
+                <ShieldCheck className="h-12 w-12 text-gray-700 mx-auto mb-4" />
+                <p className="text-gray-500">No verification requests yet.</p>
               </div>
             )}
           </div>

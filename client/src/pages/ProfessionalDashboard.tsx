@@ -15,6 +15,7 @@ import {
 import Navbar from "@/components/Navbar";
 import JobCard from "@/components/JobCard";
 import { VOCATION_KEYS, VOCATION_LABELS, type VocationKey } from "@shared/vocations";
+import { VerificationBadge } from "@/components/VerificationBadge";
 
 const APP_STATUS_STYLES: Record<string, string> = {
   pending: "bg-yellow-500/15 text-yellow-400 border-yellow-500/25",
@@ -119,7 +120,7 @@ export default function ProfessionalDashboard() {
             </h1>
             <p className="text-gray-500 text-sm mt-1">Welcome back, {user?.name}</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             {profile && (
               <span className={`text-xs font-medium px-3 py-1 rounded-full border ${
                 profile.isAvailable
@@ -129,6 +130,19 @@ export default function ProfessionalDashboard() {
                 {profile.isAvailable ? "Available" : "Unavailable"}
               </span>
             )}
+            <VerificationBadge isVerified={!!user?.isVerified} size="md" showLabel />
+            {!user?.isVerified && (
+              <Link href="/verification">
+                <Button size="sm" variant="outline" className="text-xs border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10">
+                  Get Verified
+                </Button>
+              </Link>
+            )}
+            <Link href="/messages">
+              <Button size="sm" variant="outline" className="text-xs border-white/10 text-gray-300">
+                Messages
+              </Button>
+            </Link>
           </div>
         </div>
 

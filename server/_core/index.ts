@@ -8,6 +8,7 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { registerSocketIO } from "../socket";
 import {
   helmetMiddleware,
   generalRateLimit,
@@ -60,6 +61,9 @@ async function startServer() {
       createContext,
     })
   );
+
+  // ── Socket.io real-time messaging ──────────────────────────────────────────
+  registerSocketIO(server);
 
   // ── Static / Vite ─────────────────────────────────────────────────────────
   if (process.env.NODE_ENV === "development") {
