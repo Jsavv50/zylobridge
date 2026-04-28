@@ -104,3 +104,7 @@
 - [x] On approval: set users.isVerified = true
 - [x] Display VerifiedBadge (shield-check icon) on professional profiles, job applications, and marketplace cards
 - [x] Notify professional via toast/notification on approval or rejection
+
+## Phase 13: How It Works Page
+- [x] Write comprehensive HowItWorks.tsx page covering all user roles and workflows
+- [x] Wire /how-it-works route in App.tsx
