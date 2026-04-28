@@ -59,6 +59,11 @@ import {
   incrementOtpAttempts,
   markOtpVerified,
   upsertUserByPhone,
+  createEmailOtp,
+  getLatestEmailOtp,
+  incrementEmailOtpAttempts,
+  markEmailOtpVerified,
+  upsertUserByEmail,
 } from "./db";
 import {
   initializePaystackTransaction,
@@ -748,6 +753,43 @@ export const appRouter = router({
   }),
 
   // ── Phone Auth ───────────────────────────────────────────────────────────
+  emailAuth: router({
+    sendOtp: publicProcedure
+      .input(z.object({
+        email: z.string().email("Invalid email address."),
+      }))
+      .mutation(async ({ input }) => {
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+        await createEmailOtp(input.email, otp, expiresAt);
+        // In production, send via Resend/Nodemailer. OTP logged server-side only.
+        console.log(`[EmailAuth][DEV] OTP for ${input.email}: ${otp}`);
+        return { success: true, message: "OTP sent to your email address." };
+      }),
+    verifyOtp: publicProcedure
+      .input(z.object({
+        email: z.string().email("Invalid email address."),
+        otp: z.string().length(6).regex(/^\d{6}$/, "OTP must be 6 digits."),
+        name: z.string().min(2).max(100).trim().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const record = await getLatestEmailOtp(input.email);
+        if (!record) throw new TRPCError({ code: "NOT_FOUND", message: "No OTP found. Request a new one." });
+        if (record.attempts >= 5) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many attempts. Request a new OTP." });
+        if (new Date() > record.expiresAt) throw new TRPCError({ code: "BAD_REQUEST", message: "OTP expired. Request a new one." });
+        await incrementEmailOtpAttempts(record.id);
+        if (record.otp !== input.otp) throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid OTP. Please try again." });
+        await markEmailOtpVerified(record.id);
+        const user = await upsertUserByEmail(input.email, input.name);
+        const { sdk } = await import("./_core/sdk");
+        const token = await sdk.createSessionToken(user!.openId, { name: user!.name ?? "" });
+        const { COOKIE_NAME: CNAME } = await import("../shared/const");
+        const cookieOpts = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(CNAME, token, { ...cookieOpts, maxAge: 365 * 24 * 60 * 60 * 1000 });
+        return { success: true, user: { id: user!.id, name: user!.name, email: user!.email, role: user!.role } };
+      }),
+  }),
+
   phoneAuth: router({
     sendOtp: publicProcedure
       .input(z.object({

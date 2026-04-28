@@ -22,6 +22,7 @@ import {
   products,
   orders,
   phoneOtps,
+  emailOtps,
   Product,
   Order,
   InsertOrder,
@@ -556,5 +557,65 @@ export async function upsertUserByPhone(phone: string, name?: string) {
     lastSignedIn: new Date(),
   });
   const newUser = await getUserByPhone(phone);
+  return newUser!;
+}
+
+// ─── Email OTPs ───────────────────────────────────────────────────────────────
+export async function createEmailOtp(email: string, otp: string, expiresAt: Date) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  // Invalidate old OTPs for this email
+  await db.delete(emailOtps).where(eq(emailOtps.email, email));
+  await db.insert(emailOtps).values({ email, otp, expiresAt, verified: false, attempts: 0 });
+}
+
+export async function getLatestEmailOtp(email: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(emailOtps)
+    .where(and(eq(emailOtps.email, email), eq(emailOtps.verified, false)))
+    .orderBy(desc(emailOtps.createdAt))
+    .limit(1);
+  return result[0];
+}
+
+export async function incrementEmailOtpAttempts(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(emailOtps).set({ attempts: sql`attempts + 1` }).where(eq(emailOtps.id, id));
+}
+
+export async function markEmailOtpVerified(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(emailOtps).set({ verified: true }).where(eq(emailOtps.id, id));
+}
+
+export async function getUserByEmail(email: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  return result[0];
+}
+
+export async function upsertUserByEmail(email: string, name?: string) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  const existing = await getUserByEmail(email);
+  if (existing) {
+    await db.update(users).set({ lastSignedIn: new Date() }).where(eq(users.email, email));
+    return existing;
+  }
+  // Create new user with email as openId (unique identifier)
+  const openId = `email:${email}`;
+  await db.insert(users).values({
+    openId,
+    email,
+    name: name ?? null,
+    loginMethod: "email",
+    role: "user",
+    lastSignedIn: new Date(),
+  });
+  const newUser = await getUserByEmail(email);
   return newUser!;
 }

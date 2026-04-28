@@ -247,6 +247,19 @@ export const orders = mysqlTable("orders", {
 export type Order = typeof orders.$inferSelect;
 export type InsertOrder = typeof orders.$inferInsert;
 
+// ─── Email OTPs ──────────────────────────────────────────────────────────────
+export const emailOtps = mysqlTable("email_otps", {
+  id: int("id").autoincrement().primaryKey(),
+  email: varchar("email", { length: 320 }).notNull(),
+  otp: varchar("otp", { length: 8 }).notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  verified: boolean("verified").default(false).notNull(),
+  attempts: int("attempts").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type EmailOtp = typeof emailOtps.$inferSelect;
+export type InsertEmailOtp = typeof emailOtps.$inferInsert;
+
 // ─── Phone OTPs ───────────────────────────────────────────────────────────────
 export const phoneOtps = mysqlTable("phone_otps", {
   id: int("id").autoincrement().primaryKey(),
