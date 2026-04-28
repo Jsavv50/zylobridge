@@ -131,7 +131,7 @@
 - [x] Wire /auth/phone route in App.tsx
 
 ## Phase 17: Sign In / Get Started Page
-- [ ] Remove phone login button from Navbar
-- [ ] Build dedicated /sign-in page with OAuth login + phone OTP as active options
-- [ ] Update all login CTAs (hero, CTA section, etc.) to point to /sign-in
-- [ ] Wire /sign-in route in App.tsx
+- [x] Remove phone login button from Navbar
+- [x] Build dedicated /sign-in page with OAuth login + phone OTP as active options
+- [x] Update all login CTAs (hero, CTA section, etc.) to point to /sign-in
+- [x] Wire /sign-in route in App.tsx
