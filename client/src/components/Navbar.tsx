@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Menu, X, ChevronDown, Briefcase, LayoutDashboard, Shield, MessageSquare, ShieldCheck } from "lucide-react";
+import { Menu, X, ChevronDown, Briefcase, LayoutDashboard, Shield, MessageSquare, ShieldCheck, ShoppingBag, Phone } from "lucide-react";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { trpc } from "@/lib/trpc";
 
@@ -41,6 +41,7 @@ export default function Navbar() {
 
   const navLinks = [
     { href: "/marketplace", label: "Browse Jobs" },
+    { href: "/shop", label: "Shop" },
     { href: "/how-it-works", label: "How It Works" },
   ];
 
@@ -164,6 +165,16 @@ export default function Navbar() {
                         </Link>
                       </DropdownMenuItem>
                     )}
+                    <DropdownMenuItem asChild>
+                      <Link href="/shop" className="cursor-pointer text-gray-300 hover:text-white flex items-center gap-2">
+                        <ShoppingBag className="h-4 w-4" /> Shop
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/orders" className="cursor-pointer text-gray-300 hover:text-white flex items-center gap-2">
+                        <ShoppingBag className="h-4 w-4" /> My Orders
+                      </Link>
+                    </DropdownMenuItem>
                     <DropdownMenuSeparator className="bg-white/10" />
                     <DropdownMenuItem
                       onClick={() => doLogout()}
@@ -176,6 +187,12 @@ export default function Navbar() {
               </>
             ) : (
               <>
+                <Link href="/login/phone">
+                  <Button variant="ghost" size="sm" className="text-gray-300 hover:text-white hover:bg-white/5">
+                    <Phone className="h-3.5 w-3.5 mr-1.5" />
+                    Phone Login
+                  </Button>
+                </Link>
                 <a href={getLoginUrl()}>
                   <Button variant="ghost" size="sm" className="text-gray-300 hover:text-white hover:bg-white/5">
                     Sign In

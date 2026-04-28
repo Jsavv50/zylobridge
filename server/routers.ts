@@ -44,6 +44,21 @@ import {
   getVerificationRequestsByUserId,
   getAllVerificationRequests,
   updateVerificationRequest,
+  listProducts,
+  getProductById,
+  createProduct,
+  updateProduct,
+  deleteProduct,
+  createOrder,
+  getOrderByReference,
+  getOrdersByUserId,
+  updateOrder,
+  getAllOrders,
+  createPhoneOtp,
+  getLatestPhoneOtp,
+  incrementOtpAttempts,
+  markOtpVerified,
+  upsertUserByPhone,
 } from "./db";
 import {
   initializePaystackTransaction,
@@ -628,6 +643,145 @@ export const appRouter = router({
           adminConfirmedBy: ctx.user.id,
         });
         return { success: true };
+      }),
+  }),
+  // ── Products ──────────────────────────────────────────────────────────────
+  products: router({
+    list: publicProcedure
+      .input(z.object({ activeOnly: z.boolean().optional().default(true) }))
+      .query(async ({ input }) => listProducts(input.activeOnly)),
+    getById: publicProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const product = await getProductById(input.id);
+        if (!product) throw new TRPCError({ code: "NOT_FOUND", message: "Product not found." });
+        return product;
+      }),
+    create: adminProcedure
+      .input(z.object({
+        name: z.string().min(2).max(255).trim(),
+        description: z.string().min(5).trim(),
+        price: z.number().positive(),
+        currency: z.string().max(10).default("NGN"),
+        imageUrl: z.string().url().optional(),
+        category: z.string().max(100).optional(),
+        stock: z.number().int().default(-1),
+      }))
+      .mutation(async ({ input }) => {
+        return createProduct({ ...input, price: String(input.price) });
+      }),
+    update: adminProcedure
+      .input(z.object({
+        id: z.number().int().positive(),
+        name: z.string().min(2).max(255).trim().optional(),
+        description: z.string().min(5).trim().optional(),
+        price: z.number().positive().optional(),
+        isActive: z.boolean().optional(),
+        stock: z.number().int().optional(),
+        category: z.string().max(100).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, price, ...rest } = input;
+        await updateProduct(id, { ...rest, ...(price !== undefined ? { price: String(price) } : {}) });
+        return { success: true };
+      }),
+    delete: adminProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ input }) => {
+        await deleteProduct(input.id);
+        return { success: true };
+      }),
+  }),
+
+  // ── Orders ────────────────────────────────────────────────────────────────
+  orders: router({
+    initiate: protectedProcedure
+      .input(z.object({
+        productId: z.number().int().positive(),
+        quantity: z.number().int().positive().default(1),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const product = await getProductById(input.productId);
+        if (!product || !product.isActive) throw new TRPCError({ code: "NOT_FOUND", message: "Product not found." });
+        if (product.stock !== -1 && product.stock < input.quantity) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Insufficient stock." });
+        }
+        const amount = Number(product.price) * input.quantity;
+        const reference = generatePaystackReference("ZB-SHOP");
+        const email = ctx.user.email ?? `user${ctx.user.id}@zylobridge.app`;
+        const paystackResult = await initializePaystackTransaction({
+          email,
+          amount,
+          reference,
+          metadata: { productId: input.productId, userId: ctx.user.id, quantity: input.quantity },
+          callback_url: `${process.env.APP_URL ?? "https://zylomarket.manus.space"}/orders/verify?ref=${reference}`,
+        });
+        await createOrder({
+          userId: ctx.user.id,
+          productId: input.productId,
+          quantity: input.quantity,
+          amount: String(amount),
+          currency: product.currency,
+          status: "pending",
+          paystackReference: reference,
+          paystackAccessCode: paystackResult.access_code,
+          paystackAuthorizationUrl: paystackResult.authorization_url,
+        });
+        return { reference, authorizationUrl: paystackResult.authorization_url, accessCode: paystackResult.access_code };
+      }),
+    verify: protectedProcedure
+      .input(z.object({ reference: z.string().min(1) }))
+      .mutation(async ({ input }) => {
+        const order = await getOrderByReference(input.reference);
+        if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Order not found." });
+        if (order.status === "paid") return { success: true, status: "paid" as const };
+        const result = await verifyPaystackTransaction(input.reference);
+        if (result.status === "success") {
+          await updateOrder(order.id!, { status: "paid", paidAt: new Date() });
+          return { success: true, status: "paid" as const };
+        }
+        await updateOrder(order.id!, { status: "failed" });
+        return { success: false, status: "failed" as const };
+      }),
+    myOrders: protectedProcedure.query(async ({ ctx }) => getOrdersByUserId(ctx.user.id)),
+    all: adminProcedure.query(async () => getAllOrders()),
+  }),
+
+  // ── Phone Auth ───────────────────────────────────────────────────────────
+  phoneAuth: router({
+    sendOtp: publicProcedure
+      .input(z.object({
+        phone: z.string().regex(/^\+?[1-9]\d{7,14}$/, "Invalid phone number format."),
+      }))
+      .mutation(async ({ input }) => {
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+        await createPhoneOtp(input.phone, otp, expiresAt);
+        // In production, integrate Termii/Twilio here. OTP is logged server-side only.
+        console.log(`[PhoneAuth][DEV] OTP for ${input.phone}: ${otp}`);
+        return { success: true, message: "OTP sent to your phone number." };
+      }),
+    verifyOtp: publicProcedure
+      .input(z.object({
+        phone: z.string().regex(/^\+?[1-9]\d{7,14}$/, "Invalid phone number format."),
+        otp: z.string().length(6).regex(/^\d{6}$/, "OTP must be 6 digits."),
+        name: z.string().min(2).max(100).trim().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const record = await getLatestPhoneOtp(input.phone);
+        if (!record) throw new TRPCError({ code: "NOT_FOUND", message: "No OTP found. Request a new one." });
+        if (record.attempts >= 5) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many attempts. Request a new OTP." });
+        if (new Date() > record.expiresAt) throw new TRPCError({ code: "BAD_REQUEST", message: "OTP expired. Request a new one." });
+        await incrementOtpAttempts(record.id);
+        if (record.otp !== input.otp) throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid OTP. Please try again." });
+        await markOtpVerified(record.id);
+        const user = await upsertUserByPhone(input.phone, input.name);
+        const { sdk } = await import("./_core/sdk");
+        const token = await sdk.createSessionToken(user.openId, { name: user.name ?? "" });
+        const { COOKIE_NAME: CNAME } = await import("../shared/const");
+        const cookieOpts = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(CNAME, token, { ...cookieOpts, maxAge: 365 * 24 * 60 * 60 * 1000 });
+        return { success: true, user: { id: user.id, name: user.name, phone: user.phone, role: user.role } };
       }),
   }),
 });

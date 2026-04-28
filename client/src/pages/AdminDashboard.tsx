@@ -30,7 +30,9 @@ const STATUS_LABELS: Record<string, string> = {
 
 export default function AdminDashboard() {
   const { user, isAuthenticated } = useAuth();
-  const [activeTab, setActiveTab] = useState<"overview" | "users" | "jobs" | "escrow" | "verification" | "analytics">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "users" | "jobs" | "escrow" | "verification" | "analytics" | "products" | "orders">("overview");
+  const [showProductForm, setShowProductForm] = useState(false);
+  const [productForm, setProductForm] = useState({ name: "", description: "", price: "", currency: "NGN", category: "", stock: "-1" });
   const utils = trpc.useUtils();
 
   const { data: adminStats, isLoading: statsLoading } = trpc.admin.stats.useQuery(undefined, {
@@ -47,6 +49,25 @@ export default function AdminDashboard() {
   });
   const { data: allVerifications, isLoading: verificationLoading, refetch: refetchVerifications } = trpc.verification.adminList.useQuery(undefined, {
     enabled: !!user && user.role === "admin" && activeTab === "verification",
+  });
+  const { data: allProducts, isLoading: productsLoading, refetch: refetchProducts } = trpc.products.list.useQuery({ activeOnly: false }, {
+    enabled: !!user && user.role === "admin" && activeTab === "products",
+  });
+  const { data: allOrders, isLoading: ordersLoading } = trpc.orders.all.useQuery(undefined, {
+    enabled: !!user && user.role === "admin" && activeTab === "orders",
+  });
+
+  const createProductMutation = trpc.products.create.useMutation({
+    onSuccess: () => { toast.success("Product created."); refetchProducts(); setShowProductForm(false); setProductForm({ name: "", description: "", price: "", currency: "NGN", category: "", stock: "-1" }); },
+    onError: (err) => toast.error(err.message),
+  });
+  const toggleProductMutation = trpc.products.update.useMutation({
+    onSuccess: () => { toast.success("Product updated."); refetchProducts(); },
+    onError: (err) => toast.error(err.message),
+  });
+  const deleteProductMutation = trpc.products.delete.useMutation({
+    onSuccess: () => { toast.success("Product deleted."); refetchProducts(); },
+    onError: (err) => toast.error(err.message),
   });
 
   const { mutate: updateUserRole } = trpc.admin.updateUserRole.useMutation({
@@ -140,7 +161,7 @@ export default function AdminDashboard() {
 
         {/* Tabs */}
         <div className="flex gap-1 mb-6 bg-[#131a26] rounded-xl p-1 w-fit border border-white/5 flex-wrap">
-          {(["overview", "users", "jobs", "escrow", "verification", "analytics"] as const).map((tab) => (
+          {(["overview", "users", "jobs", "escrow", "verification", "products", "orders", "analytics"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -627,6 +648,143 @@ export default function AdminDashboard() {
                 </div>
               </>
             ) : null}
+          </div>
+        )}
+
+        {/* Products Tab */}
+        {activeTab === "products" && (
+          <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-bold text-white">Product Management</h2>
+                  <Button onClick={() => setShowProductForm(!showProductForm)} className="bg-violet-600 hover:bg-violet-700 text-white">
+                    {showProductForm ? "Cancel" : "+ Add Product"}
+                  </Button>
+                </div>
+                {showProductForm && (
+                  <div className="bg-[#131a26] border border-white/10 rounded-xl p-6 space-y-4">
+                    <h3 className="font-semibold text-white">New Product</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs text-gray-400 mb-1 block">Name *</label>
+                        <input className="w-full bg-[#0d1117] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500" value={productForm.name} onChange={e => setProductForm(p => ({...p, name: e.target.value}))} placeholder="Product name" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-400 mb-1 block">Price (NGN) *</label>
+                        <input type="number" className="w-full bg-[#0d1117] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500" value={productForm.price} onChange={e => setProductForm(p => ({...p, price: e.target.value}))} placeholder="5000" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-400 mb-1 block">Category</label>
+                        <input className="w-full bg-[#0d1117] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500" value={productForm.category} onChange={e => setProductForm(p => ({...p, category: e.target.value}))} placeholder="e.g. Safety Gear" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-400 mb-1 block">Stock (-1 = unlimited)</label>
+                        <input type="number" className="w-full bg-[#0d1117] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500" value={productForm.stock} onChange={e => setProductForm(p => ({...p, stock: e.target.value}))} />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="text-xs text-gray-400 mb-1 block">Description *</label>
+                        <textarea rows={3} className="w-full bg-[#0d1117] border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-violet-500 resize-none" value={productForm.description} onChange={e => setProductForm(p => ({...p, description: e.target.value}))} placeholder="Describe the product..." />
+                      </div>
+                    </div>
+                    <Button className="bg-violet-600 hover:bg-violet-700 text-white" disabled={createProductMutation.isPending} onClick={() => {
+                      if (!productForm.name || !productForm.price || !productForm.description) { toast.error("Name, price, and description are required."); return; }
+                      createProductMutation.mutate({ name: productForm.name, description: productForm.description, price: Number(productForm.price), currency: "NGN", category: productForm.category || undefined, stock: Number(productForm.stock) });
+                    }}>
+                      {createProductMutation.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Creating...</> : "Create Product"}
+                    </Button>
+                  </div>
+                )}
+                {productsLoading ? (
+                  <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-violet-400" /></div>
+                ) : !allProducts || allProducts.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500">No products yet. Add one above.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-white/10 text-gray-400">
+                          <th className="text-left py-3 px-4">Product</th>
+                          <th className="text-left py-3 px-4">Category</th>
+                          <th className="text-right py-3 px-4">Price</th>
+                          <th className="text-center py-3 px-4">Stock</th>
+                          <th className="text-center py-3 px-4">Status</th>
+                          <th className="text-center py-3 px-4">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {allProducts.map((p) => (
+                          <tr key={p.id} className="border-b border-white/5 hover:bg-white/2">
+                            <td className="py-3 px-4">
+                              <div className="font-medium text-white">{p.name}</div>
+                              <div className="text-xs text-gray-500 truncate max-w-[200px]">{p.description}</div>
+                            </td>
+                            <td className="py-3 px-4 text-gray-400">{p.category ?? "—"}</td>
+                            <td className="py-3 px-4 text-right font-semibold text-violet-400">₦{Number(p.price).toLocaleString()}</td>
+                            <td className="py-3 px-4 text-center text-gray-300">{p.stock === -1 ? "∞" : p.stock}</td>
+                            <td className="py-3 px-4 text-center">
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${p.isActive ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/25" : "bg-red-500/15 text-red-400 border-red-500/25"}`}>
+                                {p.isActive ? "Active" : "Inactive"}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <div className="flex items-center justify-center gap-2">
+                                <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => toggleProductMutation.mutate({ id: p.id, isActive: !p.isActive })}>
+                                  {p.isActive ? "Deactivate" : "Activate"}
+                                </Button>
+                                <Button size="sm" variant="ghost" className="text-red-400 hover:text-red-300 text-xs h-7" onClick={() => { if (confirm(`Delete "${p.name}"?`)) deleteProductMutation.mutate({ id: p.id }); }}>
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+          </div>
+        )}
+        {/* Orders Tab */}
+        {activeTab === "orders" && (
+          <div className="space-y-6">
+                <h2 className="text-xl font-bold text-white">All Orders</h2>
+                {ordersLoading ? (
+                  <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-violet-400" /></div>
+                ) : !allOrders || allOrders.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500">No orders yet.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-white/10 text-gray-400">
+                          <th className="text-left py-3 px-4">Order ID</th>
+                          <th className="text-left py-3 px-4">User</th>
+                          <th className="text-left py-3 px-4">Product</th>
+                          <th className="text-right py-3 px-4">Amount</th>
+                          <th className="text-center py-3 px-4">Status</th>
+                          <th className="text-left py-3 px-4">Date</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {allOrders.map((o) => (
+                          <tr key={o.id} className="border-b border-white/5 hover:bg-white/2">
+                            <td className="py-3 px-4 text-gray-400 font-mono text-xs">#{o.id}</td>
+                            <td className="py-3 px-4 text-gray-300">User #{o.userId}</td>
+                            <td className="py-3 px-4 text-gray-300">Product #{o.productId} × {o.quantity}</td>
+                            <td className="py-3 px-4 text-right font-semibold text-violet-400">₦{Number(o.amount).toLocaleString()}</td>
+                            <td className="py-3 px-4 text-center">
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
+                                o.status === "paid" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/25" :
+                                o.status === "failed" ? "bg-red-500/15 text-red-400 border-red-500/25" :
+                                "bg-amber-500/15 text-amber-400 border-amber-500/25"
+                              }`}>{o.status}</span>
+                            </td>
+                            <td className="py-3 px-4 text-gray-500 text-xs">{new Date(o.createdAt).toLocaleDateString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
           </div>
         )}
       </div>

@@ -108,3 +108,24 @@
 ## Phase 13: How It Works Page
 - [x] Write comprehensive HowItWorks.tsx page covering all user roles and workflows
 - [x] Wire /how-it-works route in App.tsx
+
+## Phase 14: Paystack Product Purchases
+- [x] Create products table (name, description, price, currency, imageUrl, category, isActive)
+- [x] Create orders table (userId, productId, amount, currency, status, paystackReference, paidAt)
+- [x] Apply DB migration for products and orders tables
+- [x] Add product query helpers to db.ts
+- [x] Add tRPC procedures: products.list, products.getById, orders.initiate, orders.verify, orders.myOrders
+- [x] Build Products/Shop page with product cards and Paystack checkout
+- [x] Build Order Confirmation page and order history in user dashboard
+- [x] Add Paystack webhook handler for automatic order confirmation
+- [x] Wire /shop and /orders routes in App.tsx
+
+## Phase 15: Phone Number Sign-Up / Login
+- [x] Create phone_otps table (phone, otp, expiresAt, verified)
+- [x] Apply DB migration for phone_otps table
+- [x] Add server-side OTP generation and verification procedures
+- [x] Integrate SMS OTP delivery (Termii or Paystack SMS or mock for dev)
+- [x] Build PhoneAuth page with phone input + OTP verification step
+- [x] Link phone auth to existing user account (upsert by phone)
+- [x] Add "Sign in with Phone" button to the login flow
+- [x] Wire /auth/phone route in App.tsx

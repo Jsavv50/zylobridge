@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE `phone_otps` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`phone` varchar(20) NOT NULL,\n\t`otp` varchar(6) NOT NULL,\n\t`expiresAt` timestamp NOT NULL,\n\t`verified` boolean NOT NULL DEFAULT false,\n\t`attempts` int NOT NULL DEFAULT 0,\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\tCONSTRAINT `phone_otps_id` PRIMARY KEY(`id`)\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway06.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3EVFk3R5wosGZuM.85f2208ca0c1 --database WUXYqZoD8HhXP72aQb3fGa --execute CREATE TABLE `phone_otps` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`phone` varchar(20) NOT NULL,\n\t`otp` varchar(6) NOT NULL,\n\t`expiresAt` timestamp NOT NULL,\n\t`verified` boolean NOT NULL DEFAULT false,\n\t`attempts` int NOT NULL DEFAULT 0,\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\tCONSTRAINT `phone_otps_id` PRIMARY KEY(`id`)\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 106
+}

@@ -19,6 +19,7 @@ export const users = mysqlTable("users", {
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
   userType: mysqlEnum("userType", ["client", "professional", "unset"]).default("unset").notNull(),
+  phone: varchar("phone", { length: 20 }),
   avatarUrl: text("avatarUrl"),
   isVerified: boolean("isVerified").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -206,3 +207,55 @@ export const verificationRequests = mysqlTable("verification_requests", {
 });
 export type VerificationRequest = typeof verificationRequests.$inferSelect;
 export type InsertVerificationRequest = typeof verificationRequests.$inferInsert;
+
+// ─── Products ─────────────────────────────────────────────────────────────────
+export const products = mysqlTable("products", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description").notNull(),
+  price: decimal("price", { precision: 12, scale: 2 }).notNull(),
+  currency: varchar("currency", { length: 10 }).default("NGN").notNull(),
+  imageUrl: text("imageUrl"),
+  imageKey: text("imageKey"),
+  category: varchar("category", { length: 100 }),
+  stock: int("stock").default(-1).notNull(), // -1 = unlimited
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type Product = typeof products.$inferSelect;
+export type InsertProduct = typeof products.$inferInsert;
+
+// ─── Orders ───────────────────────────────────────────────────────────────────
+export const orders = mysqlTable("orders", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  productId: int("productId").notNull(),
+  quantity: int("quantity").default(1).notNull(),
+  amount: decimal("amount", { precision: 12, scale: 2 }).notNull(),
+  currency: varchar("currency", { length: 10 }).default("NGN").notNull(),
+  status: mysqlEnum("status", ["pending", "paid", "failed", "refunded"])
+    .default("pending")
+    .notNull(),
+  paystackReference: varchar("paystackReference", { length: 255 }),
+  paystackAccessCode: varchar("paystackAccessCode", { length: 255 }),
+  paystackAuthorizationUrl: text("paystackAuthorizationUrl"),
+  paidAt: timestamp("paidAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type Order = typeof orders.$inferSelect;
+export type InsertOrder = typeof orders.$inferInsert;
+
+// ─── Phone OTPs ───────────────────────────────────────────────────────────────
+export const phoneOtps = mysqlTable("phone_otps", {
+  id: int("id").autoincrement().primaryKey(),
+  phone: varchar("phone", { length: 20 }).notNull(),
+  otp: varchar("otp", { length: 6 }).notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  verified: boolean("verified").default(false).notNull(),
+  attempts: int("attempts").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type PhoneOtp = typeof phoneOtps.$inferSelect;
+export type InsertPhoneOtp = typeof phoneOtps.$inferInsert;

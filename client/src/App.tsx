@@ -14,6 +14,9 @@ import AdminDashboard from "./pages/AdminDashboard";
 import Messaging from "./pages/Messaging";
 import VerificationRequest from "./pages/VerificationRequest";
 import HowItWorks from "./pages/HowItWorks";
+import Shop from "./pages/Shop";
+import Orders from "./pages/Orders";
+import PhoneLogin from "./pages/PhoneLogin";
 
 function Router() {
   return (
@@ -28,6 +31,10 @@ function Router() {
       <Route path="/messages" component={Messaging} />
       <Route path="/verification" component={VerificationRequest} />
       <Route path="/how-it-works" component={HowItWorks} />
+      <Route path="/shop" component={Shop} />
+      <Route path="/orders" component={Orders} />
+      <Route path="/orders/verify" component={Orders} />
+      <Route path="/login/phone" component={PhoneLogin} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

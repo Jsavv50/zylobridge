@@ -19,6 +19,13 @@ import {
   InsertVerificationRequest,
   EscrowPayment,
   VerificationRequest,
+  products,
+  orders,
+  phoneOtps,
+  Product,
+  Order,
+  InsertOrder,
+  InsertProduct,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -413,4 +420,141 @@ export async function updateVerificationRequest(id: number, data: Partial<Verifi
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");
   await db.update(verificationRequests).set(data).where(eq(verificationRequests.id, id));
+}
+
+// ─── Products ─────────────────────────────────────────────────────────────────
+export async function listProducts(activeOnly = true) {
+  const db = await getDb();
+  if (!db) return [];
+  const q = db.select().from(products).orderBy(desc(products.createdAt));
+  if (activeOnly) return db.select().from(products).where(eq(products.isActive, true)).orderBy(desc(products.createdAt));
+  return q;
+}
+
+export async function getProductById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(products).where(eq(products.id, id)).limit(1);
+  return result[0];
+}
+
+export async function createProduct(data: InsertProduct) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  const [result] = await db.insert(products).values(data);
+  const id = (result as { insertId: number }).insertId;
+  return { ...data, id };
+}
+
+export async function updateProduct(id: number, data: Partial<InsertProduct>) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.update(products).set(data).where(eq(products.id, id));
+}
+
+export async function deleteProduct(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(products).where(eq(products.id, id));
+}
+
+// ─── Orders ───────────────────────────────────────────────────────────────────
+export async function createOrder(data: InsertOrder) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  const [result] = await db.insert(orders).values(data);
+  const id = (result as { insertId: number }).insertId;
+  return { ...data, id };
+}
+
+export async function getOrderById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
+  return result[0];
+}
+
+export async function getOrderByReference(ref: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(orders).where(eq(orders.paystackReference, ref)).limit(1);
+  return result[0];
+}
+
+export async function getOrdersByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(orders).where(eq(orders.userId, userId)).orderBy(desc(orders.createdAt));
+}
+
+export async function updateOrder(id: number, data: Partial<Order>) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.update(orders).set(data).where(eq(orders.id, id));
+}
+
+export async function getAllOrders() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(orders).orderBy(desc(orders.createdAt));
+}
+
+// ─── Phone OTPs ───────────────────────────────────────────────────────────────
+export async function createPhoneOtp(phone: string, otp: string, expiresAt: Date) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  // Invalidate old OTPs for this phone
+  await db.delete(phoneOtps).where(eq(phoneOtps.phone, phone));
+  await db.insert(phoneOtps).values({ phone, otp, expiresAt, verified: false, attempts: 0 });
+}
+
+export async function getLatestPhoneOtp(phone: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(phoneOtps)
+    .where(and(eq(phoneOtps.phone, phone), eq(phoneOtps.verified, false)))
+    .orderBy(desc(phoneOtps.createdAt))
+    .limit(1);
+  return result[0];
+}
+
+export async function incrementOtpAttempts(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(phoneOtps).set({ attempts: sql`attempts + 1` }).where(eq(phoneOtps.id, id));
+}
+
+export async function markOtpVerified(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(phoneOtps).set({ verified: true }).where(eq(phoneOtps.id, id));
+}
+
+export async function getUserByPhone(phone: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.phone, phone)).limit(1);
+  return result[0];
+}
+
+export async function upsertUserByPhone(phone: string, name?: string) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  const existing = await getUserByPhone(phone);
+  if (existing) {
+    await db.update(users).set({ lastSignedIn: new Date() }).where(eq(users.phone, phone));
+    return existing;
+  }
+  // Create new user with phone as openId (unique identifier)
+  const openId = `phone:${phone}`;
+  await db.insert(users).values({
+    openId,
+    phone,
+    name: name ?? null,
+    loginMethod: "phone",
+    role: "user",
+    lastSignedIn: new Date(),
+  });
+  const newUser = await getUserByPhone(phone);
+  return newUser!;
 }

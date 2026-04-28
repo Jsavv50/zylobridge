@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE `orders` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`userId` int NOT NULL,\n\t`productId` int NOT NULL,\n\t`quantity` int NOT NULL DEFAULT 1,\n\t`amount` decimal(12,2) NOT NULL,\n\t`currency` varchar(10) NOT NULL DEFAULT 'NGN',\n\t`status` enum('pending','paid','failed','refunded') NOT NULL DEFAULT 'pending',\n\t`paystackReference` varchar(255),\n\t`paystackAccessCode` varchar(255),\n\t`paystackAuthorizationUrl` text,\n\t`paidAt` timestamp,\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\t`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n\tCONSTRAINT `orders_id` PRIMARY KEY(`id`)\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway06.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3EVFk3R5wosGZuM.85f2208ca0c1 --database WUXYqZoD8HhXP72aQb3fGa --execute CREATE TABLE `orders` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`userId` int NOT NULL,\n\t`productId` int NOT NULL,\n\t`quantity` int NOT NULL DEFAULT 1,\n\t`amount` decimal(12,2) NOT NULL,\n\t`currency` varchar(10) NOT NULL DEFAULT 'NGN',\n\t`status` enum('pending','paid','failed','refunded') NOT NULL DEFAULT 'pending',\n\t`paystackReference` varchar(255),\n\t`paystackAccessCode` varchar(255),\n\t`paystackAuthorizationUrl` text,\n\t`paidAt` timestamp,\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\t`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n\tCONSTRAINT `orders_id` PRIMARY KEY(`id`)\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 216
+}
