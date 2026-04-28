@@ -752,7 +752,7 @@ export const appRouter = router({
     all: adminProcedure.query(async () => getAllOrders()),
   }),
 
-  // ── Phone Auth ───────────────────────────────────────────────────────────
+   // ── Email Auth ─────────────────────────────────────────────────────
   emailAuth: router({
     sendOtp: publicProcedure
       .input(z.object({
@@ -762,8 +762,17 @@ export const appRouter = router({
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
         await createEmailOtp(input.email, otp, expiresAt);
-        // In production, send via Resend/Nodemailer. OTP logged server-side only.
-        console.log(`[EmailAuth][DEV] OTP for ${input.email}: ${otp}`);
+        // Send OTP via Resend transactional email
+        try {
+          const { sendOtpEmail } = await import("./email");
+          await sendOtpEmail(input.email, otp);
+        } catch (emailErr) {
+          console.error("[EmailAuth] Resend delivery failed:", emailErr);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "We could not send the OTP email. Please try again in a moment.",
+          });
+        }
         return { success: true, message: "OTP sent to your email address." };
       }),
     verifyOtp: publicProcedure

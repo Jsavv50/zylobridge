@@ -135,3 +135,10 @@
 - [x] Build dedicated /sign-in page with OAuth login + phone OTP as active options
 - [x] Update all login CTAs (hero, CTA section, etc.) to point to /sign-in
 - [x] Wire /sign-in route in App.tsx
+
+## Phase 19: Resend Email Integration
+- [x] Add RESEND_API_KEY secret
+- [x] Install resend SDK
+- [x] Build server/email.ts with sendOtpEmail helper using branded ZYLOBRIDGE template
+- [x] Wire sendOtpEmail into emailAuth.sendOtp procedure
+- [x] Test full email OTP delivery flow (28/28 tests passing)
