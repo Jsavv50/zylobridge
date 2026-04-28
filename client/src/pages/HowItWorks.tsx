@@ -110,7 +110,7 @@ const professionalSteps: Step[] = [
     title: "Get Verified",
     description: "Upload a licence or certification document to earn the Verified badge.",
     detail:
-      "Navigate to 'Get Verified' in the navigation menu. Upload a clear image or PDF of your trade licence, professional certificate, or government-issued credential. The ZYLOBRIDGE admin team reviews submissions within 24–48 hours. On approval, a blue shield-check badge appears on your profile, all your applications, and your job cards — signalling trust to contractors.",
+      "Navigate to 'Get Verified' in the navigation menu. Upload a clear image or PDF of your trade licence, professional certificate, or government-issued credential. ZYLOBRIDGE reviews submissions within 24–48 hours. On approval, a blue shield-check badge appears on your profile, all your applications, and your job cards — signalling trust to contractors.",
   },
   {
     icon: Search,
@@ -135,42 +135,42 @@ const professionalSteps: Step[] = [
   },
 ];
 
-const adminCapabilities = [
+const platformAdvantages = [
   {
-    icon: Users,
-    title: "User Management",
+    icon: BadgeCheck,
+    title: "Verified Professionals Only",
     description:
-      "View all registered users, filter by role or vocation, promote users to admin, suspend accounts, and review account activity.",
-  },
-  {
-    icon: Briefcase,
-    title: "Job Oversight",
-    description:
-      "Monitor all posted jobs across every status — open, in-progress, completed, and cancelled. Remove jobs that violate platform policy.",
+      "Every professional with a Verified badge has submitted a trade licence or certified credential. You hire with confidence, not guesswork.",
   },
   {
     icon: Banknote,
-    title: "Escrow Management",
+    title: "Escrow-Protected Payments",
     description:
-      "View all escrow transactions, manually confirm bank transfers, process refunds for cancelled jobs, and audit payment history.",
+      "Funds are held securely in escrow until the job is marked complete. Neither party can walk away with money that hasn't been earned.",
   },
   {
-    icon: BadgeCheck,
-    title: "Verification Review",
+    icon: Zap,
+    title: "Real-Time Messaging",
     description:
-      "Review pending verification requests, inspect uploaded documents, approve or reject with an admin note, and revoke badges if necessary.",
+      "Communicate directly with contractors or professionals through the built-in messaging system — no third-party apps, no lost context.",
   },
   {
-    icon: BarChart3,
-    title: "Platform Analytics",
+    icon: Star,
+    title: "Ratings & Reviews",
     description:
-      "Access real-time statistics including total users, active jobs, application volumes, and platform health metrics from the admin dashboard.",
+      "Every completed job can be rated. Transparent reviews build reputation over time, rewarding quality work and honest contractors.",
   },
   {
-    icon: Lock,
-    title: "Role Control",
+    icon: Globe,
+    title: "12 Specialised Vocations",
     description:
-      "Promote or demote any user's role. The admin dashboard is completely hidden from contractor and professional accounts at both the route and API level.",
+      "From electricians and glaziers to HVAC technicians and crane operators — ZYLOBRIDGE covers the full spectrum of skilled trades.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Built-In Trust & Safety",
+    description:
+      "Rate limiting, encrypted sessions, input sanitisation, and HTTPS on every request. The platform is hardened so you can focus on the work.",
   },
 ];
 
@@ -203,7 +203,7 @@ const escrowFlow = [
   {
     step: "06",
     title: "Dispute Resolution",
-    body: "If either party raises a dispute, the ZYLOBRIDGE admin team mediates. The admin can release funds to the professional or issue a full refund to the contractor based on the evidence provided.",
+    body: "If either party raises a dispute, the ZYLOBRIDGE support team mediates. The team reviews evidence from both parties and decides whether to release funds to the professional or issue a full refund to the contractor.",
   },
 ];
 
@@ -216,17 +216,17 @@ const faqs: FaqItem[] = [
   {
     question: "How does the Verified badge work?",
     answer:
-      "Professionals can apply for verification by uploading a trade licence, professional certificate, or government-issued credential from the 'Get Verified' page. The ZYLOBRIDGE admin team reviews each submission within 24–48 hours. Approved professionals receive a blue shield-check badge on their profile, applications, and marketplace listings. The badge can be revoked if a document is found to be fraudulent.",
+      "Professionals can apply for verification by uploading a trade licence, professional certificate, or government-issued credential from the 'Get Verified' page. ZYLOBRIDGE reviews each submission within 24–48 hours. Approved professionals receive a blue shield-check badge on their profile, applications, and marketplace listings. The badge can be revoked if a document is found to be fraudulent.",
   },
   {
     question: "What payment methods are supported for escrow?",
     answer:
-      "ZYLOBRIDGE supports two escrow funding methods: Paystack (which accepts debit cards, credit cards, and bank transfers via their secure gateway) and direct bank transfer where you upload proof of payment for admin confirmation. All amounts are held in escrow until the job is marked complete.",
+      "ZYLOBRIDGE supports two escrow funding methods: Paystack (which accepts debit cards, credit cards, and bank transfers via their secure gateway) and direct bank transfer where you upload proof of payment for team confirmation. All amounts are held in escrow until the job is marked complete.",
   },
   {
     question: "What happens if I am not satisfied with the work?",
     answer:
-      "Do not mark the job complete if you are unsatisfied. Use the messaging system to communicate your concerns to the professional. If the issue cannot be resolved directly, contact ZYLOBRIDGE support to open a dispute. An admin will review the evidence from both parties and decide whether to release the escrow to the professional or issue a refund to the contractor.",
+      "Do not mark the job complete if you are unsatisfied. Use the messaging system to communicate your concerns to the professional. If the issue cannot be resolved directly, contact ZYLOBRIDGE support to open a dispute. The ZYLOBRIDGE team will review the evidence from both parties and decide whether to release the escrow to the professional or issue a refund to the contractor.",
   },
   {
     question: "Can a professional apply for multiple jobs at once?",
@@ -236,7 +236,7 @@ const faqs: FaqItem[] = [
   {
     question: "How do I change my role from contractor to professional (or vice versa)?",
     answer:
-      "Role selection happens during onboarding. If you selected the wrong role, contact ZYLOBRIDGE support and an admin can update your account. Note that your dashboard, job history, and applications are role-specific, so a role change will switch your dashboard view accordingly.",
+      "Role selection happens during onboarding. If you selected the wrong role, contact ZYLOBRIDGE support and the team will update your account. Note that your dashboard, job history, and applications are role-specific, so a role change will switch your dashboard view accordingly.",
   },
   {
     question: "Is my personal and payment information secure?",
@@ -246,7 +246,7 @@ const faqs: FaqItem[] = [
   {
     question: "How do I contact support?",
     answer:
-      "For account issues, disputes, or general enquiries, use the messaging system to contact the ZYLOBRIDGE admin team, or reach out via the contact details in the footer. Dispute-related requests are prioritised and typically responded to within one business day.",
+      "For account issues, disputes, or general enquiries, use the messaging system to contact the ZYLOBRIDGE support team, or reach out via the contact details in the footer. Dispute-related requests are prioritised and typically responded to within one business day.",
   },
 ];
 
@@ -373,12 +373,7 @@ export default function HowItWorks() {
                 title: "Skilled Professionals",
                 body: "Browse open jobs, apply with a cover letter and rate, earn a Verified badge, and get paid securely through the escrow system.",
               },
-              {
-                icon: ShieldCheck,
-                color: "emerald",
-                title: "Platform Admins",
-                body: "Manage all users, jobs, payments, and verification requests from a fully secured admin dashboard invisible to all other roles.",
-              },
+
             ].map((card) => (
               <div
                 key={card.title}
@@ -498,7 +493,7 @@ export default function HowItWorks() {
                 <h3 className="font-semibold text-white text-sm">Bank Transfer</h3>
               </div>
               <p className="text-xs text-gray-400 leading-relaxed">
-                Transfer directly to the ZYLOBRIDGE escrow account using your bank's mobile app or internet banking. Upload your proof of payment and an admin confirms the transfer within one business day.
+                Transfer directly to the ZYLOBRIDGE escrow account using your bank's mobile app or internet banking. Upload your proof of payment and the ZYLOBRIDGE team confirms the transfer within one business day.
               </p>
             </div>
           </div>
@@ -540,14 +535,14 @@ export default function HowItWorks() {
                 The ZYLOBRIDGE Verified Badge
               </h2>
               <p className="text-gray-400 text-sm leading-relaxed mb-6">
-                The Verified badge is ZYLOBRIDGE's trust signal for skilled professionals. It tells contractors that a professional's credentials have been reviewed and confirmed by the ZYLOBRIDGE admin team — not just self-reported.
+                The Verified badge is ZYLOBRIDGE's trust signal for skilled professionals. It tells contractors that a professional's credentials have been independently reviewed and confirmed — not just self-reported.
               </p>
               <div className="space-y-4">
                 {[
                   {
                     icon: Clock,
                     title: "24–48 Hour Review",
-                    body: "Submit your document and the admin team reviews it within one to two business days.",
+                    body: "Submit your document and the ZYLOBRIDGE team reviews it within one to two business days.",
                   },
                   {
                     icon: ShieldCheck,
@@ -626,31 +621,31 @@ export default function HowItWorks() {
         </div>
       </section>
 
-      {/* ── Admin Capabilities ───────────────────────────────────────────────── */}
+      {/* ── Why ZYLOBRIDGE ───────────────────────────────────────────────────── */}
       <section className="py-16 px-4">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-10">
-            <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-widest text-red-400 uppercase bg-red-500/10 border border-red-500/20 rounded-full px-4 py-1.5 mb-4">
-              <Lock className="h-3.5 w-3.5" />
-              Admin Only
+            <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-widest text-violet-400 uppercase bg-violet-500/10 border border-violet-500/20 rounded-full px-4 py-1.5 mb-4">
+              <Star className="h-3.5 w-3.5" />
+              Why ZYLOBRIDGE
             </span>
             <h2 className="text-3xl font-extrabold text-white mb-3" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-              Platform Administration
+              The Smarter Way to Hire & Get Hired
             </h2>
             <p className="text-gray-400 text-sm max-w-xl mx-auto">
-              The admin dashboard is completely invisible to contractors and professionals — it is accessible only to accounts with the admin role, protected at both the route and API level.
+              ZYLOBRIDGE is engineered for trust, speed, and fairness — giving both contractors and professionals every advantage they need to succeed.
             </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {adminCapabilities.map((cap) => (
-              <div key={cap.title} className="rounded-xl border border-white/8 bg-[#0f1520] p-5">
+            {platformAdvantages.map((adv) => (
+              <div key={adv.title} className="rounded-xl border border-white/8 bg-[#0f1520] p-5 hover:border-violet-500/30 transition-colors">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-8 h-8 rounded-lg bg-red-600/15 flex items-center justify-center shrink-0">
-                    <cap.icon className="h-4 w-4 text-red-400" />
+                  <div className="w-8 h-8 rounded-lg bg-violet-600/15 flex items-center justify-center shrink-0">
+                    <adv.icon className="h-4 w-4 text-violet-400" />
                   </div>
-                  <h3 className="font-semibold text-white text-sm">{cap.title}</h3>
+                  <h3 className="font-semibold text-white text-sm">{adv.title}</h3>
                 </div>
-                <p className="text-xs text-gray-400 leading-relaxed">{cap.description}</p>
+                <p className="text-xs text-gray-400 leading-relaxed">{adv.description}</p>
               </div>
             ))}
           </div>
