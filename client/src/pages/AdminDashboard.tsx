@@ -1,0 +1,469 @@
+import { useState } from "react";
+import { Link } from "wouter";
+import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
+import {
+  Loader2, Users, Briefcase, Shield, BarChart3,
+  CheckCircle, Clock, AlertTriangle, Trash2,
+  ChevronRight, Star, TrendingUp, Activity
+} from "lucide-react";
+import Navbar from "@/components/Navbar";
+import { VOCATION_LABELS, type VocationKey } from "@shared/vocations";
+
+const STATUS_STYLES: Record<string, string> = {
+  open: "bg-emerald-500/15 text-emerald-400 border-emerald-500/25",
+  in_progress: "bg-blue-500/15 text-blue-400 border-blue-500/25",
+  completed: "bg-purple-500/15 text-purple-400 border-purple-500/25",
+  cancelled: "bg-red-500/15 text-red-400 border-red-500/25",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  open: "Open",
+  in_progress: "In Progress",
+  completed: "Completed",
+  cancelled: "Cancelled",
+};
+
+export default function AdminDashboard() {
+  const { user, isAuthenticated } = useAuth();
+  const [activeTab, setActiveTab] = useState<"overview" | "users" | "jobs" | "analytics">("overview");
+  const utils = trpc.useUtils();
+
+  const { data: adminStats, isLoading: statsLoading } = trpc.admin.stats.useQuery(undefined, {
+    enabled: !!user && user.role === "admin",
+  });
+  const { data: allUsers, isLoading: usersLoading } = trpc.admin.listUsers.useQuery({}, {
+    enabled: !!user && user.role === "admin" && activeTab === "users",
+  });
+  const { data: allJobs, isLoading: jobsLoading } = trpc.admin.listAllJobs.useQuery({ limit: 200 }, {
+    enabled: !!user && user.role === "admin" && activeTab === "jobs",
+  });
+
+  const { mutate: updateUserRole } = trpc.admin.updateUserRole.useMutation({
+    onSuccess: () => {
+      toast.success("User role updated.");
+      utils.admin.listUsers.invalidate();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const { mutate: deleteJob } = trpc.admin.deleteJob.useMutation({
+    onSuccess: () => {
+      toast.success("Job removed.");
+      utils.admin.listAllJobs.invalidate();
+      utils.admin.stats.invalidate();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const { mutate: updateJobStatus } = trpc.jobs.updateStatus.useMutation({
+    onSuccess: () => {
+      toast.success("Job status updated.");
+      utils.admin.listAllJobs.invalidate();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  // ── RBAC Guard ────────────────────────────────────────────────────────────
+  // This page is completely hidden from non-admin users.
+  // Non-admins are redirected to a 404-style screen with no admin UI exposed.
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#0d1117] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-violet-400" />
+      </div>
+    );
+  }
+
+  if (user?.role !== "admin") {
+    return (
+      <div className="min-h-screen bg-[#0d1117] flex flex-col items-center justify-center gap-4 text-center px-4">
+        <div className="h-16 w-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-2">
+          <Shield className="h-8 w-8 text-red-400" />
+        </div>
+        <h1 className="text-2xl font-bold text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+          404 — Page Not Found
+        </h1>
+        <p className="text-gray-500 text-sm max-w-sm">
+          The page you are looking for does not exist or you do not have permission to view it.
+        </p>
+        <Link href="/">
+          <Button variant="outline" className="border-white/10 text-gray-400 bg-transparent mt-2">
+            Return Home
+          </Button>
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#0d1117] text-white">
+      <Navbar />
+
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl py-8">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-8">
+          <div className="h-10 w-10 rounded-xl bg-violet-500/15 border border-violet-500/25 flex items-center justify-center">
+            <Shield className="h-5 w-5 text-violet-400" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-extrabold text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+              Admin Dashboard
+            </h1>
+            <p className="text-gray-500 text-sm">Platform management — restricted access</p>
+          </div>
+          <div className="ml-auto">
+            <span className="text-xs font-semibold text-violet-300 bg-violet-500/10 border border-violet-500/20 rounded-full px-3 py-1">
+              ADMIN
+            </span>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 mb-6 bg-[#131a26] rounded-xl p-1 w-fit border border-white/5 flex-wrap">
+          {(["overview", "users", "jobs", "analytics"] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all capitalize ${
+                activeTab === tab ? "bg-violet-600 text-white" : "text-gray-400 hover:text-white"
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+
+        {/* Overview Tab */}
+        {activeTab === "overview" && (
+          <div className="space-y-6">
+            {statsLoading ? (
+              <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-violet-400" /></div>
+            ) : adminStats ? (
+              <>
+                {/* Stats Grid */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  {[
+                    { label: "Total Users", value: adminStats.totalUsers, icon: Users, color: "violet", sub: `${adminStats.clientCount} clients, ${adminStats.professionalCount} pros` },
+                    { label: "Total Jobs", value: adminStats.totalJobs, icon: Briefcase, color: "cyan", sub: `${adminStats.openJobs} open` },
+                    { label: "Applications", value: adminStats.totalApplications, icon: Activity, color: "emerald", sub: `${adminStats.pendingApplications} pending` },
+                    { label: "Completed Jobs", value: adminStats.completedJobs, icon: CheckCircle, color: "purple", sub: "all time" },
+                  ].map(({ label, value, icon: Icon, color, sub }) => (
+                    <div key={label} className="rounded-xl border border-white/8 bg-[#131a26] p-5">
+                      <div className={`h-9 w-9 rounded-lg bg-${color}-500/15 border border-${color}-500/25 flex items-center justify-center mb-3`}>
+                        <Icon className={`h-4.5 w-4.5 text-${color}-400`} />
+                      </div>
+                      <p className="text-2xl font-extrabold text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{value}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+                      <p className="text-xs text-gray-600 mt-1">{sub}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Job Status Breakdown */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="rounded-xl border border-white/8 bg-[#131a26] p-5">
+                    <h3 className="font-semibold text-white mb-4">Job Status Breakdown</h3>
+                    <div className="space-y-3">
+                      {[
+                        { label: "Open", value: adminStats.openJobs, total: adminStats.totalJobs, color: "emerald" },
+                        { label: "In Progress", value: adminStats.inProgressJobs, total: adminStats.totalJobs, color: "blue" },
+                        { label: "Completed", value: adminStats.completedJobs, total: adminStats.totalJobs, color: "purple" },
+                        { label: "Cancelled", value: adminStats.cancelledJobs, total: adminStats.totalJobs, color: "red" },
+                      ].map(({ label, value, total, color }) => (
+                        <div key={label}>
+                          <div className="flex items-center justify-between text-xs mb-1">
+                            <span className="text-gray-400">{label}</span>
+                            <span className="text-white font-medium">{value}</span>
+                          </div>
+                          <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full bg-${color}-500 rounded-full transition-all`}
+                              style={{ width: total > 0 ? `${(value / total) * 100}%` : "0%" }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/8 bg-[#131a26] p-5">
+                    <h3 className="font-semibold text-white mb-4">User Breakdown</h3>
+                    <div className="space-y-3">
+                      {[
+                        { label: "Contractors / Clients", value: adminStats.clientCount, total: adminStats.totalUsers, color: "violet" },
+                        { label: "Skilled Professionals", value: adminStats.professionalCount, total: adminStats.totalUsers, color: "cyan" },
+                        { label: "Admins", value: adminStats.adminCount, total: adminStats.totalUsers, color: "amber" },
+                        { label: "Unset / Onboarding", value: adminStats.unsetCount, total: adminStats.totalUsers, color: "gray" },
+                      ].map(({ label, value, total, color }) => (
+                        <div key={label}>
+                          <div className="flex items-center justify-between text-xs mb-1">
+                            <span className="text-gray-400">{label}</span>
+                            <span className="text-white font-medium">{value}</span>
+                          </div>
+                          <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full bg-${color}-500 rounded-full transition-all`}
+                              style={{ width: total > 0 ? `${(value / total) * 100}%` : "0%" }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : null}
+          </div>
+        )}
+
+        {/* Users Tab */}
+        {activeTab === "users" && (
+          <div>
+            {usersLoading ? (
+              <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-violet-400" /></div>
+            ) : allUsers && allUsers.length > 0 ? (
+              <div className="rounded-xl border border-white/8 bg-[#131a26] overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-white/5">
+                        <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-5 py-3">User</th>
+                        <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-5 py-3">Type</th>
+                        <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-5 py-3">Role</th>
+                        <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-5 py-3">Joined</th>
+                        <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-5 py-3">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allUsers.map((u: any) => (
+                        <tr key={u.id} className="border-b border-white/5 last:border-0 hover:bg-white/2 transition-colors">
+                          <td className="px-5 py-4">
+                            <div>
+                              <p className="text-sm font-medium text-white">{u.name ?? "—"}</p>
+                              <p className="text-xs text-gray-500">{u.email ?? "—"}</p>
+                            </div>
+                          </td>
+                          <td className="px-5 py-4">
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
+                              u.userType === "client" ? "bg-violet-500/15 text-violet-400 border-violet-500/25" :
+                              u.userType === "professional" ? "bg-cyan-500/15 text-cyan-400 border-cyan-500/25" :
+                              "bg-gray-500/15 text-gray-400 border-gray-500/25"
+                            }`}>
+                              {u.userType === "client" ? "Contractor" : u.userType === "professional" ? "Professional" : "Unset"}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4">
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
+                              u.role === "admin" ? "bg-amber-500/15 text-amber-400 border-amber-500/25" :
+                              "bg-gray-500/15 text-gray-400 border-gray-500/25"
+                            }`}>
+                              {u.role}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4 text-xs text-gray-500">
+                            {new Date(u.createdAt).toLocaleDateString()}
+                          </td>
+                          <td className="px-5 py-4">
+                            {u.id !== user?.id && (
+                              <Select
+                                value={u.role}
+                                onValueChange={(role) => updateUserRole({ userId: u.id, role: role as "user" | "admin" })}
+                              >
+                                <SelectTrigger className="w-[120px] h-7 text-xs bg-[#1c2740] border-white/10 text-gray-300">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent className="bg-[#1c2740] border-white/10">
+                                  <SelectItem value="user" className="text-xs text-gray-300">User</SelectItem>
+                                  <SelectItem value="admin" className="text-xs text-gray-300">Admin</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-20">
+                <Users className="h-12 w-12 text-gray-700 mx-auto mb-4" />
+                <p className="text-gray-500">No users found.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Jobs Tab */}
+        {activeTab === "jobs" && (
+          <div>
+            {jobsLoading ? (
+              <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-violet-400" /></div>
+            ) : allJobs && allJobs.length > 0 ? (
+              <div className="rounded-xl border border-white/8 bg-[#131a26] overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-white/5">
+                        <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-5 py-3">Job</th>
+                        <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-5 py-3">Vocation</th>
+                        <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-5 py-3">Budget</th>
+                        <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-5 py-3">Status</th>
+                        <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-5 py-3">Posted</th>
+                        <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-5 py-3">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allJobs.map((job: any) => (
+                        <tr key={job.id} className="border-b border-white/5 last:border-0 hover:bg-white/2 transition-colors">
+                          <td className="px-5 py-4">
+                            <div>
+                              <p className="text-sm font-medium text-white line-clamp-1">{job.title}</p>
+                              <p className="text-xs text-gray-500">{job.location}</p>
+                            </div>
+                          </td>
+                          <td className="px-5 py-4 text-xs text-gray-400">
+                            {VOCATION_LABELS[job.vocation as VocationKey] ?? job.vocation}
+                          </td>
+                          <td className="px-5 py-4 text-sm font-medium text-white">
+                            ${Number(job.budget).toLocaleString()}
+                          </td>
+                          <td className="px-5 py-4">
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${STATUS_STYLES[job.status]}`}>
+                              {STATUS_LABELS[job.status]}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4 text-xs text-gray-500">
+                            {new Date(job.createdAt).toLocaleDateString()}
+                          </td>
+                          <td className="px-5 py-4">
+                            <div className="flex items-center gap-2">
+                              <Link href={`/jobs/${job.id}`}>
+                                <Button size="sm" variant="ghost" className="h-7 text-xs text-gray-400 hover:text-white border border-white/8">
+                                  View
+                                </Button>
+                              </Link>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  if (confirm("Remove this job from the platform?")) {
+                                    deleteJob({ id: job.id });
+                                  }
+                                }}
+                                className="h-7 text-xs text-red-400 hover:text-red-300 border border-red-500/20"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-20">
+                <Briefcase className="h-12 w-12 text-gray-700 mx-auto mb-4" />
+                <p className="text-gray-500">No jobs found.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Analytics Tab */}
+        {activeTab === "analytics" && (
+          <div className="space-y-6">
+            {statsLoading ? (
+              <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-violet-400" /></div>
+            ) : adminStats ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="rounded-xl border border-white/8 bg-[#131a26] p-5">
+                    <div className="flex items-center gap-2 mb-3">
+                      <TrendingUp className="h-4 w-4 text-violet-400" />
+                      <h3 className="text-sm font-semibold text-white">Platform Health</h3>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Job Fill Rate</span>
+                        <span className="text-white font-medium">
+                          {adminStats.totalJobs > 0
+                            ? `${Math.round((adminStats.completedJobs / adminStats.totalJobs) * 100)}%`
+                            : "—"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Avg. Bids per Job</span>
+                        <span className="text-white font-medium">
+                          {adminStats.totalJobs > 0
+                            ? (adminStats.totalApplications / adminStats.totalJobs).toFixed(1)
+                            : "—"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Pro to Client Ratio</span>
+                        <span className="text-white font-medium">
+                          {adminStats.clientCount > 0
+                            ? `${(adminStats.professionalCount / adminStats.clientCount).toFixed(1)}:1`
+                            : "—"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/8 bg-[#131a26] p-5">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Activity className="h-4 w-4 text-cyan-400" />
+                      <h3 className="text-sm font-semibold text-white">Activity Summary</h3>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Open Jobs</span>
+                        <span className="text-emerald-400 font-medium">{adminStats.openJobs}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">In Progress</span>
+                        <span className="text-blue-400 font-medium">{adminStats.inProgressJobs}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Pending Applications</span>
+                        <span className="text-yellow-400 font-medium">{adminStats.pendingApplications}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/8 bg-[#131a26] p-5">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Shield className="h-4 w-4 text-amber-400" />
+                      <h3 className="text-sm font-semibold text-white">Trust & Safety</h3>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Verified Profiles</span>
+                        <span className="text-white font-medium">{adminStats.verifiedUsers}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Total Reviews</span>
+                        <span className="text-white font-medium">{adminStats.totalReviews}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Admin Count</span>
+                        <span className="text-amber-400 font-medium">{adminStats.adminCount}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : null}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

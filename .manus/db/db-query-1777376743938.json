@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE `users` ADD COLUMN `avatarUrl` text; ALTER TABLE `users` ADD COLUMN `isVerified` boolean DEFAULT false NOT NULL",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway06.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3EVFk3R5wosGZuM.85f2208ca0c1 --database WUXYqZoD8HhXP72aQb3fGa --execute ALTER TABLE `users` ADD COLUMN `avatarUrl` text; ALTER TABLE `users` ADD COLUMN `isVerified` boolean DEFAULT false NOT NULL",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 390
+}
