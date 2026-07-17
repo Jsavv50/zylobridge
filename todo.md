@@ -150,3 +150,12 @@
 - [x] Verify 0 TypeScript errors after changes
 - [x] Verify 34 tests still passing after changes
 - [x] Save checkpoint
+
+## Phase 21: Vercel outputDirectory + buildCommand Fix
+- [x] Diagnosed root cause: dist/ in .gitignore means Vercel never receives pre-built frontend; no buildCommand/outputDirectory meant Vercel served api/index.ts bundle as plain text
+- [x] Added buildCommand: "pnpm run build:client" to vercel.json so Vercel runs Vite before deploying
+- [x] Added outputDirectory: "dist/public" to vercel.json so Vercel serves index.html at /
+- [x] Added installCommand: "pnpm install --frozen-lockfile" for deterministic installs
+- [x] Kept /api/(.*) → api/index.ts and /(.*) → /index.html rewrites
+- [x] Verified 0 TypeScript errors and 34/34 tests passing
+- [x] Saved checkpoint and pushed to GitHub
