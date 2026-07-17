@@ -142,3 +142,11 @@
 - [x] Build server/email.ts with sendOtpEmail helper using branded ZYLOBRIDGE template
 - [x] Wire sendOtpEmail into emailAuth.sendOtp procedure
 - [x] Test full email OTP delivery flow (28/28 tests passing)
+
+## Phase 20: Vercel Deployment Fix
+- [x] Create api/index.ts — Vercel serverless function entry point wrapping Express app
+- [x] Rewrite vercel.json — outputDirectory: dist/public, buildCommand: build:client, /api/* → api/index.ts, SPA rewrites
+- [x] Add build:client script to package.json (vite build only, no server bundle)
+- [x] Verify 0 TypeScript errors after changes
+- [x] Verify 34 tests still passing after changes
+- [x] Save checkpoint
