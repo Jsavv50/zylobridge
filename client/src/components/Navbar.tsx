@@ -56,8 +56,8 @@ export default function Navbar() {
           {/* Logo */}
           <Link href="/" className="flex items-center gap-3 shrink-0">
             <img
-              src={LOGO.PNG}
-              alt="ZYLOBRIDGE LOGO"
+              src={LOGO_URL}
+              alt="ZYLOBRIDGE"
               className="h-9 w-9 object-contain"
             />
             <span
