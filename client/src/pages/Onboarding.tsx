@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Briefcase, HardHat, ArrowRight, Loader2 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 
-const LOGO_URL = "/manus-storage/ZYLO_7d32e9f2.png";
+const LOGO_URL = "/ZYLO.png";
 
 export default function Onboarding() {
   const [, navigate] = useLocation();

@@ -11,7 +11,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
 
-const LOGO_URL = "/manus-storage/ZYLO_7d32e9f2.png";
+const LOGO_URL = "/ZYLO.png";
 
 const TESTIMONIALS = [
   {

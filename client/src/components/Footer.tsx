@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 
-const LOGO_URL = "/manus-storage/ZYLO_7d32e9f2.png";
+const LOGO_URL = "/ZYLO.png";
 
 export default function Footer() {
   return (

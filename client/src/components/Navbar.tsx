@@ -15,7 +15,7 @@ import { Menu, X, ChevronDown, Briefcase, LayoutDashboard, Shield, MessageSquare
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { trpc } from "@/lib/trpc";
 
-const LOGO_URL = "/manus-storage/ZYLO_7d32e9f2.png";
+const LOGO_URL = "/ZYLO.png";
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);

@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
-const LOGO_URL = "/manus-storage/ZYLO_b0d5fd45.png";
+const LOGO_URL = "/ZYLO.png";
 
 type AuthMethod = "choose" | "email_input" | "email_otp" | "phone_input" | "phone_otp" | "name_capture";
 type NameCaptureFor = "email" | "phone";
