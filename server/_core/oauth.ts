@@ -3,6 +3,7 @@ import type { Express, Request, Response } from "express";
 import * as db from "../db";
 import { getSessionCookieOptions } from "./cookies";
 import { sdk } from "./sdk";
+import { getBaseUrl } from "./env";
 
 function getQueryParam(req: Request, key: string): string | undefined {
   const value = req.query[key];
@@ -20,6 +21,23 @@ export function registerOAuthRoutes(app: Express) {
     }
 
     try {
+      // Decode the state param — it is base64(redirectUri) where redirectUri was
+      // set by the frontend as `${window.location.origin}/api/oauth/callback`.
+      // On Vercel the frontend correctly encodes its own origin, so this resolves
+      // to the Vercel deployment URL automatically.
+      const decodedRedirectUri = (() => {
+        try {
+          return atob(state);
+        } catch {
+          // Fallback: derive from server-side base URL if state is not valid base64
+          const base = getBaseUrl();
+          console.warn(`[OAuth] Could not decode state; falling back to ${base}/api/oauth/callback`);
+          return `${base}/api/oauth/callback`;
+        }
+      })();
+
+      console.log(`[OAuth] Callback — redirectUri resolved to: ${decodedRedirectUri}`);
+
       const tokenResponse = await sdk.exchangeCodeForToken(code, state);
       const userInfo = await sdk.getUserInfo(tokenResponse.accessToken);
 
@@ -44,7 +62,16 @@ export function registerOAuthRoutes(app: Express) {
       const cookieOptions = getSessionCookieOptions(req);
       res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
-      res.redirect(302, "/");
+      // Redirect to the origin that initiated the login (extracted from the decoded redirectUri)
+      const origin = (() => {
+        try {
+          return new URL(decodedRedirectUri).origin;
+        } catch {
+          return getBaseUrl();
+        }
+      })();
+
+      res.redirect(302, origin + "/");
     } catch (error) {
       console.error("[OAuth] Callback failed", error);
       res.status(500).json({ error: "OAuth callback failed" });

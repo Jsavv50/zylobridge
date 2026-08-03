@@ -7,4 +7,31 @@ export const ENV = {
   isProduction: process.env.NODE_ENV === "production",
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+
+  // Google OAuth credentials — set in Vercel env vars
+  googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+
+  // Resend transactional email API key
+  resendApiKey: process.env.RESEND_API_KEY ?? "",
+
+  // Vercel deployment URL (auto-injected by Vercel as VERCEL_URL, no protocol prefix)
+  vercelUrl: process.env.VERCEL_URL ?? "",
+
+  // Explicit production callback base URL override (optional, takes precedence over VERCEL_URL)
+  appBaseUrl: process.env.APP_BASE_URL ?? "",
 };
+
+/**
+ * Resolve the canonical base URL for OAuth callbacks.
+ *
+ * Priority order:
+ *   1. APP_BASE_URL  — explicit override (e.g. https://zylobridge.vercel.app)
+ *   2. VERCEL_URL   — auto-injected by Vercel (no protocol, e.g. zylobridge.vercel.app)
+ *   3. Localhost fallback for local development
+ */
+export function getBaseUrl(): string {
+  if (ENV.appBaseUrl) return ENV.appBaseUrl.replace(/\/$/, "");
+  if (ENV.vercelUrl) return `https://${ENV.vercelUrl}`;
+  return "http://localhost:3000";
+}
