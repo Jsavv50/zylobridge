@@ -25,6 +25,9 @@ export const ENV = {
   supabaseUrl: process.env.SUPABASE_URL ?? "",
   supabaseAnonKey: process.env.SUPABASE_ANON_KEY ?? "",
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
+
+  // Termii SMS API key — for phone OTP delivery
+  termiiApiKey: process.env.TERMII_API_KEY ?? "",
 };
 
 /**

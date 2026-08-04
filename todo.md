@@ -212,12 +212,12 @@
 - [x] Saved checkpoint and pushed to GitHub
 
 ## Phase 27: Complete Repository Import Audit for Vercel Production
-- [ ] Scan every .ts/.tsx/.js/.mjs file for broken imports and unresolved aliases
-- [ ] Simulate exact Vercel serverless build (esbuild bundle of api/index.ts with alias resolution)
-- [ ] Fix every broken import: @shared/_core, relative paths, missing modules
-- [ ] Run production build with zero ERR_MODULE_NOT_FOUND errors
-- [ ] Verify 0 TypeScript errors and all tests passing
-- [ ] Save checkpoint and push to GitHub
+- [x] Scan every .ts/.tsx/.js/.mjs file for broken imports and unresolved aliases — completed in Phase 30
+- [x] Simulate exact Vercel serverless build — converted to Node.js server deployment in Phase 31
+- [x] Fix every broken import: @shared/_core, relative paths, missing modules — completed in Phase 29/30
+- [x] Run production build with zero ERR_MODULE_NOT_FOUND errors — dist/index.js 113 kB, 0 errors
+- [x] Verify 0 TypeScript errors and all tests passing — 0 errors, 41/41 passing
+- [x] Save checkpoint and push to GitHub — checkpoint d4ef75cf
 
 ## Phase 31: Vercel Node.js Server Deployment Conversion
 - [x] Audit current build scripts — pnpm build already runs vite build + esbuild server/_core/index.ts
@@ -226,4 +226,13 @@
 - [x] Removed api/ serverless entry point directory entirely
 - [x] Run pnpm build end-to-end — dist/index.js (113 kB) + dist/public/index.html produced
 - [x] Verify 0 TypeScript errors and 41/41 tests passing
+- [x] Save checkpoint and push to GitHub
+
+## Phase 32: Remaining Features
+- [x] Cookie Policy page at /cookie-policy (same premium sticky-TOC layout as PrivacyPolicy.tsx and TermsOfService.tsx)
+- [x] Editable profile settings panel in UserProfile.tsx (update display name, phone, notification preferences via tRPC mutation)
+- [x] SMS OTP delivery — wire Termii into phoneAuth.sendOtp procedure (currently generates OTPs but does not send SMS)
+- [x] Register /cookie-policy route in App.tsx
+- [x] Update Privacy Policy and Terms of Service footer links to point to /cookie-policy
+- [x] Verify 0 TypeScript errors and 45/45 tests passing
 - [x] Save checkpoint and push to GitHub

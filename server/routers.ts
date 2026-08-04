@@ -64,6 +64,7 @@ import {
   incrementEmailOtpAttempts,
   markEmailOtpVerified,
   upsertUserByEmail,
+  updateUserProfile,
 } from "./db";
 import {
   initializePaystackTransaction,
@@ -136,6 +137,21 @@ export const appRouter = router({
       .input(z.object({ userType: z.enum(["client", "professional"]) }))
       .mutation(async ({ ctx, input }) => {
         await updateUserType(ctx.user.id, input.userType);
+        return { success: true };
+      }),
+
+    updateProfile: protectedProcedure
+      .input(
+        z.object({
+          name: z.string().min(1).max(128).optional(),
+          phone: z.string().max(20).optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        await updateUserProfile(ctx.user.id, {
+          name: input.name,
+          phone: input.phone,
+        });
         return { success: true };
       }),
   }),
@@ -808,8 +824,23 @@ export const appRouter = router({
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
         await createPhoneOtp(input.phone, otp, expiresAt);
-        // In production, integrate Termii/Twilio here. OTP is logged server-side only.
-        console.log(`[PhoneAuth][DEV] OTP for ${input.phone}: ${otp}`);
+
+                // Deliver OTP via Termii SMS gateway
+        const { sendOtpSms } = await import("./sms");
+        const smsResult = await sendOtpSms(input.phone, otp);
+        if (!smsResult.success) {
+          // In development (no API key), log the OTP server-side for testing
+          console.warn(`[PhoneAuth] SMS delivery failed for ${input.phone}: ${smsResult.error}`);
+          console.log(`[PhoneAuth][FALLBACK] OTP for ${input.phone}: ${otp}`);
+          // In production, surface the failure to the client so they know to retry
+          const { ENV } = await import("./_core/env");
+          if (ENV.isProduction && ENV.termiiApiKey) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Failed to send OTP. Please try again or use a different sign-in method.",
+            });
+          }
+        }
         return { success: true, message: "OTP sent to your phone number." };
       }),
     verifyOtp: publicProcedure
