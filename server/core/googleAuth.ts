@@ -29,7 +29,7 @@
  *      callback URL and missing env vars at cold-start so Vercel function
  *      logs immediately show the misconfiguration.
  */
-import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+import { COOKIE_NAME, ONE_YEAR_MS } from "../../shared/const";
 import crypto from "crypto";
 import type { Express, Request, Response } from "express";
 import * as db from "../db";

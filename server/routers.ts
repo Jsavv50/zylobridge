@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { COOKIE_NAME } from "@shared/const";
+import { COOKIE_NAME } from "../shared/const";
 import { getSessionCookieOptions } from "./core/cookies";
 import { systemRouter } from "./core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./core/trpc";
