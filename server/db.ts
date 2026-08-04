@@ -108,19 +108,6 @@ export async function updateUserRole(userId: number, role: "user" | "admin") {
   await db.update(users).set({ role }).where(eq(users.id, userId));
 }
 
-export async function updateUserProfile(
-  userId: number,
-  data: { name?: string; phone?: string }
-) {
-  const db = await getDb();
-  if (!db) return;
-  const update: Partial<typeof users.$inferInsert> = {};
-  if (data.name !== undefined) update.name = data.name;
-  if (data.phone !== undefined) update.phone = data.phone;
-  if (Object.keys(update).length === 0) return;
-  await db.update(users).set(update).where(eq(users.id, userId));
-}
-
 export async function getAllUsers(limit = 50, offset = 0) {
   const db = await getDb();
   if (!db) return [];

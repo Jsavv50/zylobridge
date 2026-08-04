@@ -20,7 +20,6 @@ import PhoneLogin from "./pages/PhoneLogin";
 import SignIn from "./pages/SignIn";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
-import CookiePolicy from "./pages/CookiePolicy";
 import UserProfile from "./pages/UserProfile";
 
 function Router() {
@@ -43,7 +42,6 @@ function Router() {
       <Route path="/sign-in" component={SignIn} />
       <Route path="/privacy-policy" component={PrivacyPolicy} />
       <Route path="/terms" component={TermsOfService} />
-      <Route path="/cookie-policy" component={CookiePolicy} />
       <Route path="/profile" component={UserProfile} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />

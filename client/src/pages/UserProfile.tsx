@@ -22,17 +22,11 @@ import {
   ShoppingBag,
   LayoutDashboard,
   Lock,
-  Save,
-  X,
-  Bell,
-  BellOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -191,194 +185,10 @@ function QuickActionCard({
   );
 }
 
-// ─── Edit Profile Panel ───────────────────────────────────────────────────────
-
-function EditProfilePanel({
-  user,
-  onClose,
-  onSaved,
-}: {
-  user: { name?: string | null; phone?: string | null; email?: string | null };
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [name, setName] = useState(user.name ?? "");
-  const [phone, setPhone] = useState(user.phone ?? "");
-  const [emailNotif, setEmailNotif] = useState(true);
-  const [smsNotif, setSmsNotif] = useState(!!user.phone);
-
-  const utils = trpc.useUtils();
-  const updateProfile = trpc.auth.updateProfile.useMutation({
-    onSuccess: () => {
-      toast.success("Profile updated successfully.");
-      utils.auth.me.invalidate();
-      onSaved();
-    },
-    onError: (err) => {
-      toast.error(err.message || "Failed to update profile. Please try again.");
-    },
-  });
-
-  const handleSave = () => {
-    const trimmedName = name.trim();
-    const trimmedPhone = phone.trim();
-    if (trimmedName.length === 0) {
-      toast.error("Display name cannot be empty.");
-      return;
-    }
-    updateProfile.mutate({
-      name: trimmedName !== (user.name ?? "") ? trimmedName : undefined,
-      phone: trimmedPhone !== (user.phone ?? "") ? trimmedPhone : undefined,
-    });
-  };
-
-  return (
-    <section className="rounded-2xl border border-violet-500/30 bg-[#131a26]/80 p-6 animate-in fade-in slide-in-from-top-2 duration-200">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-base font-semibold text-white flex items-center gap-2">
-          <Edit3 className="h-4 w-4 text-violet-400" />
-          Edit Profile Settings
-        </h2>
-        <button
-          onClick={onClose}
-          className="p-1.5 rounded-lg hover:bg-white/8 text-gray-500 hover:text-gray-300 transition-colors"
-          aria-label="Close edit panel"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-      <Separator className="bg-white/6 mb-5" />
-
-      <div className="space-y-5">
-        {/* Display Name */}
-        <div className="space-y-1.5">
-          <Label htmlFor="edit-name" className="text-xs font-medium text-gray-400 uppercase tracking-wide">
-            Display Name
-          </Label>
-          <Input
-            id="edit-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Your full name"
-            maxLength={128}
-            className="bg-white/4 border-white/10 text-white placeholder-gray-600 focus:border-violet-500/50 focus:ring-violet-500/20"
-          />
-          <p className="text-xs text-gray-600">This is the name shown on your profile and job applications.</p>
-        </div>
-
-        {/* Phone Number */}
-        <div className="space-y-1.5">
-          <Label htmlFor="edit-phone" className="text-xs font-medium text-gray-400 uppercase tracking-wide">
-            Phone Number
-          </Label>
-          <Input
-            id="edit-phone"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="+1 (555) 000-0000"
-            maxLength={20}
-            type="tel"
-            className="bg-white/4 border-white/10 text-white placeholder-gray-600 focus:border-violet-500/50 focus:ring-violet-500/20"
-          />
-          <p className="text-xs text-gray-600">Used for phone OTP sign-in and SMS notifications.</p>
-        </div>
-
-        {/* Email (read-only) */}
-        {user.email && (
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-gray-400 uppercase tracking-wide">
-              Email Address
-            </Label>
-            <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-white/6 bg-white/2">
-              <Mail className="h-4 w-4 text-gray-600 shrink-0" />
-              <span className="text-sm text-gray-400">{user.email}</span>
-              <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 rounded-full px-1.5 py-0.5">
-                <CheckCircle className="h-2.5 w-2.5" /> Confirmed
-              </span>
-            </div>
-            <p className="text-xs text-gray-600">Email address is managed by your sign-in provider and cannot be changed here.</p>
-          </div>
-        )}
-
-        {/* Notification Preferences */}
-        <div className="space-y-3">
-          <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Notification Preferences</p>
-          <div className="space-y-2">
-            <button
-              type="button"
-              onClick={() => setEmailNotif(!emailNotif)}
-              className="w-full flex items-center justify-between rounded-xl border border-white/8 bg-white/2 px-4 py-3 hover:bg-white/4 transition-colors group"
-            >
-              <div className="flex items-center gap-3">
-                {emailNotif ? (
-                  <Bell className="h-4 w-4 text-violet-400" />
-                ) : (
-                  <BellOff className="h-4 w-4 text-gray-500" />
-                )}
-                <div className="text-left">
-                  <p className="text-sm font-medium text-white">Email Notifications</p>
-                  <p className="text-xs text-gray-500">Job updates, messages, and platform alerts</p>
-                </div>
-              </div>
-              <div className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 transition-colors ${emailNotif ? "bg-violet-600 border-violet-600" : "bg-gray-700 border-gray-700"}`}>
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${emailNotif ? "translate-x-4" : "translate-x-0"}`} />
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setSmsNotif(!smsNotif)}
-              className="w-full flex items-center justify-between rounded-xl border border-white/8 bg-white/2 px-4 py-3 hover:bg-white/4 transition-colors group"
-            >
-              <div className="flex items-center gap-3">
-                {smsNotif ? (
-                  <Phone className="h-4 w-4 text-violet-400" />
-                ) : (
-                  <Phone className="h-4 w-4 text-gray-500" />
-                )}
-                <div className="text-left">
-                  <p className="text-sm font-medium text-white">SMS Notifications</p>
-                  <p className="text-xs text-gray-500">Critical alerts sent to your phone number</p>
-                </div>
-              </div>
-              <div className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 transition-colors ${smsNotif ? "bg-violet-600 border-violet-600" : "bg-gray-700 border-gray-700"}`}>
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${smsNotif ? "translate-x-4" : "translate-x-0"}`} />
-              </div>
-            </button>
-          </div>
-          <p className="text-xs text-gray-600">Notification delivery requires a configured phone number or email address.</p>
-        </div>
-      </div>
-
-      {/* Actions */}
-      <div className="flex items-center gap-3 mt-6 pt-5 border-t border-white/6">
-        <Button
-          onClick={handleSave}
-          disabled={updateProfile.isPending}
-          className="flex-1 font-semibold gap-2"
-          style={{ background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)" }}
-        >
-          <Save className="h-4 w-4" />
-          {updateProfile.isPending ? "Saving…" : "Save Changes"}
-        </Button>
-        <Button
-          variant="outline"
-          onClick={onClose}
-          disabled={updateProfile.isPending}
-          className="border-white/10 text-gray-300 hover:text-white hover:border-white/20 bg-transparent"
-        >
-          Cancel
-        </Button>
-      </div>
-    </section>
-  );
-}
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function UserProfile() {
   const [, navigate] = useLocation();
-  const [editOpen, setEditOpen] = useState(false);
   const { user, loading, isAuthenticated, logout } = useAuth({
     redirectOnUnauthenticated: true,
     redirectPath: "/sign-in",
@@ -499,11 +309,11 @@ export default function UserProfile() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="border-white/10 text-gray-300 hover:text-white hover:border-violet-500/40 bg-transparent gap-1.5"
-                    onClick={() => setEditOpen((v) => !v)}
+                    className="border-white/10 text-gray-300 hover:text-white hover:border-white/20 bg-transparent gap-1.5"
+                    onClick={() => toast.info("Profile editing coming soon")}
                   >
                     <Edit3 className="h-3.5 w-3.5" />
-                    {editOpen ? "Close Settings" : "Edit Profile"}
+                    Edit Profile
                   </Button>
                   <Button
                     variant="outline"
@@ -519,15 +329,6 @@ export default function UserProfile() {
               </div>
             </div>
           </div>
-
-          {/* ── Edit Profile Panel (inline, shown when editOpen) ──────────── */}
-          {editOpen && (
-            <EditProfilePanel
-              user={user}
-              onClose={() => setEditOpen(false)}
-              onSaved={() => setEditOpen(false)}
-            />
-          )}
 
           {/* ── Stats row ─────────────────────────────────────────────────── */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -709,7 +510,7 @@ export default function UserProfile() {
                 icon={Briefcase}
                 title="Browse Jobs"
                 description="Find and apply to available trade jobs in your area."
-                href="/marketplace"
+                href="/jobs"
               />
               <QuickActionCard
                 icon={MessageSquare}
@@ -728,7 +529,7 @@ export default function UserProfile() {
                   icon={Star}
                   title="My Applications"
                   description="Track the status of your job applications."
-                  href="/dashboard/professional"
+                  href="/my-applications"
                 />
               )}
               {user.userType === "client" && (
@@ -736,7 +537,7 @@ export default function UserProfile() {
                   icon={LayoutDashboard}
                   title="My Jobs"
                   description="Manage the jobs you have posted on the platform."
-                  href="/dashboard/contractor"
+                  href="/my-jobs"
                   accent
                 />
               )}
@@ -745,7 +546,7 @@ export default function UserProfile() {
                   icon={Shield}
                   title="Admin Panel"
                   description="Manage users, jobs, and platform settings."
-                  href="/dashboard/admin"
+                  href="/admin"
                   accent
                 />
               )}
