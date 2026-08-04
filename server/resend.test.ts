@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { validateResendKey } from "./email";
 import { appRouter } from "./routers";
-import type { TrpcContext } from "./_core/context";
+import type { TrpcContext } from "./core/context";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 

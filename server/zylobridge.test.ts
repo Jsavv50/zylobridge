@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { appRouter } from "./routers";
 import { COOKIE_NAME } from "../shared/const";
-import type { TrpcContext } from "./_core/context";
+import type { TrpcContext } from "./core/context";
+import { vi } from "vitest";
+
+// Mock Paystack to avoid live HTTP calls in tests
+vi.mock("./paystack", () => ({
+  listPaystackBanks: vi.fn().mockResolvedValue([{ id: 1, name: "Zenith Bank", code: "057", slug: "zenith-bank", longcode: "057150013", gateway: null, pay_with_bank: false, active: true, country: "Nigeria", currency: "NGN", type: "nuban", is_deleted: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }]),
+  initializePaystackTransaction: vi.fn().mockResolvedValue({ authorization_url: "https://paystack.com/pay/test", access_code: "test-access", reference: "test-ref-001" }),
+  verifyPaystackTransaction: vi.fn().mockResolvedValue({ status: "success", amount: 500000, reference: "test-ref-001", paid_at: new Date().toISOString() }),
+  resolveAccountNumber: vi.fn().mockResolvedValue({ account_name: "Test User", account_number: "0123456789" }),
+  generatePaystackReference: vi.fn().mockReturnValue("ZB-test-001"),
+}));
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 

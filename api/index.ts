@@ -12,11 +12,11 @@
 import "dotenv/config";
 import express from "express";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { registerOAuthRoutes } from "../server/_core/oauth";
-import { registerGoogleAuthRoutes } from "../server/_core/googleAuth";
-import { registerStorageProxy } from "../server/_core/storageProxy";
+import { registerOAuthRoutes } from "../server/core/oauth";
+import { registerGoogleAuthRoutes } from "../server/core/googleAuth";
+import { registerStorageProxy } from "../server/core/storageProxy";
 import { appRouter } from "../server/routers";
-import { createContext } from "../server/_core/context";
+import { createContext } from "../server/core/context";
 import {
   helmetMiddleware,
   generalRateLimit,

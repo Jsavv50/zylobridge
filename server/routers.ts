@@ -1,9 +1,9 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { COOKIE_NAME } from "@shared/const";
-import { getSessionCookieOptions } from "./_core/cookies";
-import { systemRouter } from "./_core/systemRouter";
-import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { getSessionCookieOptions } from "./core/cookies";
+import { systemRouter } from "./core/systemRouter";
+import { protectedProcedure, publicProcedure, router } from "./core/trpc";
 import { storagePut } from "./storage";
 import {
   upsertUser,
@@ -790,7 +790,7 @@ export const appRouter = router({
         if (record.otp !== input.otp) throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid OTP. Please try again." });
         await markEmailOtpVerified(record.id);
         const user = await upsertUserByEmail(input.email, input.name);
-        const { sdk } = await import("./_core/sdk");
+        const { sdk } = await import("./core/sdk");
         const token = await sdk.createSessionToken(user!.openId, { name: user!.name ?? "" });
         const { COOKIE_NAME: CNAME } = await import("../shared/const");
         const cookieOpts = getSessionCookieOptions(ctx.req);
@@ -827,7 +827,7 @@ export const appRouter = router({
         if (record.otp !== input.otp) throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid OTP. Please try again." });
         await markOtpVerified(record.id);
         const user = await upsertUserByPhone(input.phone, input.name);
-        const { sdk } = await import("./_core/sdk");
+        const { sdk } = await import("./core/sdk");
         const token = await sdk.createSessionToken(user.openId, { name: user.name ?? "" });
         const { COOKIE_NAME: CNAME } = await import("../shared/const");
         const cookieOpts = getSessionCookieOptions(ctx.req);

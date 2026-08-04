@@ -210,3 +210,11 @@
 - [x] Scanned entire project for any other @shared/_core references — none found
 - [x] Verified 0 TypeScript errors and 41/41 tests passing
 - [x] Saved checkpoint and pushed to GitHub
+
+## Phase 27: Complete Repository Import Audit for Vercel Production
+- [ ] Scan every .ts/.tsx/.js/.mjs file for broken imports and unresolved aliases
+- [ ] Simulate exact Vercel serverless build (esbuild bundle of api/index.ts with alias resolution)
+- [ ] Fix every broken import: @shared/_core, relative paths, missing modules
+- [ ] Run production build with zero ERR_MODULE_NOT_FOUND errors
+- [ ] Verify 0 TypeScript errors and all tests passing
+- [ ] Save checkpoint and push to GitHub
