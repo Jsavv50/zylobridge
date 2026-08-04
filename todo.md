@@ -202,3 +202,11 @@
 - [x] Add startup diagnostics in registerGoogleAuthRoutes() — logs missing env vars and resolved callback URL at cold-start
 - [x] Verify 0 TypeScript errors and 41/41 tests passing
 - [x] Save checkpoint and push to GitHub
+
+## Phase 26: Vercel Module Resolution Fix — Cannot find module server/core/auth
+- [x] Identified root cause: sdk.ts imported from @shared/_core/errors; Vercel's bundler strips leading underscores from directory names, resolving _core → core at runtime, producing the path /var/task/server/core/auth which does not exist
+- [x] Created shared/core/ directory as a copy of shared/_core/ (both kept for safety)
+- [x] Updated server/_core/sdk.ts line 2: @shared/_core/errors → @shared/core/errors
+- [x] Scanned entire project for any other @shared/_core references — none found
+- [x] Verified 0 TypeScript errors and 41/41 tests passing
+- [x] Saved checkpoint and pushed to GitHub
