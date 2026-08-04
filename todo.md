@@ -212,20 +212,9 @@
 - [x] Saved checkpoint and pushed to GitHub
 
 ## Phase 27: Complete Repository Import Audit for Vercel Production
-- [x] Scan every .ts/.tsx/.js/.mjs file for broken imports and unresolved aliases
-- [x] Simulate exact Vercel serverless build (esbuild bundle of api/index.ts with alias resolution)
-- [x] Fix every broken import: renamed server/_core -> server/core, client/src/_core -> client/src/core, shared/_core -> shared/core across 20+ files
-- [x] Fixed bare server/storage import in imageGeneration.ts
-- [x] Fixed 2 dynamic imports in routers.ts
-- [x] Fixed Paystack mock in zylobridge.test.ts to use correct exported function names
-- [x] Run production build with zero ERR_MODULE_NOT_FOUND errors
-- [x] Verify 0 TypeScript errors and 41/41 tests passing
-- [x] Save checkpoint and push to GitHub
-
-## Phase 28: Route-Based Code Splitting
-- [x] Convert all page imports in App.tsx to React.lazy + Suspense
-- [x] Configure Vite manualChunks to separate vendor, ui, and feature chunks
-- [x] Add PageSkeleton loading fallback for Suspense boundaries
-- [x] Run production build — 20 chunks, largest 406 kB (vendor-react, gzip 120 kB), all feature chunks under 230 kB
-- [x] Verify 0 TypeScript errors and 41/41 tests passing
-- [x] Save checkpoint and push to GitHub
+- [ ] Scan every .ts/.tsx/.js/.mjs file for broken imports and unresolved aliases
+- [ ] Simulate exact Vercel serverless build (esbuild bundle of api/index.ts with alias resolution)
+- [ ] Fix every broken import: @shared/_core, relative paths, missing modules
+- [ ] Run production build with zero ERR_MODULE_NOT_FOUND errors
+- [ ] Verify 0 TypeScript errors and all tests passing
+- [ ] Save checkpoint and push to GitHub
