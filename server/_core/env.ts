@@ -20,6 +20,11 @@ export const ENV = {
 
   // Explicit production callback base URL override (optional, takes precedence over VERCEL_URL)
   appBaseUrl: process.env.APP_BASE_URL ?? "",
+
+  // Supabase — for session persistence and user management
+  supabaseUrl: process.env.SUPABASE_URL ?? "",
+  supabaseAnonKey: process.env.SUPABASE_ANON_KEY ?? "",
+  supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
 };
 
 /**

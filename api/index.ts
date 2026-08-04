@@ -13,6 +13,7 @@ import "dotenv/config";
 import express from "express";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "../server/_core/oauth";
+import { registerGoogleAuthRoutes } from "../server/_core/googleAuth";
 import { registerStorageProxy } from "../server/_core/storageProxy";
 import { appRouter } from "../server/routers";
 import { createContext } from "../server/_core/context";
@@ -35,10 +36,12 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // ── Rate limiting ─────────────────────────────────────────────────────────────
 app.use("/api/trpc/auth", authRateLimit);
+app.use("/api/auth", authRateLimit);
 app.use("/api/", generalRateLimit);
 
 // ── OAuth routes ──────────────────────────────────────────────────────────────
 registerOAuthRoutes(app);
+registerGoogleAuthRoutes(app);
 
 // ── Storage proxy ─────────────────────────────────────────────────────────────
 registerStorageProxy(app);

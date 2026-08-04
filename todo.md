@@ -171,3 +171,15 @@
 - [x] Update Footer.tsx to link Privacy Policy to /privacy-policy route
 - [x] Verify 0 TypeScript errors
 - [x] Save checkpoint and push to GitHub
+
+## Phase 23: Google OAuth + Supabase Integration
+- [x] Store GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY as project secrets
+- [x] Install @supabase/supabase-js on server and client
+- [x] Add Supabase env vars to server/_core/env.ts
+- [x] Build server-side Google OAuth routes: /api/auth/google (redirect) and /api/auth/google/callback (exchange + session)
+- [x] On successful Google callback: upsert user in local DB + create Supabase session
+- [x] Update SignIn.tsx Google button to use direct Google OAuth URL (/api/auth/google)
+- [x] Register Google auth routes in both server/_core/index.ts and api/index.ts (Vercel)
+- [x] Write credential validation tests for Google and Supabase (41/41 passing)
+- [x] Verify 0 TypeScript errors
+- [x] Save checkpoint and push to GitHub

@@ -182,8 +182,8 @@ export default function SignIn() {
               </div>
 
               <div className="rounded-2xl border border-white/8 bg-[#131a26]/80 backdrop-blur-sm p-8 space-y-4">
-                {/* Google OAuth — uses the correct platform OAuth URL */}
-                <a href={getLoginUrl()} className="block">
+                {/* Google OAuth — direct Google OAuth 2.0 via /api/auth/google */}
+                <a href={`/api/auth/google?returnPath=${encodeURIComponent(window.location.pathname === '/sign-in' ? '/' : window.location.pathname)}`} className="block">
                   <button className="w-full flex items-center justify-between px-5 py-4 rounded-xl font-semibold text-white transition-all duration-200 hover:bg-white/10 active:scale-[0.98] border border-white/10 bg-white/5">
                     <span className="flex items-center gap-3">
                       <span className="w-8 h-8 rounded-lg bg-white flex items-center justify-center">
