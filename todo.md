@@ -218,3 +218,12 @@
 - [ ] Run production build with zero ERR_MODULE_NOT_FOUND errors
 - [ ] Verify 0 TypeScript errors and all tests passing
 - [ ] Save checkpoint and push to GitHub
+
+## Phase 31: Vercel Node.js Server Deployment Conversion
+- [x] Audit current build scripts — pnpm build already runs vite build + esbuild server/_core/index.ts
+- [x] Confirmed build script produces dist/index.js (113 kB self-contained Express bundle) + dist/public/ (Vite frontend)
+- [x] Rewrote vercel.json: buildCommand: pnpm run build, builds @vercel/node pointing to dist/index.js, all routes → dist/index.js
+- [x] Removed api/ serverless entry point directory entirely
+- [x] Run pnpm build end-to-end — dist/index.js (113 kB) + dist/public/index.html produced
+- [x] Verify 0 TypeScript errors and 41/41 tests passing
+- [x] Save checkpoint and push to GitHub

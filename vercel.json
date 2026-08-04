@@ -1,20 +1,20 @@
 {
   "version": 2,
-  "buildCommand": "pnpm run build:client",
-  "outputDirectory": "dist/public",
+  "buildCommand": "pnpm run build",
   "installCommand": "pnpm install --frozen-lockfile",
-  "rewrites": [
+  "builds": [
     {
-      "source": "/manus-storage/(.*)",
-      "destination": "/api/index.ts"
-    },
+      "src": "dist/index.js",
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": ["dist/**"]
+      }
+    }
+  ],
+  "routes": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api/index.ts"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "src": "/(.*)",
+      "dest": "/dist/index.js"
     }
   ]
 }
