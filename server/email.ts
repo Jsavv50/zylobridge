@@ -1,5 +1,5 @@
 import { Resend } from "resend";
-import { ENV } from "./core/env";
+import { ENV } from "./_core/env";
 
 let _resend: Resend | null = null;
 

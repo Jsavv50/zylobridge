@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { appRouter } from "./routers";
 import { COOKIE_NAME } from "../shared/const";
-import type { TrpcContext } from "./core/context";
+import type { TrpcContext } from "./_core/context";
 import { vi } from "vitest";
 
 // Mock Paystack to avoid live HTTP calls in tests

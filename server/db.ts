@@ -28,7 +28,7 @@ import {
   InsertOrder,
   InsertProduct,
 } from "../drizzle/schema";
-import { ENV } from "./core/env";
+import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
