@@ -19,6 +19,8 @@ import Orders from "./pages/Orders";
 import PhoneLogin from "./pages/PhoneLogin";
 import SignIn from "./pages/SignIn";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfService from "./pages/TermsOfService";
+import UserProfile from "./pages/UserProfile";
 
 function Router() {
   return (
@@ -39,6 +41,8 @@ function Router() {
       <Route path="/login/phone" component={PhoneLogin} />
       <Route path="/sign-in" component={SignIn} />
       <Route path="/privacy-policy" component={PrivacyPolicy} />
+      <Route path="/terms" component={TermsOfService} />
+      <Route path="/profile" component={UserProfile} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

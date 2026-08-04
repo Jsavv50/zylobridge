@@ -183,3 +183,13 @@
 - [x] Write credential validation tests for Google and Supabase (41/41 passing)
 - [x] Verify 0 TypeScript errors
 - [x] Save checkpoint and push to GitHub
+
+## Phase 24: User Profile Dashboard + Terms of Service Page
+- [x] Build UserProfile.tsx — account details, settings, sign-out, role display, verification status
+- [x] Register /profile route in App.tsx
+- [x] Update Navbar user dropdown to link to /profile (My Profile item with User icon)
+- [x] Build TermsOfService.tsx using same premium layout as PrivacyPolicy.tsx (14 sections, sticky TOC, keyword search, callouts)
+- [x] Register /terms route in App.tsx
+- [x] Update Footer.tsx Terms of Service link to /terms
+- [x] Verify 0 TypeScript errors and 41/41 tests passing
+- [x] Save checkpoint and push to GitHub

@@ -60,7 +60,7 @@ export default function Footer() {
             <ul className="space-y-2.5">
               {[
                 { href: "/privacy-policy", label: "Privacy Policy" },
-                { href: "#", label: "Terms of Service" },
+                { href: "/terms", label: "Terms of Service" },
                 { href: "#", label: "Cookie Policy" },
                 { href: "#", label: "GDPR Compliance" },
               ].map((item) => (

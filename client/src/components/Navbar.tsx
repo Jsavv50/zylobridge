@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Menu, X, ChevronDown, Briefcase, LayoutDashboard, Shield, MessageSquare, ShieldCheck, ShoppingBag } from "lucide-react";
+import { Menu, X, ChevronDown, Briefcase, LayoutDashboard, Shield, MessageSquare, ShieldCheck, ShoppingBag, User } from "lucide-react";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { trpc } from "@/lib/trpc";
 
@@ -173,6 +173,11 @@ export default function Navbar() {
                     <DropdownMenuItem asChild>
                       <Link href="/orders" className="cursor-pointer text-gray-300 hover:text-white flex items-center gap-2">
                         <ShoppingBag className="h-4 w-4" /> My Orders
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/profile" className="cursor-pointer text-gray-300 hover:text-white flex items-center gap-2">
+                        <User className="h-4 w-4" /> My Profile
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator className="bg-white/10" />
