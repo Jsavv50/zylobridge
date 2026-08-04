@@ -159,3 +159,15 @@
 - [x] Kept /api/(.*) → api/index.ts and /(.*) → /index.html rewrites
 - [x] Verified 0 TypeScript errors and 34/34 tests passing
 - [x] Saved checkpoint and pushed to GitHub
+
+## Phase 22: Privacy Policy Page
+- [x] Build enterprise-grade PrivacyPolicy.tsx with sticky TOC, keyword search, callout boxes, breadcrumb navigation
+- [x] Preserve all 13 sections of legal content word-for-word with correct numbering and hierarchy
+- [x] Implement WCAG-compliant accessible markup (semantic HTML, aria labels, keyboard navigation, focus rings)
+- [x] Add IntersectionObserver for active section highlighting in sticky TOC
+- [x] Add back-to-top button with scroll visibility detection
+- [x] Add document info footer with last updated date, company name, contact email, and related policy links
+- [x] Register /privacy-policy route in App.tsx
+- [x] Update Footer.tsx to link Privacy Policy to /privacy-policy route
+- [x] Verify 0 TypeScript errors
+- [x] Save checkpoint and push to GitHub
