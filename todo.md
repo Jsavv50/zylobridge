@@ -193,3 +193,12 @@
 - [x] Update Footer.tsx Terms of Service link to /terms
 - [x] Verify 0 TypeScript errors and 41/41 tests passing
 - [x] Save checkpoint and push to GitHub
+
+## Phase 25: Google OAuth FUNCTION_INVOCATION_FAILED Fix
+- [x] Fix Crash 1: supabase.ts — replaced assertSupabaseConfig() throw with lazy init returning null; getSupabaseAdmin/Public now return null instead of throwing when credentials missing
+- [x] Fix Crash 2: googleAuth.ts — added getCallbackUrl() with explicit protocol validation; throws a clear error if APP_BASE_URL/VERCEL_URL resolves without https://
+- [x] Fix Crash 3: googleAuth.ts — added VITE_APP_ID guard with console.warn if missing; session token still created but operator is alerted
+- [x] Fix Crash 4: loginMethod "google" is a varchar(64) — no enum constraint, already valid
+- [x] Add startup diagnostics in registerGoogleAuthRoutes() — logs missing env vars and resolved callback URL at cold-start
+- [x] Verify 0 TypeScript errors and 41/41 tests passing
+- [x] Save checkpoint and push to GitHub

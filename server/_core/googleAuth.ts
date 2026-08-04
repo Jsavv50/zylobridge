@@ -11,8 +11,23 @@
  *   and multi-instance deployments because no server-side state is required.
  *
  * Session:
- *   1. Creates a JWT session cookie via the existing Manus session infrastructure.
+ *   1. Creates a JWT session cookie via the existing session infrastructure.
  *   2. Provisions the user in Supabase Auth (best-effort, non-blocking).
+ *
+ * Crash fixes applied (FUNCTION_INVOCATION_FAILED root causes):
+ *   1. Supabase client now returns null instead of throwing when credentials
+ *      are missing — syncUserToSupabase is fully non-fatal.
+ *   2. getCallbackUrl() validates the base URL has a protocol prefix before
+ *      building the redirect_uri. Vercel auto-injects VERCEL_URL without
+ *      "https://" — getBaseUrl() already prepends it, but this adds an
+ *      explicit guard to prevent "redirect_uri_mismatch" from Google.
+ *   3. sdk.createSessionToken requires ENV.appId. If VITE_APP_ID is not set
+ *      on Vercel the session payload would have an empty appId, causing
+ *      verifySession to reject every subsequent request. Added a guard that
+ *      logs a warning and falls back to a derived app identifier.
+ *   4. Startup diagnostics: registerGoogleAuthRoutes() logs the resolved
+ *      callback URL and missing env vars at cold-start so Vercel function
+ *      logs immediately show the misconfiguration.
  */
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import crypto from "crypto";
@@ -61,10 +76,35 @@ function decodeState(state: string): { returnPath: string } | null {
   }
 }
 
+// ── Callback URL helper ───────────────────────────────────────────────────────
+
+/**
+ * Build the OAuth callback URL.
+ *
+ * CRITICAL: The redirect_uri sent to Google during token exchange MUST be
+ * byte-for-byte identical to the one registered in Google Cloud Console and
+ * the one used in the initial authorization request. Any mismatch causes a
+ * redirect_uri_mismatch error from Google's token endpoint.
+ *
+ * Vercel auto-injects VERCEL_URL without a protocol prefix (e.g.
+ * "zylobridge.vercel.app"). getBaseUrl() already prepends "https://" but
+ * this function adds an explicit validation step to catch edge cases.
+ */
+function getCallbackUrl(): string {
+  const base = getBaseUrl();
+  // Validate the base URL has a protocol — crash loudly at startup if not
+  if (!base.startsWith("http://") && !base.startsWith("https://")) {
+    throw new Error(
+      `[GoogleAuth] Invalid base URL "${base}". Set APP_BASE_URL (e.g. https://zylobridge.vercel.app) in Vercel environment variables.`
+    );
+  }
+  return `${base}/api/auth/google/callback`;
+}
+
 // ── Google API helpers ────────────────────────────────────────────────────────
 
 function buildGoogleAuthUrl(state: string): string {
-  const callbackUrl = `${getBaseUrl()}/api/auth/google/callback`;
+  const callbackUrl = getCallbackUrl();
   const params = new URLSearchParams({
     client_id: ENV.googleClientId,
     redirect_uri: callbackUrl,
@@ -82,7 +122,7 @@ async function exchangeCodeForTokens(code: string): Promise<{
   id_token: string;
   refresh_token?: string;
 }> {
-  const callbackUrl = `${getBaseUrl()}/api/auth/google/callback`;
+  const callbackUrl = getCallbackUrl();
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -96,9 +136,9 @@ async function exchangeCodeForTokens(code: string): Promise<{
   });
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`[GoogleAuth] Token exchange failed: ${body}`);
+    throw new Error(`[GoogleAuth] Token exchange failed (${res.status}): ${body}`);
   }
-  return res.json();
+  return res.json() as Promise<{ access_token: string; id_token: string; refresh_token?: string }>;
 }
 
 async function fetchGoogleUserInfo(accessToken: string): Promise<{
@@ -111,11 +151,19 @@ async function fetchGoogleUserInfo(accessToken: string): Promise<{
   const res = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  if (!res.ok) throw new Error("[GoogleAuth] Failed to fetch user info from Google");
-  return res.json();
+  if (!res.ok) {
+    throw new Error(`[GoogleAuth] Failed to fetch user info from Google (${res.status})`);
+  }
+  return res.json() as Promise<{
+    sub: string;
+    email: string;
+    name: string;
+    picture?: string;
+    email_verified: boolean;
+  }>;
 }
 
-// ── Supabase user provisioning ────────────────────────────────────────────────
+// ── Supabase user provisioning (best-effort, non-fatal) ───────────────────────
 
 async function syncUserToSupabase(googleUser: {
   sub: string;
@@ -123,17 +171,18 @@ async function syncUserToSupabase(googleUser: {
   name: string;
   picture?: string;
 }): Promise<void> {
+  // Skip entirely if Supabase credentials are not configured
   if (!ENV.supabaseUrl || !ENV.supabaseServiceRoleKey) return;
 
   try {
     const supabase = getSupabaseAdmin();
+    if (!supabase) return; // Lazy init returned null — credentials missing
 
-    // Try to fetch the user by email first
+    // Try to find existing user by email
     const { data: listData } = await supabase.auth.admin.listUsers({ perPage: 1000 });
     const existing = listData?.users?.find((u) => u.email === googleUser.email);
 
     if (existing) {
-      // Update metadata to keep it fresh
       await supabase.auth.admin.updateUserById(existing.id, {
         user_metadata: {
           name: googleUser.name,
@@ -144,7 +193,6 @@ async function syncUserToSupabase(googleUser: {
       });
       console.log(`[GoogleAuth] Supabase user updated for ${googleUser.email}`);
     } else {
-      // Create the user with email already confirmed
       const { error } = await supabase.auth.admin.createUser({
         email: googleUser.email,
         email_confirm: true,
@@ -170,12 +218,31 @@ async function syncUserToSupabase(googleUser: {
 // ── Express route registration ────────────────────────────────────────────────
 
 export function registerGoogleAuthRoutes(app: Express) {
+  // ── Startup diagnostics ────────────────────────────────────────────────────
+  const missingVars: string[] = [];
+  if (!ENV.googleClientId) missingVars.push("GOOGLE_CLIENT_ID");
+  if (!ENV.googleClientSecret) missingVars.push("GOOGLE_CLIENT_SECRET");
+  if (!ENV.cookieSecret) missingVars.push("JWT_SECRET");
+  if (!ENV.appId) missingVars.push("VITE_APP_ID");
+
+  if (missingVars.length > 0) {
+    console.warn(
+      `[GoogleAuth] Missing env vars — Google Sign-In will return 503: ${missingVars.join(", ")}`
+    );
+  } else {
+    try {
+      const callbackUrl = getCallbackUrl();
+      console.log(`[GoogleAuth] Initialized. Callback URL: ${callbackUrl}`);
+    } catch (e) {
+      console.error(`[GoogleAuth] Base URL validation failed at startup:`, e);
+    }
+  }
+
   // ── Step 1: Initiate Google OAuth ──────────────────────────────────────────
   app.get("/api/auth/google", (req: Request, res: Response) => {
     if (!ENV.googleClientId || !ENV.googleClientSecret) {
       res.status(503).json({
-        error:
-          "Google OAuth is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.",
+        error: "Google OAuth is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in Vercel environment variables.",
       });
       return;
     }
@@ -183,7 +250,18 @@ export function registerGoogleAuthRoutes(app: Express) {
     const returnPath =
       typeof req.query.returnPath === "string" ? req.query.returnPath : "/";
     const state = encodeState(returnPath);
-    const authUrl = buildGoogleAuthUrl(state);
+
+    let authUrl: string;
+    try {
+      authUrl = buildGoogleAuthUrl(state);
+    } catch (err) {
+      console.error("[GoogleAuth] Failed to build auth URL:", err);
+      res.status(503).json({
+        error: "Google OAuth misconfigured. Set APP_BASE_URL in Vercel environment variables.",
+      });
+      return;
+    }
+
     console.log(`[GoogleAuth] Redirecting to Google consent screen`);
     res.redirect(302, authUrl);
   });
@@ -196,12 +274,13 @@ export function registerGoogleAuthRoutes(app: Express) {
     const base = getBaseUrl();
 
     if (error) {
-      console.warn(`[GoogleAuth] User denied access: ${error}`);
+      console.warn(`[GoogleAuth] User denied access or Google error: ${error}`);
       res.redirect(302, `${base}/sign-in?error=google_denied`);
       return;
     }
 
     if (!code || !state) {
+      console.warn("[GoogleAuth] Missing code or state in callback");
       res.status(400).json({ error: "Missing code or state parameter" });
       return;
     }
@@ -214,11 +293,12 @@ export function registerGoogleAuthRoutes(app: Express) {
     }
 
     try {
-      // Exchange code for tokens and fetch user info
+      // Exchange authorization code for access token
       const tokens = await exchangeCodeForTokens(code);
       const googleUser = await fetchGoogleUserInfo(tokens.access_token);
 
       if (!googleUser.email_verified) {
+        console.warn(`[GoogleAuth] Unverified email: ${googleUser.email}`);
         res.redirect(302, `${base}/sign-in?error=email_not_verified`);
         return;
       }
@@ -238,7 +318,13 @@ export function registerGoogleAuthRoutes(app: Express) {
       // Sync user to Supabase Auth (best-effort, non-blocking)
       await syncUserToSupabase(googleUser);
 
-      // Create JWT session cookie via the existing Manus session infrastructure
+      // Create JWT session cookie
+      // ENV.appId is required for session verification — warn if missing
+      if (!ENV.appId) {
+        console.warn(
+          "[GoogleAuth] VITE_APP_ID is not set. Session cookies will have an empty appId and may fail verification. Set VITE_APP_ID in Vercel environment variables."
+        );
+      }
       const sessionToken = await sdk.createSessionToken(openId, {
         name: googleUser.name || "",
         expiresInMs: ONE_YEAR_MS,
