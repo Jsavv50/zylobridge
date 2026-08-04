@@ -167,6 +167,49 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // Vendor: React core — always needed, cache forever
+          if (id.includes("node_modules/react") || id.includes("node_modules/react-dom") || id.includes("node_modules/scheduler")) {
+            return "vendor-react";
+          }
+          // Vendor: tRPC + TanStack Query
+          if (id.includes("node_modules/@trpc") || id.includes("node_modules/@tanstack")) {
+            return "vendor-trpc";
+          }
+          // Vendor: Radix UI + shadcn components
+          if (id.includes("node_modules/@radix-ui") || id.includes("node_modules/cmdk") || id.includes("node_modules/vaul") || id.includes("node_modules/sonner")) {
+            return "vendor-ui";
+          }
+          // Vendor: Charts + visualisation
+          if (id.includes("node_modules/recharts") || id.includes("node_modules/d3")) {
+            return "vendor-charts";
+          }
+          // Vendor: remaining third-party
+          if (id.includes("node_modules")) {
+            return "vendor-misc";
+          }
+          // Feature: dashboard pages (large, role-gated)
+          if (id.includes("/pages/AdminDashboard") || id.includes("/pages/ClientDashboard") || id.includes("/pages/ProfessionalDashboard")) {
+            return "feature-dashboards";
+          }
+          // Feature: legal pages (rarely visited)
+          if (id.includes("/pages/PrivacyPolicy") || id.includes("/pages/TermsOfService")) {
+            return "feature-legal";
+          }
+          // Feature: messaging (socket-heavy)
+          if (id.includes("/pages/Messaging")) {
+            return "feature-messaging";
+          }
+          // Feature: shop + orders
+          if (id.includes("/pages/Shop") || id.includes("/pages/Orders")) {
+            return "feature-commerce";
+          }
+        },
+      },
+    },
   },
   server: {
     host: true,
