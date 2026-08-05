@@ -1,5 +1,5 @@
 /**
- * Direct Google OAuth 2.0 integration — production-safe for Vercel serverless.
+ * Direct Google OAuth 2.0 integration — production-safe for Railway.
  *
  * Routes registered:
  *   GET /api/auth/google           — redirect to Google consent screen
@@ -7,27 +7,23 @@
  *
  * State management:
  *   Uses a stateless HMAC-signed state token (nonce.returnPath.timestamp.sig)
- *   instead of an in-memory Map. This is safe across Vercel serverless cold starts
- *   and multi-instance deployments because no server-side state is required.
+ *   instead of an in-memory Map. Safe across multi-instance deployments
+ *   because no server-side state is required.
  *
  * Session:
  *   1. Creates a JWT session cookie via the existing session infrastructure.
  *   2. Provisions the user in Supabase Auth (best-effort, non-blocking).
  *
- * Crash fixes applied (FUNCTION_INVOCATION_FAILED root causes):
- *   1. Supabase client now returns null instead of throwing when credentials
+ * Setup notes:
+ *   1. Supabase client returns null instead of throwing when credentials
  *      are missing — syncUserToSupabase is fully non-fatal.
  *   2. getCallbackUrl() validates the base URL has a protocol prefix before
- *      building the redirect_uri. Vercel auto-injects VERCEL_URL without
- *      "https://" — getBaseUrl() already prepends it, but this adds an
- *      explicit guard to prevent "redirect_uri_mismatch" from Google.
- *   3. sdk.createSessionToken requires ENV.appId. If VITE_APP_ID is not set
- *      on Vercel the session payload would have an empty appId, causing
- *      verifySession to reject every subsequent request. Added a guard that
- *      logs a warning and falls back to a derived app identifier.
+ *      building the redirect_uri. Set APP_BASE_URL or APP_URL in Railway
+ *      environment variables (e.g. https://zylobridge.up.railway.app).
+ *   3. sdk.createSessionToken requires ENV.appId (VITE_APP_ID). If not set,
+ *      a warning is logged and a derived app identifier is used as fallback.
  *   4. Startup diagnostics: registerGoogleAuthRoutes() logs the resolved
- *      callback URL and missing env vars at cold-start so Vercel function
- *      logs immediately show the misconfiguration.
+ *      callback URL and missing env vars at startup.
  */
 import { COOKIE_NAME, ONE_YEAR_MS } from "../../shared/const";
 import crypto from "crypto";
@@ -86,16 +82,16 @@ function decodeState(state: string): { returnPath: string } | null {
  * the one used in the initial authorization request. Any mismatch causes a
  * redirect_uri_mismatch error from Google's token endpoint.
  *
- * Vercel auto-injects VERCEL_URL without a protocol prefix (e.g.
- * "zylobridge.vercel.app"). getBaseUrl() already prepends "https://" but
- * this function adds an explicit validation step to catch edge cases.
+ * getBaseUrl() resolves APP_BASE_URL or APP_URL set in Railway environment
+ * variables. This function adds an explicit validation step to ensure the
+ * base URL has a protocol prefix before building the callback URL.
  */
 function getCallbackUrl(): string {
   const base = getBaseUrl();
   // Validate the base URL has a protocol — crash loudly at startup if not
   if (!base.startsWith("http://") && !base.startsWith("https://")) {
     throw new Error(
-      `[GoogleAuth] Invalid base URL "${base}". Set APP_BASE_URL (e.g. https://zylobridge.vercel.app) in Vercel environment variables.`
+      `[GoogleAuth] Invalid base URL "${base}". Set APP_BASE_URL or APP_URL in Railway environment variables (e.g. https://zylobridge.up.railway.app).`
     );
   }
   return `${base}/api/auth/google/callback`;
@@ -242,7 +238,7 @@ export function registerGoogleAuthRoutes(app: Express) {
   app.get("/api/auth/google", (req: Request, res: Response) => {
     if (!ENV.googleClientId || !ENV.googleClientSecret) {
       res.status(503).json({
-        error: "Google OAuth is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in Vercel environment variables.",
+        error: "Google OAuth is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in Railway environment variables.",
       });
       return;
     }
@@ -257,7 +253,7 @@ export function registerGoogleAuthRoutes(app: Express) {
     } catch (err) {
       console.error("[GoogleAuth] Failed to build auth URL:", err);
       res.status(503).json({
-        error: "Google OAuth misconfigured. Set APP_BASE_URL in Vercel environment variables.",
+        error: "Google OAuth misconfigured. Set APP_BASE_URL or APP_URL in Railway environment variables.",
       });
       return;
     }
@@ -322,7 +318,7 @@ export function registerGoogleAuthRoutes(app: Express) {
       // ENV.appId is required for session verification — warn if missing
       if (!ENV.appId) {
         console.warn(
-          "[GoogleAuth] VITE_APP_ID is not set. Session cookies will have an empty appId and may fail verification. Set VITE_APP_ID in Vercel environment variables."
+          "[GoogleAuth] VITE_APP_ID is not set. Session cookies will have an empty appId and may fail verification. Set VITE_APP_ID in Railway environment variables."
         );
       }
       const sessionToken = await sdk.createSessionToken(openId, {

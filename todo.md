@@ -237,3 +237,17 @@
 - [x] Run pnpm build end-to-end — dist/index.js (113 kB) + dist/public/index.html produced
 - [x] Verify 0 TypeScript errors and 41/41 tests passing
 - [x] Save checkpoint and push to GitHub
+
+## Phase 35: Railway Production Migration
+- [x] Delete api/index.ts and api/ directory (Vercel serverless entry point removed)
+- [x] Delete vercel.json (no Vercel configuration remaining)
+- [x] Revert VITE_API_URL in client/src/main.tsx — restored to hardcoded /api/trpc (same-origin)
+- [x] Clean server/_core/env.ts — removed VERCEL_URL, updated getBaseUrl() to use APP_BASE_URL or APP_URL for Railway
+- [x] Update server/_core/googleAuth.ts — removed all Vercel references, updated error messages and comments for Railway
+- [x] Add GET /api/health endpoint to server/_core/index.ts returning {status:"ok",timestamp:"..."}
+- [x] pnpm build succeeds — dist/index.js 112.9 kB + dist/public/ produced
+- [x] pnpm check — 0 TypeScript errors
+- [x] pnpm test — 41/41 passing
+- [x] Production server starts: /api/health 200, /api/trpc 200, / 200 (React frontend)
+- [x] No VERCEL_URL or Vercel-specific references in source files
+- [x] Commit to GitHub

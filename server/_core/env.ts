@@ -8,18 +8,16 @@ export const ENV = {
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
 
-  // Google OAuth credentials — set in Vercel env vars
+  // Google OAuth credentials
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
 
   // Resend transactional email API key
   resendApiKey: process.env.RESEND_API_KEY ?? "",
 
-  // Vercel deployment URL (auto-injected by Vercel as VERCEL_URL, no protocol prefix)
-  vercelUrl: process.env.VERCEL_URL ?? "",
-
-  // Explicit production callback base URL override (optional, takes precedence over VERCEL_URL)
-  appBaseUrl: process.env.APP_BASE_URL ?? "",
+  // Canonical production URL — set APP_BASE_URL or APP_URL in Railway environment variables
+  // e.g. https://zylobridge.up.railway.app
+  appBaseUrl: process.env.APP_BASE_URL ?? process.env.APP_URL ?? "",
 
   // Supabase — for session persistence and user management
   supabaseUrl: process.env.SUPABASE_URL ?? "",
@@ -31,12 +29,11 @@ export const ENV = {
  * Resolve the canonical base URL for OAuth callbacks.
  *
  * Priority order:
- *   1. APP_BASE_URL  — explicit override (e.g. https://zylobridge.vercel.app)
- *   2. VERCEL_URL   — auto-injected by Vercel (no protocol, e.g. zylobridge.vercel.app)
- *   3. Localhost fallback for local development
+ *   1. APP_BASE_URL or APP_URL — set in Railway environment variables
+ *      e.g. https://zylobridge.up.railway.app
+ *   2. Localhost fallback for local development
  */
 export function getBaseUrl(): string {
   if (ENV.appBaseUrl) return ENV.appBaseUrl.replace(/\/$/, "");
-  if (ENV.vercelUrl) return `https://${ENV.vercelUrl}`;
   return "http://localhost:3000";
 }
