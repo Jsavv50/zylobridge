@@ -219,6 +219,16 @@
 - [ ] Verify 0 TypeScript errors and all tests passing
 - [ ] Save checkpoint and push to GitHub
 
+## Phase 33: Restore Vercel Serverless Architecture
+- [x] Create api/index.ts — Vercel serverless entry point mounting Express app (security, OAuth, Google Auth, storage proxy, tRPC, health check)
+- [x] Rewrite vercel.json — buildCommand: pnpm run build:client, outputDirectory: dist/public, /api/* → api/index.ts, SPA fallback → /index.html
+- [x] pnpm install succeeds (Done in 1.3s)
+- [x] pnpm build:client succeeds — dist/public/index.html produced
+- [x] 0 TypeScript errors (pnpm check clean)
+- [x] 41/41 tests passing
+- [x] /api/health returns {"status":"ok","timestamp":"..."}
+- [x] Commit to GitHub
+
 ## Phase 31: Vercel Node.js Server Deployment Conversion
 - [x] Audit current build scripts — pnpm build already runs vite build + esbuild server/_core/index.ts
 - [x] Confirmed build script produces dist/index.js (113 kB self-contained Express bundle) + dist/public/ (Vite frontend)
