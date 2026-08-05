@@ -237,3 +237,11 @@
 - [x] Run pnpm build end-to-end — dist/index.js (113 kB) + dist/public/index.html produced
 - [x] Verify 0 TypeScript errors and 41/41 tests passing
 - [x] Save checkpoint and push to GitHub
+
+## Phase 34: Revert Vercel Serverless — Restore Express Node.js Architecture
+- [x] Delete api/index.ts and api/ directory
+- [x] Restore vercel.json to original Node.js server build (buildCommand: pnpm run build, @vercel/node pointing to dist/index.js)
+- [x] pnpm build succeeds — dist/index.js 112.8 kB + dist/public/ produced
+- [x] 0 TypeScript errors (pnpm check clean)
+- [x] 41/41 tests passing
+- [x] Commit to GitHub
