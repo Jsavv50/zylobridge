@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
+import cors from "cors";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerGoogleAuthRoutes } from "./googleAuth";
@@ -37,6 +38,36 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 async function startServer() {
   const app = express();
   const server = createServer(app);
+
+  // ── CORS ─────────────────────────────────────────────────────────────────
+  // Allow the Vercel frontend origin to make cross-origin API requests.
+  // FRONTEND_URL must be set in Railway environment variables, e.g.:
+  //   https://zylobridge.vercel.app
+  // Multiple origins can be comma-separated: https://a.vercel.app,https://b.com
+  const allowedOrigins = (process.env.FRONTEND_URL ?? "")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean);
+
+  app.use(
+    cors({
+      origin: (origin, callback) => {
+        // Allow same-origin requests (no Origin header) and local development
+        if (!origin) return callback(null, true);
+        if (
+          allowedOrigins.length === 0 ||
+          allowedOrigins.includes(origin) ||
+          origin.startsWith("http://localhost")
+        ) {
+          return callback(null, true);
+        }
+        callback(new Error(`CORS: origin ${origin} not allowed`));
+      },
+      credentials: true,
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization", "Cookie"],
+    })
+  );
 
   // ── Security middleware ──────────────────────────────────────────────────
   app.use(helmetMiddleware);

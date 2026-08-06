@@ -251,3 +251,20 @@
 - [x] Production server starts: /api/health 200, /api/trpc 200, / 200 (React frontend)
 - [x] No VERCEL_URL or Vercel-specific references in source files
 - [x] Commit to GitHub
+
+## Phase 36: Split Deployment — Vercel (frontend) + Railway (backend)
+- [x] Install cors and @types/cors packages
+- [x] Add build:server script to package.json (esbuild server/_core/index.ts → dist/index.js)
+- [x] Update build script to run build:client && build:server sequentially
+- [x] Add engines field to package.json (node >=20.0.0)
+- [x] Create vercel.json — buildCommand: pnpm run build:client, outputDirectory: dist/public, SPA fallback
+- [x] Create railway.json — NIXPACKS builder, build:server, node dist/index.js start, /api/health healthcheck
+- [x] Wire VITE_API_URL in client/src/main.tsx — API_URL const with Railway backend URL, falls back to "" for local dev
+- [x] Add CORS middleware to server/_core/index.ts — reads FRONTEND_URL env var, allows Vercel origin + localhost
+- [x] Audit shared/ — all files are browser-safe (pure TS types and utilities, no Node.js-only imports)
+- [x] Confirm no runtime server/ or drizzle/ imports in client/src/
+- [x] pnpm build:client succeeds — dist/public/ produced
+- [x] pnpm build:server succeeds — dist/index.js 113.5 kB produced
+- [x] pnpm check — 0 TypeScript errors
+- [x] pnpm test — 41/41 passing
+- [x] Commit to GitHub
