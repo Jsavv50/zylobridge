@@ -9,7 +9,7 @@ import { registerGoogleAuthRoutes } from "./googleAuth";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
-import { serveStatic, setupVite } from "./vite";
+import { setupVite } from "./vite";
 import { registerSocketIO } from "../socket";
 import {
   helmetMiddleware,
@@ -44,10 +44,16 @@ async function startServer() {
   // FRONTEND_URL must be set in Railway environment variables, e.g.:
   //   https://zylobridge.vercel.app
   // Multiple origins can be comma-separated: https://a.vercel.app,https://b.com
-  const allowedOrigins = (process.env.FRONTEND_URL ?? "")
-    .split(",")
-    .map((o) => o.trim())
-    .filter(Boolean);
+  // Always allow the production domain. FRONTEND_URL can add extra origins
+  // (e.g. preview deployments) as a comma-separated list.
+  const allowedOrigins = [
+    "https://zylobridge.com",
+    "https://www.zylobridge.com",
+    ...(process.env.FRONTEND_URL ?? "")
+      .split(",")
+      .map((o) => o.trim())
+      .filter(Boolean),
+  ];
 
   app.use(
     cors({
@@ -104,11 +110,9 @@ async function startServer() {
   // ── Socket.io real-time messaging ──────────────────────────────────────────
   registerSocketIO(server);
 
-  // ── Static / Vite ─────────────────────────────────────────────────────────
+  // ── Local development — Vite dev server (not used on Railway) ─────────────
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);
-  } else {
-    serveStatic(app);
   }
 
   const preferredPort = parseInt(process.env.PORT || "3000");

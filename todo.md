@@ -268,3 +268,14 @@
 - [x] pnpm check — 0 TypeScript errors
 - [x] pnpm test — 41/41 passing
 - [x] Commit to GitHub
+
+## Phase 37: API-Only Railway Backend
+- [x] Remove serveStatic() call and setupVite() call from server/_core/index.ts
+- [x] Remove serveStatic import from server/_core/index.ts
+- [x] Update CORS allowedOrigins to hardcode https://zylobridge.com in addition to FRONTEND_URL env var
+- [x] Remove serveStatic() function body from server/_core/vite.ts (keep setupVite for local dev)
+- [x] pnpm build:server succeeds with no errors
+- [x] pnpm check — 0 TypeScript errors
+- [x] pnpm test — 41/41 passing
+- [x] Server starts without dist/public present
+- [x] Commit to GitHub
