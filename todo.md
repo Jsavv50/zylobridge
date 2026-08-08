@@ -322,3 +322,14 @@
 - [x] pnpm build:server succeeds
 - [x] pnpm test — all tests passing
 - [x] Commit to GitHub
+
+## Phase 43: Email OTP → Supabase Auth Migration [COMPLETE]
+- [x] Replace emailAuth.sendOtp in routers.ts with supabase.auth.signInWithOtp
+- [x] Replace emailAuth.verifyOtp in routers.ts with supabase.auth.verifyOtp + upsertUserByEmail + JWT session cookie
+- [x] Add safe production logging (no OTP codes, no secrets)
+- [x] Keep phoneAuth.sendOtp/verifyOtp unchanged (custom flow, separate)
+- [x] Keep upsertUserByEmail in db.ts (still needed after Supabase OTP verification)
+- [x] Verify SignIn.tsx error messages show actual backend error (already uses err.message)
+- [x] Verify build:server 0 errors
+- [x] Verify 42/42 tests passing
+- [x] Checkpoint and deliver full report

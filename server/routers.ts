@@ -1,3 +1,4 @@
+import { getSupabaseAdmin, getSupabasePublic } from "./_core/supabase";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { COOKIE_NAME } from "../shared/const";
@@ -59,10 +60,6 @@ import {
   incrementOtpAttempts,
   markOtpVerified,
   upsertUserByPhone,
-  createEmailOtp,
-  getLatestEmailOtp,
-  incrementEmailOtpAttempts,
-  markEmailOtpVerified,
   upsertUserByEmail,
 } from "./db";
 import {
@@ -759,20 +756,27 @@ export const appRouter = router({
         email: z.string().email("Invalid email address."),
       }))
       .mutation(async ({ input }) => {
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-        await createEmailOtp(input.email, otp, expiresAt);
-        // Send OTP via Resend transactional email
-        try {
-          const { sendOtpEmail } = await import("./email");
-          await sendOtpEmail(input.email, otp);
-        } catch (emailErr) {
-          console.error("[EmailAuth] Resend delivery failed:", emailErr);
+        // Use Supabase Auth native OTP — Supabase sends the email via configured SMTP (Resend)
+        const anonClient = getSupabasePublic();
+        if (!anonClient) {
+          console.error("[EmailAuth] Supabase public client unavailable — SUPABASE_URL or SUPABASE_ANON_KEY not set.");
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
-            message: "We could not send the OTP email. Please try again in a moment.",
+            message: "Email authentication is not configured. Please contact support.",
           });
         }
+        const { error: otpError } = await anonClient.auth.signInWithOtp({
+          email: input.email,
+          options: { shouldCreateUser: true },
+        });
+        if (otpError) {
+          console.error(`[EmailAuth] Supabase signInWithOtp failed: ${otpError.message}`);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: otpError.message,
+          });
+        }
+        console.log(`[EmailAuth] OTP email dispatched via Supabase Auth for ${input.email}`);
         return { success: true, message: "OTP sent to your email address." };
       }),
     verifyOtp: publicProcedure
@@ -782,13 +786,23 @@ export const appRouter = router({
         name: z.string().min(2).max(100).trim().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const record = await getLatestEmailOtp(input.email);
-        if (!record) throw new TRPCError({ code: "NOT_FOUND", message: "No OTP found. Request a new one." });
-        if (record.attempts >= 5) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many attempts. Request a new OTP." });
-        if (new Date() > record.expiresAt) throw new TRPCError({ code: "BAD_REQUEST", message: "OTP expired. Request a new one." });
-        await incrementEmailOtpAttempts(record.id);
-        if (record.otp !== input.otp) throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid OTP. Please try again." });
-        await markEmailOtpVerified(record.id);
+        // Verify OTP via Supabase Auth
+        const anonClient = getSupabasePublic();
+        if (!anonClient) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Email authentication is not configured." });
+        }
+        const { data: verifyData, error: verifyError } = await anonClient.auth.verifyOtp({
+          email: input.email,
+          token: input.otp,
+          type: "email",
+        });
+        if (verifyError || !verifyData.user) {
+          const msg = verifyError?.message ?? "OTP verification failed.";
+          console.error(`[EmailAuth] Supabase verifyOtp failed for ${input.email}: ${msg}`);
+          throw new TRPCError({ code: "UNAUTHORIZED", message: msg });
+        }
+        console.log(`[EmailAuth] Supabase OTP verified for ${input.email}`);
+        // Upsert user in local DB and issue JWT session cookie
         const user = await upsertUserByEmail(input.email, input.name);
         const { sdk } = await import("./_core/sdk");
         const token = await sdk.createSessionToken(user!.openId, { name: user!.name ?? "" });
