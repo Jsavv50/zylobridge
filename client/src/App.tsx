@@ -30,6 +30,7 @@ function Router() {
       <Route path="/jobs/:id" component={JobDetail} />
       <Route path="/onboarding" component={Onboarding} />
       <Route path="/dashboard/contractor" component={ClientDashboard} />
+      <Route path="/dashboard/client" component={ClientDashboard} />
       <Route path="/dashboard/professional" component={ProfessionalDashboard} />
       <Route path="/dashboard/admin" component={AdminDashboard} />
       <Route path="/messages" component={Messaging} />

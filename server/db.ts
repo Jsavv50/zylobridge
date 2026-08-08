@@ -112,7 +112,7 @@ export async function updateUserType(userId: number, userType: "client" | "profe
   await db.update(users).set({ userType }).where(eq(users.id, userId));
 }
 
-export async function updateUserRole(userId: number, role: "user" | "admin") {
+export async function updateUserRole(userId: number, role: "user" | "admin" | "super_admin") {
   const db = await getDb();
   if (!db) return;
   await db.update(users).set({ role }).where(eq(users.id, userId));

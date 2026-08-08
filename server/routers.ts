@@ -75,7 +75,7 @@ import {
 
 // ── Admin guard ────────────────────────────────────────────────────────────────
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== "admin") {
+  if (ctx.user.role !== "admin" && ctx.user.role !== "super_admin") {
     throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required." });
   }
   return next({ ctx });
@@ -613,7 +613,7 @@ export const appRouter = router({
         return getAllUsers(input.limit, input.offset);
       }),
     updateUserRole: adminProcedure
-      .input(z.object({ userId: z.number().int().positive(), role: z.enum(["user", "admin"]) }))
+      .input(z.object({ userId: z.number().int().positive(), role: z.enum(["user", "admin", "super_admin"]) }))
       .mutation(async ({ ctx, input }) => {
         if (input.userId === ctx.user.id) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot change your own role." });
