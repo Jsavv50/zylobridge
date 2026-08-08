@@ -214,8 +214,9 @@ class SDKServer {
 
       if (
         !isNonEmptyString(openId) ||
-        !isNonEmptyString(appId) ||
-        !isNonEmptyString(name)
+        !isNonEmptyString(appId)
+        // name is intentionally allowed to be empty for new users who have not yet
+        // completed the "One Last Step" profile screen
       ) {
         console.warn("[Auth] Session payload missing required fields");
         return null;
@@ -224,7 +225,7 @@ class SDKServer {
       return {
         openId,
         appId,
-        name,
+        name: typeof name === "string" ? name : "",
       };
     } catch (error) {
       console.warn("[Auth] Session verification failed", String(error));
