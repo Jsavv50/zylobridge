@@ -308,3 +308,17 @@
 - [x] pnpm build:server succeeds
 - [x] pnpm test — 41/41 passing
 - [x] Commit to GitHub
+
+## Phase 41: PostgreSQL/Supabase Migration (MySQL → PostgreSQL)
+- [x] Install postgres driver (postgres-js)
+- [x] Rewrite drizzle/schema.ts from MySQL types to PostgreSQL types
+- [x] Update drizzle.config.ts dialect from mysql to postgresql
+- [x] Update server/db.ts to use drizzle-orm/postgres-js
+- [x] Remove mysql2 from dependencies
+- [x] Generate PostgreSQL CREATE TABLE SQL and apply to Supabase via webdev_execute_sql
+- [x] Fix onDuplicateKeyUpdate → onConflictDoUpdate in server/db.ts upsertUser
+- [x] Fix all other MySQL-specific query patterns (onDuplicateKeyUpdate) across server files
+- [x] pnpm check — 0 TypeScript errors
+- [x] pnpm build:server succeeds
+- [x] pnpm test — all tests passing
+- [x] Commit to GitHub

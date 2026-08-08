@@ -3,6 +3,18 @@ import { validateResendKey } from "./email";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 
+// Mock database to avoid live DB connections in tests
+vi.mock("./db", () => ({
+  getDb: vi.fn().mockResolvedValue(null),
+  createEmailOtp: vi.fn().mockResolvedValue(undefined),
+  getLatestEmailOtp: vi.fn().mockResolvedValue(null),
+  incrementEmailOtpAttempts: vi.fn().mockResolvedValue(undefined),
+  markEmailOtpVerified: vi.fn().mockResolvedValue(undefined),
+  getUserByEmail: vi.fn().mockResolvedValue(null),
+  upsertUserByEmail: vi.fn().mockResolvedValue({ id: 1, openId: "email:test@example.com" }),
+  upsertUser: vi.fn().mockResolvedValue(undefined),
+}));
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function createPublicContext(): TrpcContext {

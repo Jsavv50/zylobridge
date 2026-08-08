@@ -1,5 +1,5 @@
 import { and, or, desc, asc, eq, like, gte, lte, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+import { drizzle } from "drizzle-orm/postgres-js";
 import {
   InsertUser,
   users,
@@ -35,7 +35,14 @@ let _db: ReturnType<typeof drizzle> | null = null;
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      const postgres = await import("postgres");
+      const client = postgres.default(process.env.DATABASE_URL, {
+        max: 1,            // Transaction pooler: keep pool size at 1
+        idle_timeout: 20,  // Close idle connections after 20s
+        connect_timeout: 10,
+        prepare: false,    // Required for Supabase Transaction Pooler (pgbouncer)
+      });
+      _db = drizzle(client);
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
@@ -79,7 +86,10 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   if (!values.lastSignedIn) values.lastSignedIn = new Date();
   if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = new Date();
 
-  await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
+  await db
+    .insert(users)
+    .values(values)
+    .onConflictDoUpdate({ target: users.openId, set: updateSet });
 }
 
 export async function getUserByOpenId(openId: string) {
@@ -329,9 +339,11 @@ export async function getOrCreateConversation(jobId: number, clientId: number, p
     and(eq(conversations.jobId, jobId), eq(conversations.clientId, clientId), eq(conversations.professionalId, professionalId))
   ).limit(1);
   if (existing[0]) return existing[0];
-  const [result] = await db.insert(conversations).values({ jobId, clientId, professionalId, lastMessageAt: new Date() });
-  const id = (result as { insertId: number }).insertId;
-  return { id, jobId, clientId, professionalId, lastMessageAt: new Date(), createdAt: new Date() };
+  const [inserted] = await db
+    .insert(conversations)
+    .values({ jobId, clientId, professionalId, lastMessageAt: new Date() })
+    .returning();
+  return inserted;
 }
 
 export async function getConversationsByUserId(userId: number) {
@@ -372,9 +384,8 @@ export async function getUnreadMessageCount(userId: number) {
 export async function createEscrowPayment(data: InsertEscrowPayment) {
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");
-  const [result] = await db.insert(escrowPayments).values(data);
-  const id = (result as { insertId: number }).insertId;
-  return { ...data, id };
+  const [inserted] = await db.insert(escrowPayments).values(data).returning();
+  return inserted;
 }
 
 export async function getEscrowByJobId(jobId: number) {
@@ -400,9 +411,8 @@ export async function getAllEscrowPayments() {
 export async function createVerificationRequest(data: InsertVerificationRequest) {
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");
-  const [result] = await db.insert(verificationRequests).values(data);
-  const id = (result as { insertId: number }).insertId;
-  return { ...data, id };
+  const [inserted] = await db.insert(verificationRequests).values(data).returning();
+  return inserted;
 }
 
 export async function getVerificationRequestsByUserId(userId: number) {
@@ -442,9 +452,8 @@ export async function getProductById(id: number) {
 export async function createProduct(data: InsertProduct) {
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");
-  const [result] = await db.insert(products).values(data);
-  const id = (result as { insertId: number }).insertId;
-  return { ...data, id };
+  const [inserted] = await db.insert(products).values(data).returning();
+  return inserted;
 }
 
 export async function updateProduct(id: number, data: Partial<InsertProduct>) {
@@ -463,9 +472,8 @@ export async function deleteProduct(id: number) {
 export async function createOrder(data: InsertOrder) {
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");
-  const [result] = await db.insert(orders).values(data);
-  const id = (result as { insertId: number }).insertId;
-  return { ...data, id };
+  const [inserted] = await db.insert(orders).values(data).returning();
+  return inserted;
 }
 
 export async function getOrderById(id: number) {
