@@ -15,14 +15,23 @@ export const ENV = {
   // Resend transactional email API key
   resendApiKey: process.env.RESEND_API_KEY ?? "",
 
-  // Canonical backend URL — used for OAuth callback URIs.
-  // Set APP_BASE_URL=https://api.zylobridge.com in Railway environment variables.
-  appBaseUrl: process.env.APP_BASE_URL ?? process.env.APP_URL ?? "",
+  // Canonical backend URL — used for Google OAuth callback URIs.
+  // Set BACKEND_URL=https://api.zylobridge.com in Railway environment variables.
+  // Also accepts APP_BASE_URL or APP_URL as legacy aliases.
+  // MUST point to the Railway backend, not the Vercel frontend.
+  appBaseUrl:
+    process.env.BACKEND_URL ??
+    process.env.APP_BASE_URL ??
+    process.env.APP_URL ??
+    "",
 
   // Frontend URL — where users are redirected after authentication.
-  // Set FRONTEND_BASE_URL=https://zylobridge.com in Railway environment variables.
-  // Defaults to appBaseUrl for same-host deployments or local development.
-  frontendBaseUrl: process.env.FRONTEND_BASE_URL ?? "",
+  // Set FRONTEND_URL=https://zylobridge.com in Railway environment variables.
+  // Also accepts FRONTEND_BASE_URL as an alias.
+  frontendBaseUrl:
+    process.env.FRONTEND_URL ??
+    process.env.FRONTEND_BASE_URL ??
+    "",
 
   // Supabase — for session persistence and user management
   supabaseUrl: process.env.SUPABASE_URL ?? "",
@@ -31,12 +40,15 @@ export const ENV = {
 };
 
 /**
- * Resolve the canonical backend base URL for OAuth callback URIs.
+ * Resolve the canonical backend base URL for Google OAuth callback URIs.
  *
  * Priority order:
- *   1. APP_BASE_URL or APP_URL — set in Railway environment variables
- *      e.g. https://api.zylobridge.com
- *   2. Localhost fallback for local development
+ *   1. BACKEND_URL — explicit backend URL (e.g. https://api.zylobridge.com)
+ *   2. APP_BASE_URL or APP_URL — legacy aliases
+ *   3. Localhost fallback for local development
+ *
+ * IMPORTANT: This MUST resolve to the Railway backend domain, not the Vercel
+ * frontend. The Google OAuth callback URI is built from this value.
  */
 export function getBaseUrl(): string {
   if (ENV.appBaseUrl) return ENV.appBaseUrl.replace(/\/$/, "");
@@ -47,12 +59,11 @@ export function getBaseUrl(): string {
  * Resolve the frontend URL for post-authentication redirects.
  *
  * Priority order:
- *   1. FRONTEND_BASE_URL — explicit override (e.g. https://zylobridge.com)
- *   2. APP_BASE_URL / APP_URL — same-host fallback
+ *   1. FRONTEND_URL — explicit frontend URL (e.g. https://zylobridge.com)
+ *   2. FRONTEND_BASE_URL — alias
  *   3. Localhost fallback for local development
  */
 export function getFrontendUrl(): string {
   if (ENV.frontendBaseUrl) return ENV.frontendBaseUrl.replace(/\/$/, "");
-  if (ENV.appBaseUrl) return ENV.appBaseUrl.replace(/\/$/, "");
   return "http://localhost:3000";
 }

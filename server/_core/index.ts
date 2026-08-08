@@ -39,6 +39,13 @@ async function startServer() {
   const app = express();
   const server = createServer(app);
 
+  // ── Trust proxy ───────────────────────────────────────────────────────────
+  // Railway terminates TLS at its load balancer and forwards requests via HTTP
+  // with X-Forwarded-Proto: https. Without trust proxy, req.protocol is "http"
+  // and isSecureRequest() returns false, causing SameSite=None cookies to be
+  // set with Secure=false — which browsers reject for cross-site requests.
+  app.set("trust proxy", 1);
+
   // ── CORS ─────────────────────────────────────────────────────────────────
   // Allow the Vercel frontend origin to make cross-origin API requests.
   // FRONTEND_URL must be set in Railway environment variables, e.g.:

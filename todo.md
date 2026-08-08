@@ -298,3 +298,13 @@
 - [x] pnpm build:server succeeds
 - [x] pnpm test — 41/41 passing
 - [x] Commit to GitHub
+
+## Phase 40: Google OAuth redirect_uri_mismatch Fix
+- [x] Add BACKEND_URL env var alias to env.ts (reads BACKEND_URL > APP_BASE_URL > APP_URL)
+- [x] Add FRONTEND_URL env var alias to env.ts getFrontendUrl() (reads FRONTEND_URL > FRONTEND_BASE_URL > appBaseUrl)
+- [x] Add app.set("trust proxy", 1) to server/_core/index.ts for Railway HTTPS detection
+- [x] Verify getCallbackUrl() generates exactly https://api.zylobridge.com/api/auth/google/callback
+- [x] pnpm check — 0 TypeScript errors
+- [x] pnpm build:server succeeds
+- [x] pnpm test — 41/41 passing
+- [x] Commit to GitHub
