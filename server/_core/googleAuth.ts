@@ -30,7 +30,7 @@ import crypto from "crypto";
 import type { Express, Request, Response } from "express";
 import * as db from "../db";
 import { getSessionCookieOptions } from "./cookies";
-import { ENV, getBaseUrl } from "./env";
+import { ENV, getBaseUrl, getFrontendUrl } from "./env";
 import { sdk } from "./sdk";
 import { getSupabaseAdmin } from "./supabase";
 
@@ -268,10 +268,11 @@ export function registerGoogleAuthRoutes(app: Express) {
     const state = typeof req.query.state === "string" ? req.query.state : null;
     const error = typeof req.query.error === "string" ? req.query.error : null;
     const base = getBaseUrl();
+    const frontend = getFrontendUrl();
 
     if (error) {
       console.warn(`[GoogleAuth] User denied access or Google error: ${error}`);
-      res.redirect(302, `${base}/sign-in?error=google_denied`);
+      res.redirect(302, `${frontend}/sign-in?error=google_denied`);
       return;
     }
 
@@ -284,7 +285,7 @@ export function registerGoogleAuthRoutes(app: Express) {
     const decoded = decodeState(state);
     if (!decoded) {
       console.warn("[GoogleAuth] Invalid or expired state param");
-      res.redirect(302, `${base}/sign-in?error=invalid_state`);
+      res.redirect(302, `${frontend}/sign-in?error=invalid_state`);
       return;
     }
 
@@ -295,7 +296,7 @@ export function registerGoogleAuthRoutes(app: Express) {
 
       if (!googleUser.email_verified) {
         console.warn(`[GoogleAuth] Unverified email: ${googleUser.email}`);
-        res.redirect(302, `${base}/sign-in?error=email_not_verified`);
+        res.redirect(302, `${frontend}/sign-in?error=email_not_verified`);
         return;
       }
 
@@ -330,14 +331,14 @@ export function registerGoogleAuthRoutes(app: Express) {
       res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
       const returnPath = decoded.returnPath || "/";
-      const redirectTo = `${base}${returnPath.startsWith("/") ? returnPath : `/${returnPath}`}`;
+      const redirectTo = `${frontend}${returnPath.startsWith("/") ? returnPath : `/${returnPath}`}`;
       console.log(
         `[GoogleAuth] Sign-in successful for ${googleUser.email} — redirecting to ${redirectTo}`
       );
       res.redirect(302, redirectTo);
     } catch (err) {
       console.error("[GoogleAuth] Callback error:", err);
-      res.redirect(302, `${base}/sign-in?error=google_failed`);
+      res.redirect(302, `${frontend}/sign-in?error=google_failed`);
     }
   });
 }

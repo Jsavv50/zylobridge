@@ -93,6 +93,11 @@ async function startServer() {
   registerOAuthRoutes(app);
   registerGoogleAuthRoutes(app);
 
+  // ── Root endpoint (API diagnostics) ──────────────────────────────────────
+  app.get("/", (_req, res) => {
+    res.json({ status: "ok", service: "Zylobridge API" });
+  });
+
   // ── Health check ──────────────────────────────────────────────────────────
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });

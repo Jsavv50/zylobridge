@@ -15,9 +15,14 @@ export const ENV = {
   // Resend transactional email API key
   resendApiKey: process.env.RESEND_API_KEY ?? "",
 
-  // Canonical production URL — set APP_BASE_URL or APP_URL in Railway environment variables
-  // e.g. https://zylobridge.up.railway.app
+  // Canonical backend URL — used for OAuth callback URIs.
+  // Set APP_BASE_URL=https://api.zylobridge.com in Railway environment variables.
   appBaseUrl: process.env.APP_BASE_URL ?? process.env.APP_URL ?? "",
+
+  // Frontend URL — where users are redirected after authentication.
+  // Set FRONTEND_BASE_URL=https://zylobridge.com in Railway environment variables.
+  // Defaults to appBaseUrl for same-host deployments or local development.
+  frontendBaseUrl: process.env.FRONTEND_BASE_URL ?? "",
 
   // Supabase — for session persistence and user management
   supabaseUrl: process.env.SUPABASE_URL ?? "",
@@ -26,14 +31,28 @@ export const ENV = {
 };
 
 /**
- * Resolve the canonical base URL for OAuth callbacks.
+ * Resolve the canonical backend base URL for OAuth callback URIs.
  *
  * Priority order:
  *   1. APP_BASE_URL or APP_URL — set in Railway environment variables
- *      e.g. https://zylobridge.up.railway.app
+ *      e.g. https://api.zylobridge.com
  *   2. Localhost fallback for local development
  */
 export function getBaseUrl(): string {
+  if (ENV.appBaseUrl) return ENV.appBaseUrl.replace(/\/$/, "");
+  return "http://localhost:3000";
+}
+
+/**
+ * Resolve the frontend URL for post-authentication redirects.
+ *
+ * Priority order:
+ *   1. FRONTEND_BASE_URL — explicit override (e.g. https://zylobridge.com)
+ *   2. APP_BASE_URL / APP_URL — same-host fallback
+ *   3. Localhost fallback for local development
+ */
+export function getFrontendUrl(): string {
+  if (ENV.frontendBaseUrl) return ENV.frontendBaseUrl.replace(/\/$/, "");
   if (ENV.appBaseUrl) return ENV.appBaseUrl.replace(/\/$/, "");
   return "http://localhost:3000";
 }

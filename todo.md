@@ -287,3 +287,14 @@
 - [x] pnpm build:client and pnpm build:server succeed
 - [x] pnpm test — 41/41 passing
 - [x] Commit to GitHub
+
+## Phase 39: Google OAuth 404 Fix + Root Endpoint
+- [x] Fix googleAuth.ts post-callback redirect — use FRONTEND_BASE_URL env var for user redirect, keep APP_BASE_URL for OAuth callback
+- [x] Add FRONTEND_BASE_URL to server/_core/env.ts
+- [x] Add GET / root endpoint to server/_core/index.ts returning {status:"ok",service:"Zylobridge API"}
+- [x] Update railway.json startCommand to pnpm start (instead of node dist/index.js directly)
+- [x] Update vercel.json outputDirectory to dist (not dist/public) per audit requirement
+- [x] pnpm check — 0 TypeScript errors
+- [x] pnpm build:server succeeds
+- [x] pnpm test — 41/41 passing
+- [x] Commit to GitHub
