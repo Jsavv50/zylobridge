@@ -2,6 +2,12 @@ import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
+
+// Railway backend base URL — must be set in Vercel env vars as VITE_API_URL
+// e.g. https://api.zylobridge.com
+// Falls back to empty string for same-origin local development.
+const API_URL = ((import.meta.env.VITE_API_URL as string | undefined) ?? "").replace(/\/$/, "");
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -183,7 +189,7 @@ export default function SignIn() {
 
               <div className="rounded-2xl border border-white/8 bg-[#131a26]/80 backdrop-blur-sm p-8 space-y-4">
                 {/* Google OAuth — direct Google OAuth 2.0 via /api/auth/google */}
-                <a href={`/api/auth/google?returnPath=${encodeURIComponent(window.location.pathname === '/sign-in' ? '/' : window.location.pathname)}`} className="block">
+                <a href={`${API_URL}/api/auth/google?returnPath=${encodeURIComponent(window.location.pathname === '/sign-in' ? '/' : window.location.pathname)}`} className="block">
                   <button className="w-full flex items-center justify-between px-5 py-4 rounded-xl font-semibold text-white transition-all duration-200 hover:bg-white/10 active:scale-[0.98] border border-white/10 bg-white/5">
                     <span className="flex items-center gap-3">
                       <span className="w-8 h-8 rounded-lg bg-white flex items-center justify-center">

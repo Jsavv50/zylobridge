@@ -29,11 +29,22 @@ interface Conversation {
   createdAt: Date;
 }
 
+
+/**
+ * SOCKET_URL — Railway backend WebSocket endpoint.
+ * Reads VITE_API_URL (same variable used by tRPC) so both HTTP and WebSocket
+ * traffic go to the same Railway service.
+ * Falls back to window.location.origin for local development.
+ */
+const SOCKET_URL =
+  ((import.meta.env.VITE_API_URL as string | undefined) ?? "").replace(/\/$/, "") ||
+  window.location.origin;
+
 let socketInstance: Socket | null = null;
 
 function getSocket(): Socket {
   if (!socketInstance) {
-    socketInstance = io(window.location.origin, {
+    socketInstance = io(SOCKET_URL, {
       path: "/socket.io",
       withCredentials: true,
       transports: ["websocket", "polling"],

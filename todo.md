@@ -279,3 +279,11 @@
 - [x] pnpm test — 41/41 passing
 - [x] Server starts without dist/public present
 - [x] Commit to GitHub
+
+## Phase 38: Production Deployment Audit Fixes
+- [x] Fix Messaging.tsx Socket.io URL — replace window.location.origin with VITE_API_URL (Railway backend URL)
+- [x] Fix SignIn.tsx Google OAuth link — replace /api/auth/google relative URL with ${VITE_API_URL}/api/auth/google absolute URL
+- [x] pnpm check — 0 TypeScript errors
+- [x] pnpm build:client and pnpm build:server succeed
+- [x] pnpm test — 41/41 passing
+- [x] Commit to GitHub
