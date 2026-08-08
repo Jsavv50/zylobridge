@@ -117,6 +117,11 @@ export async function updateUserRole(userId: number, role: "user" | "admin" | "s
   if (!db) return;
   await db.update(users).set({ role }).where(eq(users.id, userId));
 }
+export async function updateUserName(userId: number, name: string) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ name, updatedAt: new Date() }).where(eq(users.id, userId));
+}
 
 export async function getAllUsers(limit = 50, offset = 0) {
   const db = await getDb();

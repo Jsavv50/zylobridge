@@ -12,6 +12,7 @@ import {
   getUserById,
   updateUserType,
   updateUserRole,
+  updateUserName,
   getAllUsers,
   getUserCount,
   createJob,
@@ -133,6 +134,12 @@ export const appRouter = router({
       .input(z.object({ userType: z.enum(["client", "professional"]) }))
       .mutation(async ({ ctx, input }) => {
         await updateUserType(ctx.user.id, input.userType);
+        return { success: true };
+      }),
+    updateName: protectedProcedure
+      .input(z.object({ name: z.string().min(2).max(100).trim() }))
+      .mutation(async ({ ctx, input }) => {
+        await updateUserName(ctx.user.id, input.name);
         return { success: true };
       }),
   }),

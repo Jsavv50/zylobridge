@@ -48,6 +48,10 @@ export default function SignIn() {
   const [name, setName] = useState("");
   const [countdown, setCountdown] = useState(0);
 
+  // Verified user stored after first (and only) verifyOtp call
+  // Used by handleCompleteName so verifyOtp is NEVER called a second time
+  const [verifiedUserId, setVerifiedUserId] = useState<number | null>(null);
+
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) navigate("/");
@@ -73,7 +77,9 @@ export default function SignIn() {
   const verifyEmailOtp = trpc.emailAuth.verifyOtp.useMutation({
     onSuccess: (data) => {
       if (data.success) {
-        if (!name) {
+        // Store the verified user ID so Complete Sign Up can use it without re-calling verifyOtp
+        if (data.user?.id) setVerifiedUserId(data.user.id);
+        if (!name && !data.user?.name) {
           setNameCaptureFor("email");
           setMethod("name_capture");
         } else {
@@ -82,7 +88,13 @@ export default function SignIn() {
         }
       }
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => {
+      if (err.message.toLowerCase().includes("expired") || err.message.toLowerCase().includes("invalid")) {
+        toast.error("This code has expired or is invalid. Please request a new one.");
+      } else {
+        toast.error(err.message);
+      }
+    },
   });
 
   // ── Phone OTP mutations ────────────────────────────────────────────────────
@@ -98,7 +110,8 @@ export default function SignIn() {
   const verifyPhoneOtp = trpc.phoneAuth.verifyOtp.useMutation({
     onSuccess: (data) => {
       if (data.success) {
-        if (!name) {
+        if (data.user?.id) setVerifiedUserId(data.user.id);
+        if (!name && !data.user?.name) {
           setNameCaptureFor("phone");
           setMethod("name_capture");
         } else {
@@ -107,17 +120,38 @@ export default function SignIn() {
         }
       }
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => {
+      if (err.message.toLowerCase().includes("expired") || err.message.toLowerCase().includes("invalid")) {
+        toast.error("This code has expired or is invalid. Please request a new one.");
+      } else {
+        toast.error(err.message);
+      }
+    },
   });
 
   // ── Name capture mutation (re-verify with name) ────────────────────────────
+  // ── Name capture — uses auth.updateName (NEVER re-calls verifyOtp) ─────────
+  const updateName = trpc.auth.updateName.useMutation({
+    onSuccess: () => {
+      toast.success("Welcome to ZYLOBRIDGE!");
+      window.location.href = "/";
+    },
+    onError: (err) => {
+      if (err.message.toLowerCase().includes("unauthorized") || err.message.toLowerCase().includes("session")) {
+        toast.error("Your sign-in session has expired. Please request a new verification code.");
+        setMethod("email_input");
+        setVerifiedUserId(null);
+      } else {
+        toast.error(err.message);
+      }
+    },
+  });
+
   const handleCompleteName = () => {
     if (!name.trim()) return toast.error("Please enter your name.");
-    if (nameCaptureFor === "email") {
-      verifyEmailOtp.mutate({ email, otp: emailOtp, name: name.trim() });
-    } else {
-      verifyPhoneOtp.mutate({ phone, otp: phoneOtp, name: name.trim() });
-    }
+    // The OTP was already verified — use the JWT session cookie to update the name.
+    // verifyOtp is NOT called again here.
+    updateName.mutate({ name: name.trim() });
   };
 
   const handleResend = () => {
@@ -128,7 +162,8 @@ export default function SignIn() {
 
   const isLoading =
     sendEmailOtp.isPending || verifyEmailOtp.isPending ||
-    sendPhoneOtp.isPending || verifyPhoneOtp.isPending;
+    sendPhoneOtp.isPending || verifyPhoneOtp.isPending ||
+    updateName.isPending;
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
