@@ -8,7 +8,14 @@ import App from "./App";
 import { getLoginUrl } from "./const";
 import "./index.css";
 
-const queryClient = new QueryClient();
+// Disable automatic retries for mutations globally.
+// OTP verification mutations MUST NOT retry — a consumed OTP cannot be reused.
+const queryClient = new QueryClient({
+  defaultOptions: {
+    mutations: { retry: false },
+    queries: { retry: 1, staleTime: 30_000 },
+  },
+});
 
 /**
  * API_URL — base URL of the Railway backend.

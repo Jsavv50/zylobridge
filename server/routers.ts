@@ -793,11 +793,14 @@ export const appRouter = router({
         name: z.string().min(2).max(100).trim().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        // Verify OTP via Supabase Auth
+        // Each request gets a unique ID so duplicate requests are immediately visible in logs
+        const requestId = Math.random().toString(36).slice(2, 10).toUpperCase();
+        console.log(`[EmailAuth] verifyOtp request ${requestId} started — email present: ${!!input.email}, token length: ${input.otp?.length ?? 0}`);
         const anonClient = getSupabasePublic();
         if (!anonClient) {
           throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Email authentication is not configured." });
         }
+        console.log(`[EmailAuth] verifyOtp request ${requestId} calling Supabase`);
         const { data: verifyData, error: verifyError } = await anonClient.auth.verifyOtp({
           email: input.email,
           token: input.otp,
@@ -805,10 +808,10 @@ export const appRouter = router({
         });
         if (verifyError || !verifyData.user) {
           const msg = verifyError?.message ?? "OTP verification failed.";
-          console.error(`[EmailAuth] Supabase verifyOtp failed for ${input.email}: ${msg}`);
+          console.error(`[EmailAuth] verifyOtp request ${requestId} FAILED: ${msg}`);
           throw new TRPCError({ code: "UNAUTHORIZED", message: msg });
         }
-        console.log(`[EmailAuth] Supabase OTP verified for ${input.email}`);
+        console.log(`[EmailAuth] verifyOtp request ${requestId} SUCCESS — user present: ${!!verifyData.user}`);
         // Upsert user in local DB and issue JWT session cookie
         const user = await upsertUserByEmail(input.email, input.name);
         const { sdk } = await import("./_core/sdk");
@@ -816,6 +819,7 @@ export const appRouter = router({
         const { COOKIE_NAME: CNAME } = await import("../shared/const");
         const cookieOpts = getSessionCookieOptions(ctx.req);
         ctx.res.cookie(CNAME, token, { ...cookieOpts, maxAge: 365 * 24 * 60 * 60 * 1000 });
+        console.log(`[EmailAuth] verifyOtp request ${requestId} session cookie set — returning success`);
         return { success: true, user: { id: user!.id, name: user!.name, email: user!.email, role: user!.role } };
       }),
   }),

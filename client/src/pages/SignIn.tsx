@@ -75,6 +75,7 @@ export default function SignIn() {
   });
 
   const verifyEmailOtp = trpc.emailAuth.verifyOtp.useMutation({
+    retry: false, // OTPs are single-use — never retry a failed verifyOtp request
     onSuccess: (data) => {
       if (data.success) {
         // Store the verified user ID so Complete Sign Up can use it without re-calling verifyOtp
@@ -96,6 +97,9 @@ export default function SignIn() {
       }
     },
   });
+  // retry: false is critical — OTPs are single-use; retrying a failed request would
+  // submit the same consumed token to Supabase and produce "Token has expired or is invalid"
+  // This override is intentionally placed after the mutation definition for clarity.
 
   // ── Phone OTP mutations ────────────────────────────────────────────────────
   const sendPhoneOtp = trpc.phoneAuth.sendOtp.useMutation({
@@ -108,6 +112,7 @@ export default function SignIn() {
   });
 
   const verifyPhoneOtp = trpc.phoneAuth.verifyOtp.useMutation({
+    retry: false, // OTPs are single-use — never retry a failed verifyOtp request
     onSuccess: (data) => {
       if (data.success) {
         if (data.user?.id) setVerifiedUserId(data.user.id);
@@ -372,7 +377,16 @@ export default function SignIn() {
                   placeholder="• • • • • •"
                   value={emailOtp}
                   onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  onKeyDown={(e) => e.key === "Enter" && verifyEmailOtp.mutate({ email, otp: emailOtp, name: name || undefined })}
+                  onKeyDown={(e) => {
+                    // e.preventDefault() stops the Enter key from also activating the
+                    // button below via its onClick, which would call mutate() twice.
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (!verifyEmailOtp.isPending && emailOtp.length === 6) {
+                        verifyEmailOtp.mutate({ email, otp: emailOtp, name: name || undefined });
+                      }
+                    }
+                  }}
                   className="bg-[#0d1117] border-white/10 text-white placeholder:text-gray-600 focus:border-violet-500 h-14 text-center text-2xl tracking-[0.5em] font-bold"
                   autoFocus
                 />
@@ -460,7 +474,14 @@ export default function SignIn() {
                   placeholder="• • • • • •"
                   value={phoneOtp}
                   onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  onKeyDown={(e) => e.key === "Enter" && verifyPhoneOtp.mutate({ phone, otp: phoneOtp, name: name || undefined })}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (!verifyPhoneOtp.isPending && phoneOtp.length === 6) {
+                        verifyPhoneOtp.mutate({ phone, otp: phoneOtp, name: name || undefined });
+                      }
+                    }
+                  }}
                   className="bg-[#0d1117] border-white/10 text-white placeholder:text-gray-600 focus:border-violet-500 h-14 text-center text-2xl tracking-[0.5em] font-bold"
                   autoFocus
                 />
