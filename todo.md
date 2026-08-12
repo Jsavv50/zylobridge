@@ -212,12 +212,12 @@
 - [x] Saved checkpoint and pushed to GitHub
 
 ## Phase 27: Complete Repository Import Audit for Vercel Production
-- [ ] Scan every .ts/.tsx/.js/.mjs file for broken imports and unresolved aliases
-- [ ] Simulate exact Vercel serverless build (esbuild bundle of api/index.ts with alias resolution)
-- [ ] Fix every broken import: @shared/_core, relative paths, missing modules
-- [ ] Run production build with zero ERR_MODULE_NOT_FOUND errors
-- [ ] Verify 0 TypeScript errors and all tests passing
-- [ ] Save checkpoint and push to GitHub
+- [x] Scan every .ts/.tsx/.js/.mjs file for broken imports and unresolved aliases — completed during Phases 29–31
+- [x] Simulate exact Vercel serverless build (esbuild bundle of api/index.ts with alias resolution) — superseded by split Vercel frontend/Railway backend architecture
+- [x] Fix every broken import: @shared/_core, relative paths, missing modules — completed during Phases 29–31
+- [x] Run production build with zero ERR_MODULE_NOT_FOUND errors — completed during Phases 29–31
+- [x] Verify 0 TypeScript errors and all tests passing — completed during Phases 29–31
+- [x] Save checkpoint and push to GitHub — completed during Phase 31
 
 ## Phase 33: Restore Vercel Serverless Architecture
 - [x] Create api/index.ts — Vercel serverless entry point mounting Express app (security, OAuth, Google Auth, storage proxy, tRPC, health check)
@@ -333,3 +333,13 @@
 - [x] Verify build:server 0 errors
 - [x] Verify 42/42 tests passing
 - [x] Checkpoint and deliver full report
+
+## Phase 47: Production Twilio Phone OTP Delivery
+- [x] Audit all phone OTP, DEV/mock, console OTP, and SMS delivery paths
+- [x] Replace production mock OTP delivery with Twilio Messaging Service delivery
+- [x] Validate Twilio environment configuration and normalize phone numbers to E.164
+- [x] Add safe Twilio diagnostics without logging OTPs or credentials in production
+- [x] Ensure sendOtp returns success only after Twilio accepts the message
+- [x] Add or update unit tests for Twilio delivery and production error handling
+- [x] Verify compiled Railway server build and complete test suite
+- [x] Save checkpoint and push the production fix to GitHub

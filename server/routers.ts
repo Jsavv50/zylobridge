@@ -70,6 +70,7 @@ import {
   resolveAccountNumber,
   generatePaystackReference,
 } from "./paystack";
+import { maskPhoneNumber, normalizePhoneNumber, sendPhoneOtpSms, SmsDeliveryError } from "./sms";
 
 // ── Admin guard ────────────────────────────────────────────────────────────────
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -827,31 +828,56 @@ export const appRouter = router({
   phoneAuth: router({
     sendOtp: publicProcedure
       .input(z.object({
-        phone: z.string().regex(/^\+?[1-9]\d{7,14}$/, "Invalid phone number format."),
+        phone: z.string().min(8).max(32),
       }))
       .mutation(async ({ input }) => {
+        let phone: string;
+        try {
+          phone = normalizePhoneNumber(input.phone);
+        } catch (error) {
+          const message = error instanceof SmsDeliveryError ? error.message : "Invalid phone number format.";
+          throw new TRPCError({ code: "BAD_REQUEST", message });
+        }
+
+        console.log(`[PhoneAuth] Generating OTP for ${maskPhoneNumber(phone)}`);
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-        await createPhoneOtp(input.phone, otp, expiresAt);
-        // In production, integrate Termii/Twilio here. OTP is logged server-side only.
-        console.log(`[PhoneAuth][DEV] OTP for ${input.phone}: ${otp}`);
+
+        try {
+          await sendPhoneOtpSms(phone, otp);
+        } catch (error) {
+          const message = error instanceof SmsDeliveryError ? error.message : "SMS delivery could not be completed. Please try again.";
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message });
+        }
+
+        // Store a verification code only after the SMS provider has accepted it.
+        await createPhoneOtp(phone, otp, expiresAt);
+        console.log(`[PhoneAuth] OTP SMS request completed successfully for ${maskPhoneNumber(phone)}`);
         return { success: true, message: "OTP sent to your phone number." };
       }),
     verifyOtp: publicProcedure
       .input(z.object({
-        phone: z.string().regex(/^\+?[1-9]\d{7,14}$/, "Invalid phone number format."),
+        phone: z.string().min(8).max(32),
         otp: z.string().length(6).regex(/^\d{6}$/, "OTP must be 6 digits."),
         name: z.string().min(2).max(100).trim().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const record = await getLatestPhoneOtp(input.phone);
+        let phone: string;
+        try {
+          phone = normalizePhoneNumber(input.phone);
+        } catch (error) {
+          const message = error instanceof SmsDeliveryError ? error.message : "Invalid phone number format.";
+          throw new TRPCError({ code: "BAD_REQUEST", message });
+        }
+
+        const record = await getLatestPhoneOtp(phone);
         if (!record) throw new TRPCError({ code: "NOT_FOUND", message: "No OTP found. Request a new one." });
         if (record.attempts >= 5) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many attempts. Request a new OTP." });
         if (new Date() > record.expiresAt) throw new TRPCError({ code: "BAD_REQUEST", message: "OTP expired. Request a new one." });
         await incrementOtpAttempts(record.id);
         if (record.otp !== input.otp) throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid OTP. Please try again." });
         await markOtpVerified(record.id);
-        const user = await upsertUserByPhone(input.phone, input.name);
+        const user = await upsertUserByPhone(phone, input.name);
         const { sdk } = await import("./_core/sdk");
         const token = await sdk.createSessionToken(user.openId, { name: user.name ?? "" });
         const { COOKIE_NAME: CNAME } = await import("../shared/const");

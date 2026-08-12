@@ -15,6 +15,11 @@ export const ENV = {
   // Resend transactional email API key
   resendApiKey: process.env.RESEND_API_KEY ?? "",
 
+  // Twilio Programmable Messaging — used only by server-side phone OTP delivery.
+  twilioAccountSid: process.env.TWILIO_ACCOUNT_SID ?? "",
+  twilioAuthToken: process.env.TWILIO_AUTH_TOKEN ?? "",
+  twilioMessagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID ?? "",
+
   // Canonical backend URL — used for Google OAuth callback URIs.
   // Set BACKEND_URL=https://api.zylobridge.com in Railway environment variables.
   // Also accepts APP_BASE_URL or APP_URL as legacy aliases.
