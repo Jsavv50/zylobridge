@@ -343,3 +343,9 @@
 - [x] Add or update unit tests for Twilio delivery and production error handling
 - [x] Verify compiled Railway server build and complete test suite
 - [x] Save checkpoint and push the production fix to GitHub
+
+## Phase 48: Phone OTP Resend Experience
+- [x] Add a Resend OTP control on the phone verification screen
+- [x] Show a 60-second countdown and disable resend during cooldown
+- [x] Restart the timer only after a successful resend request
+- [x] Verify client build, server build, and tests before checkpointing
