@@ -61,13 +61,19 @@ export default function Footer() {
               {[
                 { href: "/privacy-policy", label: "Privacy Policy" },
                 { href: "/terms", label: "Terms of Service" },
-                { href: "#", label: "Cookie Policy" },
+                { href: "/cookie-policy", label: "Cookie Policy" },
                 { href: "#", label: "GDPR Compliance" },
               ].map((item) => (
                 <li key={item.label}>
-                  <Link href={item.href} className="text-sm text-gray-500 hover:text-violet-400 transition-colors">
-                    {item.label}
-                  </Link>
+                  {item.href === "/cookie-policy" ? (
+                    <a href={item.href} className="text-sm text-gray-500 transition-colors hover:text-violet-400">
+                      {item.label}
+                    </a>
+                  ) : (
+                    <Link href={item.href} className="text-sm text-gray-500 transition-colors hover:text-violet-400">
+                      {item.label}
+                    </Link>
+                  )}
                 </li>
               ))}
             </ul>

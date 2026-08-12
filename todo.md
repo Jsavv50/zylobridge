@@ -356,3 +356,10 @@
 - [x] Verify the production Vite output contains one CookieYes script tag
 - [x] Verify the live Vercel site loads the CookieYes script and keeps the frontend functional
 - [x] Save checkpoint and push the frontend-only integration to GitHub
+
+## Phase 50: CookieYes Cookie Policy Page
+- [x] Audit existing public-policy page, routing, footer, and metadata patterns
+- [x] Create or update the public /cookie-policy page with the CookieYes policy script scoped to that route
+- [x] Add the Cookie Policy footer link and document title/description metadata
+- [x] Verify script scope, responsive route behavior, TypeScript, tests, and split production builds
+- [ ] Save checkpoint and push the frontend-only change to GitHub
