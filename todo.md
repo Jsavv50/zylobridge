@@ -363,3 +363,10 @@
 - [x] Add the Cookie Policy footer link and document title/description metadata
 - [x] Verify script scope, responsive route behavior, TypeScript, tests, and split production builds
 - [x] Save checkpoint and push the frontend-only change to GitHub
+
+## Phase 51: Static Cookie Policy Replacement
+- [x] Audit the current /cookie-policy implementation and existing global CookieYes consent API
+- [x] Replace the dynamic CookieYes policy loader with the exact supplied static Cookie Policy content
+- [x] Connect the Consent Preferences control to the existing CookieYes consent-management mechanism without creating a second banner
+- [ ] Verify script removal, public routing, accessibility, responsive rendering, TypeScript, tests, builds, and production behavior
+- [ ] Save checkpoint and push the frontend-only replacement to GitHub
