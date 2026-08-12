@@ -21,6 +21,7 @@ describe("Cookie Policy frontend integration", () => {
     expect(footer).toContain('{ href: "/cookie-policy", label: "Cookie Policy" }');
     expect(page).toContain('const COOKIE_POLICY_SCRIPT_ID = "cky-cookie-policy"');
     expect(page).toContain('policyScript.src = COOKIE_POLICY_SCRIPT_URL');
+    expect(page).toContain('window.dispatchEvent(new Event("load"))');
     expect(page).toContain('document.title = "Cookie Policy | Zylobridge"');
     expect(html).not.toContain("cookie-policy/script.js");
   });

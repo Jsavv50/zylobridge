@@ -60,6 +60,14 @@ export default function CookiePolicy() {
     policyScript.type = "text/javascript";
     policyScript.src = COOKIE_POLICY_SCRIPT_URL;
     policyScript.async = false;
+    policyScript.onload = () => {
+      // CookieYes registers its policy renderer on window.load. On an SPA navigation,
+      // that browser event has already occurred, so replay it only after this page-scoped
+      // script has registered its listener.
+      if (document.readyState === "complete" && host.children.length === 1) {
+        window.dispatchEvent(new Event("load"));
+      }
+    };
     policyScript.onerror = () => setLoadState("error");
     host.appendChild(policyScript);
 

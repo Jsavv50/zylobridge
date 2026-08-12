@@ -362,4 +362,4 @@
 - [x] Create or update the public /cookie-policy page with the CookieYes policy script scoped to that route
 - [x] Add the Cookie Policy footer link and document title/description metadata
 - [x] Verify script scope, responsive route behavior, TypeScript, tests, and split production builds
-- [ ] Save checkpoint and push the frontend-only change to GitHub
+- [x] Save checkpoint and push the frontend-only change to GitHub
