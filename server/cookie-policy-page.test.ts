@@ -20,6 +20,7 @@ describe("static Cookie Policy frontend integration", () => {
     expect(app).toContain('path="/cookie-policy" component={CookiePolicy}');
     expect(footer).toContain('{ href: "/cookie-policy", label: "Cookie Policy" }');
     expect(page).toContain("window.revisitCkyConsent");
+    expect(page).toContain("detectCookieYesConsentManager");
     expect(page).toContain("CookieYes sets this cookie for consent solution management.");
     expect(page).toContain('target="_blank"');
     expect(page).toContain('rel="noopener noreferrer"');

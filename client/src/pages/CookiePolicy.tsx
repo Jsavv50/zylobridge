@@ -63,7 +63,24 @@ export default function CookiePolicy() {
   useCookiePolicyMetadata();
 
   useEffect(() => {
-    setCanRevisitConsent(typeof window.revisitCkyConsent === "function");
+    let attempts = 0;
+    let retryTimer: number | undefined;
+
+    const detectCookieYesConsentManager = () => {
+      const isReady = typeof window.revisitCkyConsent === "function";
+      setCanRevisitConsent(isReady);
+
+      if (!isReady && attempts < 40) {
+        attempts += 1;
+        retryTimer = window.setTimeout(detectCookieYesConsentManager, 125);
+      }
+    };
+
+    detectCookieYesConsentManager();
+
+    return () => {
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+    };
   }, []);
 
   const openConsentPreferences = () => {
