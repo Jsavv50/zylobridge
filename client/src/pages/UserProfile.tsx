@@ -21,6 +21,7 @@ import {
   MessageSquare,
   ShoppingBag,
   LayoutDashboard,
+  Building2,
   Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -236,6 +237,8 @@ export default function UserProfile() {
       ? "Trade Professional"
       : user.userType === "client"
       ? "Client / Contractor"
+      : user.userType === "enterprise"
+      ? "Enterprise"
       : "Account not configured";
   const loginMethodLabel =
     user.loginMethod === "google"
@@ -538,6 +541,15 @@ export default function UserProfile() {
                   title="My Jobs"
                   description="Manage the jobs you have posted on the platform."
                   href="/my-jobs"
+                  accent
+                />
+              )}
+              {user.userType === "enterprise" && (
+                <QuickActionCard
+                  icon={Building2}
+                  title="Enterprise Workspace"
+                  description="Open your organization workspace and account tools."
+                  href="/dashboard/enterprise"
                   accent
                 />
               )}

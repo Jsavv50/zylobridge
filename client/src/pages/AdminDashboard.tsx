@@ -233,6 +233,7 @@ export default function AdminDashboard() {
                       {[
                         { label: "Contractors / Clients", value: adminStats.clientCount, total: adminStats.totalUsers, color: "violet" },
                         { label: "Skilled Professionals", value: adminStats.professionalCount, total: adminStats.totalUsers, color: "cyan" },
+                        { label: "Enterprise", value: adminStats.enterpriseCount, total: adminStats.totalUsers, color: "amber" },
                         { label: "Admins", value: adminStats.adminCount, total: adminStats.totalUsers, color: "amber" },
                         { label: "Unset / Onboarding", value: adminStats.unsetCount, total: adminStats.totalUsers, color: "gray" },
                       ].map(({ label, value, total, color }) => (
@@ -288,9 +289,10 @@ export default function AdminDashboard() {
                             <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
                               u.userType === "client" ? "bg-violet-500/15 text-violet-400 border-violet-500/25" :
                               u.userType === "professional" ? "bg-cyan-500/15 text-cyan-400 border-cyan-500/25" :
+                              u.userType === "enterprise" ? "bg-amber-500/15 text-amber-400 border-amber-500/25" :
                               "bg-gray-500/15 text-gray-400 border-gray-500/25"
                             }`}>
-                              {u.userType === "client" ? "Contractor" : u.userType === "professional" ? "Professional" : "Unset"}
+                              {u.userType === "client" ? "Contractor" : u.userType === "professional" ? "Professional" : u.userType === "enterprise" ? "Enterprise" : "Unset"}
                             </span>
                           </td>
                           <td className="px-5 py-4">

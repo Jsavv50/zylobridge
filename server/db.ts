@@ -106,7 +106,7 @@ export async function getUserById(id: number) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function updateUserType(userId: number, userType: "client" | "professional") {
+export async function updateUserType(userId: number, userType: "client" | "professional" | "enterprise") {
   const db = await getDb();
   if (!db) return;
   await db.update(users).set({ userType }).where(eq(users.id, userId));
@@ -286,7 +286,7 @@ export async function getAdminStats() {
   const db = await getDb();
   if (!db) {
     return {
-      totalUsers: 0, clientCount: 0, professionalCount: 0, adminCount: 0, unsetCount: 0,
+      totalUsers: 0, clientCount: 0, professionalCount: 0, enterpriseCount: 0, adminCount: 0, unsetCount: 0,
       totalJobs: 0, openJobs: 0, inProgressJobs: 0, completedJobs: 0, cancelledJobs: 0,
       totalApplications: 0, pendingApplications: 0,
       verifiedUsers: 0, totalReviews: 0,
@@ -308,6 +308,7 @@ export async function getAdminStats() {
 
   const clientCount = userRows.filter((u) => u.userType === "client").length;
   const professionalCount = userRows.filter((u) => u.userType === "professional").length;
+  const enterpriseCount = userRows.filter((u) => u.userType === "enterprise").length;
   const adminCount = userRows.filter((u) => u.role === "admin").length;
   const unsetCount = userRows.filter((u) => u.userType === "unset").length;
 
@@ -322,6 +323,7 @@ export async function getAdminStats() {
     totalUsers: userRows.length,
     clientCount,
     professionalCount,
+    enterpriseCount,
     adminCount,
     unsetCount,
     totalJobs: jobRows.length,

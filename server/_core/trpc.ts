@@ -27,6 +27,24 @@ const requireUser = t.middleware(async opts => {
 
 export const protectedProcedure = t.procedure.use(requireUser);
 
+/**
+ * Restricts a procedure to the Enterprise actor type. This is intentionally
+ * separate from system roles (user/admin/super_admin), which continue to
+ * govern platform administration.
+ */
+export const enterpriseProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  if (ctx.user.userType !== "enterprise") {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Enterprise account access required." });
+  }
+
+  return next({
+    ctx: {
+      ...ctx,
+      user: ctx.user,
+    },
+  });
+});
+
 export const adminProcedure = t.procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;

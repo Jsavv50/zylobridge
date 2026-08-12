@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Menu, X, ChevronDown, Briefcase, LayoutDashboard, Shield, MessageSquare, ShieldCheck, ShoppingBag, User } from "lucide-react";
+import { Menu, X, ChevronDown, Briefcase, LayoutDashboard, Building2, Shield, MessageSquare, ShieldCheck, ShoppingBag, User } from "lucide-react";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { trpc } from "@/lib/trpc";
 
@@ -32,6 +32,7 @@ export default function Navbar() {
   const isAdmin = user?.role === "admin";
   const isClient = user?.userType === "client";
   const isProfessional = user?.userType === "professional";
+  const isEnterprise = user?.userType === "enterprise";
 
   const { data: unreadData } = trpc.messaging.unreadCount.useQuery(undefined, {
     enabled: isAuthenticated,
@@ -117,6 +118,14 @@ export default function Navbar() {
                     <Button variant="ghost" size="sm" className="text-gray-300 hover:text-white hover:bg-white/5">
                       <LayoutDashboard className="h-4 w-4 mr-1.5" />
                       Dashboard
+                    </Button>
+                  </Link>
+                )}
+                {isEnterprise && (
+                  <Link href="/dashboard/enterprise">
+                    <Button variant="ghost" size="sm" className="text-amber-300 hover:text-amber-200 hover:bg-amber-500/10">
+                      <Building2 className="h-4 w-4 mr-1.5" />
+                      Workspace
                     </Button>
                   </Link>
                 )}
@@ -258,6 +267,13 @@ export default function Navbar() {
                   <Link href="/dashboard/professional" onClick={() => setMobileOpen(false)}>
                     <Button variant="outline" size="sm" className="w-full border-white/10 text-gray-300">
                       Professional Dashboard
+                    </Button>
+                  </Link>
+                )}
+                {isEnterprise && (
+                  <Link href="/dashboard/enterprise" onClick={() => setMobileOpen(false)}>
+                    <Button variant="outline" size="sm" className="w-full border-amber-500/30 text-amber-300">
+                      <Building2 className="h-4 w-4 mr-2" /> Enterprise Workspace
                     </Button>
                   </Link>
                 )}

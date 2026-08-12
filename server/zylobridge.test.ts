@@ -28,7 +28,7 @@ vi.mock("./db", () => ({
   updateProfile: vi.fn().mockResolvedValue(undefined),
   createReview: vi.fn().mockResolvedValue({ id: 1 }),
   getReviewsByRevieweeId: vi.fn().mockResolvedValue([]),
-  getAdminStats: vi.fn().mockResolvedValue({ totalUsers: 0, clientCount: 0, professionalCount: 0, adminCount: 0, unsetCount: 0, totalJobs: 0, openJobs: 0, inProgressJobs: 0, completedJobs: 0, cancelledJobs: 0, totalApplications: 0, pendingApplications: 0, verifiedUsers: 0, totalReviews: 0 }),
+  getAdminStats: vi.fn().mockResolvedValue({ totalUsers: 0, clientCount: 0, professionalCount: 0, enterpriseCount: 0, adminCount: 0, unsetCount: 0, totalJobs: 0, openJobs: 0, inProgressJobs: 0, completedJobs: 0, cancelledJobs: 0, totalApplications: 0, pendingApplications: 0, verifiedUsers: 0, totalReviews: 0 }),
   getAllUsers: vi.fn().mockResolvedValue([]),
   getUserCount: vi.fn().mockResolvedValue(0),
   updateUserType: vi.fn().mockResolvedValue(undefined),
@@ -123,6 +123,10 @@ function createClientCtx() {
 
 function createProfessionalCtx() {
   return createCtx({ id: 3, openId: "pro-001", role: "user", userType: "professional" });
+}
+
+function createEnterpriseCtx() {
+  return createCtx({ id: 4, openId: "enterprise-001", role: "user", userType: "enterprise" });
 }
 
 function createUnauthCtx(): TrpcContext {
@@ -319,6 +323,49 @@ describe("auth.setUserType", () => {
     const ctx = createUnauthCtx();
     const caller = appRouter.createCaller(ctx);
     await expect(caller.auth.setUserType({ userType: "client" })).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+  });
+
+  it("accepts Enterprise as a first-class account type", async () => {
+    const { ctx } = createCtx();
+    const caller = appRouter.createCaller(ctx);
+    await expect(caller.auth.setUserType({ userType: "enterprise" })).resolves.toEqual({ success: true });
+  });
+});
+
+describe("Enterprise role authorization", () => {
+  it("returns a workspace overview for Enterprise accounts", async () => {
+    const { ctx } = createEnterpriseCtx();
+    const caller = appRouter.createCaller(ctx);
+    await expect(caller.enterprise.overview()).resolves.toMatchObject({ workspace: "enterprise" });
+  });
+
+  it("blocks contractor and professional accounts from the Enterprise workspace endpoint", async () => {
+    const contractorCaller = appRouter.createCaller(createClientCtx().ctx);
+    const professionalCaller = appRouter.createCaller(createProfessionalCtx().ctx);
+    await expect(contractorCaller.enterprise.overview()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(professionalCaller.enterprise.overview()).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("does not grant Enterprise accounts contractor-only job posting", async () => {
+    const { ctx } = createEnterpriseCtx();
+    const caller = appRouter.createCaller(ctx);
+    await expect(caller.jobs.create({
+      title: "Enterprise Job",
+      description: "This description is long enough for validation.",
+      vocation: "electrician",
+      budget: 1000,
+      location: "Houston, TX",
+    })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("does not grant Enterprise accounts professional-only job applications", async () => {
+    const { ctx } = createEnterpriseCtx();
+    const caller = appRouter.createCaller(ctx);
+    await expect(caller.applications.submitApplication({
+      jobId: 1,
+      coverLetter: "This cover letter is long enough for validation.",
+      bidAmount: 500,
+    })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });
 

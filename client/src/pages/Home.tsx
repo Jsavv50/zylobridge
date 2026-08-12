@@ -417,6 +417,17 @@ export default function Home() {
                       </Button>
                     </Link>
                   )}
+                  {user?.userType === "enterprise" && (
+                    <Link href="/dashboard/enterprise">
+                      <Button
+                        size="lg"
+                        className="font-bold px-8 h-12 text-base"
+                        style={{ background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)" }}
+                      >
+                        Open Workspace <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </Link>
+                  )}
                   {user?.userType === "unset" && (
                     <Link href="/onboarding">
                       <Button

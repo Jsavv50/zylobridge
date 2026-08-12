@@ -12,7 +12,7 @@ import {
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 export const roleEnum = pgEnum("role", ["user", "admin", "super_admin"]);
-export const userTypeEnum = pgEnum("user_type", ["client", "professional", "unset"]);
+export const userTypeEnum = pgEnum("user_type", ["client", "professional", "enterprise", "unset"]);
 export const vocationEnum = pgEnum("vocation", [
   "electrician",
   "carpenter",

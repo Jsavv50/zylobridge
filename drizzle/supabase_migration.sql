@@ -6,7 +6,8 @@
 
 -- ─── Enums ────────────────────────────────────────────────────────────────────
 DO $$ BEGIN CREATE TYPE role AS ENUM ('user', 'admin'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN CREATE TYPE user_type AS ENUM ('client', 'professional', 'unset'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE user_type AS ENUM ('client', 'professional', 'enterprise', 'unset'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+ALTER TYPE user_type ADD VALUE IF NOT EXISTS 'enterprise';
 DO $$ BEGIN CREATE TYPE vocation AS ENUM ('electrician','carpenter','plumber','mason_bricklayer','painter','flooring_tiler','heavy_equipment_operator','road_construction_worker','hvac_technician','elevator_installer_repairer','pest_control_technician','glazier'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE job_status AS ENUM ('open','in_progress','completed','cancelled'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE application_status AS ENUM ('pending','accepted','rejected','withdrawn'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;

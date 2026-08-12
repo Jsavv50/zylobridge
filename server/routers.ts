@@ -4,7 +4,7 @@ import { z } from "zod";
 import { COOKIE_NAME } from "../shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { enterpriseProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { storagePut } from "./storage";
 import {
   upsertUser,
@@ -132,7 +132,7 @@ export const appRouter = router({
       return { success: true } as const;
     }),
     setUserType: protectedProcedure
-      .input(z.object({ userType: z.enum(["client", "professional"]) }))
+      .input(z.object({ userType: z.enum(["client", "professional", "enterprise"]) }))
       .mutation(async ({ ctx, input }) => {
         await updateUserType(ctx.user.id, input.userType);
         return { success: true };
@@ -143,6 +143,16 @@ export const appRouter = router({
         await updateUserName(ctx.user.id, input.name);
         return { success: true };
       }),
+  }),
+
+  // ── Enterprise workspace ───────────────────────────────────────────────────
+  // Enterprise is recognized as a top-level actor now; organization membership,
+  // team management, and project delegation remain future scoped capabilities.
+  enterprise: router({
+    overview: enterpriseProcedure.query(() => ({
+      workspace: "enterprise" as const,
+      capabilities: ["marketplace_access", "account_management"] as const,
+    })),
   }),
 
   // ── Jobs ──────────────────────────────────────────────────────────────────

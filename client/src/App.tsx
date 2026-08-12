@@ -10,6 +10,7 @@ import JobDetail from "./pages/JobDetail";
 import Onboarding from "./pages/Onboarding";
 import ClientDashboard from "./pages/ClientDashboard";
 import ProfessionalDashboard from "./pages/ProfessionalDashboard";
+import EnterpriseDashboard from "./pages/EnterpriseDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import Messaging from "./pages/Messaging";
 import VerificationRequest from "./pages/VerificationRequest";
@@ -33,6 +34,7 @@ function Router() {
       <Route path="/dashboard/contractor" component={ClientDashboard} />
       <Route path="/dashboard/client" component={ClientDashboard} />
       <Route path="/dashboard/professional" component={ProfessionalDashboard} />
+      <Route path="/dashboard/enterprise" component={EnterpriseDashboard} />
       <Route path="/dashboard/admin" component={AdminDashboard} />
       <Route path="/messages" component={Messaging} />
       <Route path="/verification" component={VerificationRequest} />
