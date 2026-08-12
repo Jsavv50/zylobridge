@@ -349,3 +349,10 @@
 - [x] Show a 60-second countdown and disable resend during cooldown
 - [x] Restart the timer only after a successful resend request
 - [x] Verify client build, server build, and tests before checkpointing
+
+## Phase 49: CookieYes Frontend Integration
+- [x] Confirm the Vite HTML entry point and verify CookieYes is not already present
+- [x] Add the provided CookieYes installation script once in the frontend document head
+- [x] Verify the production Vite output contains one CookieYes script tag
+- [x] Verify the live Vercel site loads the CookieYes script and keeps the frontend functional
+- [x] Save checkpoint and push the frontend-only integration to GitHub
