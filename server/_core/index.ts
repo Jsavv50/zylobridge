@@ -6,6 +6,7 @@ import cors from "cors";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerGoogleAuthRoutes } from "./googleAuth";
+import { registerRealtimeAuthRoutes } from "./realtimeAuth";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
@@ -99,6 +100,7 @@ async function startServer() {
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   registerGoogleAuthRoutes(app);
+  registerRealtimeAuthRoutes(app);
 
   // ── Root endpoint (API diagnostics) ──────────────────────────────────────
   app.get("/", (_req, res) => {

@@ -379,3 +379,12 @@
 - [x] Add regression tests for existing Professional and Contractor roles, Enterprise onboarding and dashboard routing, role-based navigation, and unauthorized access prevention
 - [x] Run and verify TypeScript, full tests, client/server production builds, and the database migration
 - [x] Save checkpoint, push the role expansion to GitHub, and report any manual operational steps
+
+## Phase 53: Supabase Realtime Authentication Bridge
+- [x] Add SUPABASE_JWT_SECRET to server environment configuration (`server/_core/env.ts`) and startup validation
+- [x] Create server-side Realtime JWT generator (`server/_core/realtimeAuth.ts`) using jose, HS256, `SUPABASE_JWT_SECRET`, 30-minute expiration, and claims `{ sub: String(user.id), role: "authenticated", user_id: user.id }`
+- [x] Create authenticated REST endpoint `GET /api/realtime/token` protected by existing session cookie and `sdk.authenticateRequest()`
+- [x] Create browser-side Supabase client & Realtime helper (`client/src/lib/supabase.ts`) using public `SUPABASE_URL` and `SUPABASE_ANON_KEY`, calling `GET /api/realtime/token` with credentials: include, and calling `supabase.realtime.setAuth(token)` with automatic token refresh
+- [x] Add unit tests for Realtime auth token generation, configuration validation, and endpoint security (`server/realtime-auth.test.ts`)
+- [x] Run TypeScript check, test suite, `build:client`, and `build:server` successfully without breaking existing auth, schema, RLS, or messaging
+- [x] Save checkpoint, publish, and report exact implementation details
