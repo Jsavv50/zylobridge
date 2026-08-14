@@ -191,14 +191,35 @@ export default function Messaging() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const sendMessageMutation = trpc.messaging.sendMessage.useMutation({
+    onSuccess: (newMsg) => {
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === newMsg.id)) return prev;
+        return [
+          ...prev,
+          {
+            id: newMsg.id,
+            conversationId: newMsg.conversationId,
+            senderId: newMsg.senderId,
+            content: newMsg.content,
+            isRead: newMsg.isRead ?? false,
+            createdAt: new Date(newMsg.createdAt),
+          },
+        ];
+      });
+      refetchConversations();
+    },
+  });
+
   const sendMessage = useCallback(() => {
-    if (!inputValue.trim() || !selectedConvId || !socketRef.current) return;
-    socketRef.current.emit("send_message", {
-      conversationId: selectedConvId,
-      content: inputValue.trim(),
-    });
+    if (!inputValue.trim() || !selectedConvId || sendMessageMutation.isPending) return;
+    const contentToSend = inputValue.trim();
     setInputValue("");
-  }, [inputValue, selectedConvId]);
+    sendMessageMutation.mutate({
+      conversationId: selectedConvId,
+      content: contentToSend,
+    });
+  }, [inputValue, selectedConvId, sendMessageMutation]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -370,11 +391,15 @@ export default function Messaging() {
                     />
                     <Button
                       onClick={sendMessage}
-                      disabled={!inputValue.trim() || !socketConnected}
+                      disabled={!inputValue.trim() || !selectedConvId || sendMessageMutation.isPending}
                       size="icon"
                       className="bg-primary hover:bg-primary/90 shrink-0"
                     >
-                      <Send className="h-4 w-4" />
+                      {sendMessageMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
                     </Button>
                   </div>
                 </div>

@@ -367,6 +367,19 @@ export async function getMessagesByConversationId(conversationId: number, limit 
   return db.select().from(messages).where(eq(messages.conversationId, conversationId)).orderBy(asc(messages.createdAt)).limit(limit);
 }
 
+export async function createMessage(conversationId: number, senderId: number, content: string) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  const [inserted] = await db.insert(messages).values({
+    conversationId,
+    senderId,
+    content: content.trim(),
+    isRead: false,
+  }).returning();
+  await db.update(conversations).set({ lastMessageAt: new Date() }).where(eq(conversations.id, conversationId));
+  return inserted;
+}
+
 export async function getUnreadMessageCount(userId: number) {
   const db = await getDb();
   if (!db) return 0;

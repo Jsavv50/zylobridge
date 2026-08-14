@@ -37,3 +37,11 @@ describe("Messaging Realtime Integration & Architecture", () => {
     expect(code).toContain("VITE_SUPABASE_ANON_KEY");
   });
 });
+  it("verifies Messaging.tsx uses tRPC sendMessage mutation instead of requiring socketConnected", () => {
+    const messagingPath = path.resolve(__dirname, "../client/src/pages/Messaging.tsx");
+    const code = fs.readFileSync(messagingPath, "utf-8");
+
+    expect(code).toContain("trpc.messaging.sendMessage.useMutation");
+    expect(code).not.toContain("socketRef.current.emit(\"send_message\"");
+    expect(code).not.toContain("!socketConnected");
+  });

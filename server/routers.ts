@@ -6,6 +6,9 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { enterpriseProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { storagePut } from "./storage";
+import { getDb } from "./db";
+import { conversations } from "../drizzle/schema";
+import { eq } from "drizzle-orm";
 import {
   upsertUser,
   getUserByOpenId,
@@ -38,6 +41,7 @@ import {
   getConversationsByUserId,
   getMessagesByConversationId,
   getUnreadMessageCount,
+  createMessage,
   createEscrowPayment,
   getEscrowByJobId,
   updateEscrowStatus,
@@ -365,6 +369,24 @@ export const appRouter = router({
       }))
       .query(async ({ ctx, input }) => {
         return getMessagesByConversationId(input.conversationId, input.limit);
+      }),
+
+    sendMessage: protectedProcedure
+      .input(z.object({
+        conversationId: z.number().int().positive(),
+        content: z.string().min(1).max(5000),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+        const convs = await db.select().from(conversations).where(eq(conversations.id, input.conversationId)).limit(1);
+        const conv = convs[0];
+        if (!conv) throw new TRPCError({ code: "NOT_FOUND", message: "Conversation not found" });
+        if (conv.clientId !== ctx.user.id && conv.professionalId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Not a member of this conversation" });
+        }
+        const message = await createMessage(input.conversationId, ctx.user.id, input.content);
+        return message;
       }),
 
     unreadCount: protectedProcedure.query(async ({ ctx }) => {
