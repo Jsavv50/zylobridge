@@ -13,6 +13,7 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 
 let clientInstance: SupabaseClient | null = null;
 let refreshTimer: number | null = null;
+let activeAuthPromise: Promise<boolean> | null = null;
 
 /**
  * Get or initialize the singleton public Supabase browser client.
@@ -74,31 +75,54 @@ async function fetchRealtimeToken(): Promise<{ token: string; expiresIn: number 
 
 /**
  * Initialize Supabase Realtime authentication using the backend session bridge.
+ * Single-flight guard prevents duplicate concurrent token requests.
  * Sets auth and schedules automatic token refresh before expiration.
  */
 export async function initSupabaseRealtimeAuth(): Promise<boolean> {
-  const supabase = getSupabaseBrowserClient();
-
-  const tokenData = await fetchRealtimeToken();
-  if (!tokenData) {
-    return false;
+  if (activeAuthPromise) {
+    return activeAuthPromise;
   }
 
-  // Set auth on Supabase Realtime client
-  supabase.realtime.setAuth(tokenData.token);
-  console.log("[SupabaseBrowser] Realtime setAuth successful");
+  activeAuthPromise = (async () => {
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const tokenData = await fetchRealtimeToken();
+      if (!tokenData) {
+        throw new Error("Failed to obtain valid realtime token from bridge");
+      }
 
-  // Schedule refresh before expiration (e.g., refresh 5 minutes before expiration, or halfway if short)
-  if (refreshTimer) {
-    window.clearTimeout(refreshTimer);
-    refreshTimer = null;
-  }
+      // Set auth on Supabase Realtime client
+      supabase.realtime.setAuth(tokenData.token);
+      console.log("[SupabaseBrowser] Realtime setAuth successful");
 
-  const refreshIntervalMs = Math.max((tokenData.expiresIn - 300) * 1000, 60 * 1000);
-  refreshTimer = window.setTimeout(async () => {
-    console.log("[SupabaseBrowser] Refreshing Realtime authorization token...");
-    await initSupabaseRealtimeAuth();
-  }, refreshIntervalMs);
+      // Schedule refresh before expiration (e.g., refresh 5 minutes before expiration, or 1 minute minimum)
+      if (refreshTimer) {
+        window.clearTimeout(refreshTimer);
+        refreshTimer = null;
+      }
 
-  return true;
+      const refreshIntervalMs = Math.max((tokenData.expiresIn - 300) * 1000, 60 * 1000);
+      refreshTimer = window.setTimeout(async () => {
+        console.log("[SupabaseBrowser] Refreshing Realtime authorization token...");
+        try {
+          const freshTokenData = await fetchRealtimeToken();
+          if (freshTokenData) {
+            supabase.realtime.setAuth(freshTokenData.token);
+            console.log("[SupabaseBrowser] Realtime token refreshed successfully via setAuth");
+          }
+        } catch (refreshErr) {
+          console.warn("[SupabaseBrowser] Realtime token refresh failed:", String(refreshErr));
+        }
+      }, refreshIntervalMs);
+
+      return true;
+    } catch (err) {
+      console.error("[SupabaseBrowser] initSupabaseRealtimeAuth error:", String(err));
+      throw err;
+    } finally {
+      activeAuthPromise = null;
+    }
+  })();
+
+  return activeAuthPromise;
 }

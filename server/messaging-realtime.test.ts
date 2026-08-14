@@ -64,3 +64,19 @@ describe("Messaging Realtime Integration & Architecture", () => {
     expect(code).not.toContain("socketConnected");
     expect(code).not.toContain("getSocket");
   });
+  it("verifies client/src/lib/supabase.ts implements single-flight initSupabaseRealtimeAuth with promise reuse and error rejection", () => {
+    const supabaseLibPath = path.resolve(__dirname, "../client/src/lib/supabase.ts");
+    const code = fs.readFileSync(supabaseLibPath, "utf-8");
+
+    expect(code).toContain("activeAuthPromise");
+    expect(code).toContain("fetchRealtimeToken");
+    expect(code).toContain("supabase.realtime.setAuth");
+  });
+
+  it("verifies Messaging.tsx awaits initSupabaseRealtimeAuth before subscribing and sets ERROR on auth failure", () => {
+    const messagingPath = path.resolve(__dirname, "../client/src/pages/Messaging.tsx");
+    const code = fs.readFileSync(messagingPath, "utf-8");
+
+    expect(code).toContain("initSupabaseRealtimeAuth()");
+    expect(code).toContain("setRealtimeStatus(\"ERROR\")");
+  });

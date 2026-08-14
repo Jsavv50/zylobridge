@@ -56,79 +56,102 @@ export default function Messaging() {
     }
   }, [fetchedMessages]);
 
-  // Initialize Supabase Realtime authentication once per authenticated session
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    initSupabaseRealtimeAuth().catch((err) => {
-      console.warn("[Messaging] Supabase Realtime init failed:", String(err));
-    });
-  }, [isAuthenticated]);
-
-  // Supabase Realtime channel subscription for the active conversation
+  // Supabase Realtime channel subscription for the active conversation, gated on awaited initSupabaseRealtimeAuth
   useEffect(() => {
     if (!isAuthenticated || !selectedConvId) {
       setRealtimeStatus("CONNECTING");
       return;
     }
 
+    let isMounted = true;
     setRealtimeStatus("CONNECTING");
-    const supabase = getSupabaseBrowserClient();
-    const channelName = `private-conversation-${selectedConvId}`;
-    const channel = supabase.channel(channelName, {
-      config: {
-        private: true,
-      },
+
+    const setupRealtimeChannel = async () => {
+      try {
+        const authSuccess = await initSupabaseRealtimeAuth();
+        if (!isMounted) return;
+
+        if (!authSuccess) {
+          setRealtimeStatus("ERROR");
+          console.warn("[Messaging] Realtime authentication failed before subscription");
+          return;
+        }
+
+        const supabase = getSupabaseBrowserClient();
+        const channelName = `private-conversation-${selectedConvId}`;
+        const channel = supabase.channel(channelName, {
+          config: {
+            private: true,
+          },
+        });
+
+        channel
+          .on(
+            "postgres_changes",
+            {
+              event: "INSERT",
+              schema: "public",
+              table: "messages",
+              filter: `conversationId=eq.${selectedConvId}`,
+            },
+            (payload) => {
+              if (!isMounted) return;
+              const newMsg = payload.new as any;
+              if (newMsg && newMsg.id && newMsg.conversationId === selectedConvId) {
+                setMessages((prev) => {
+                  if (prev.some((m) => m.id === newMsg.id)) {
+                    return prev;
+                  }
+                  return [
+                    ...prev,
+                    {
+                      id: newMsg.id,
+                      conversationId: newMsg.conversationId,
+                      senderId: newMsg.senderId,
+                      content: newMsg.content,
+                      isRead: newMsg.isRead ?? false,
+                      createdAt: new Date(newMsg.createdAt),
+                    },
+                  ];
+                });
+                refetchConversations();
+              }
+            }
+          )
+          .subscribe((status, err) => {
+            if (!isMounted) return;
+            if (status === "SUBSCRIBED") {
+              setRealtimeStatus("CONNECTED");
+              console.log(`[Messaging] Realtime channel ${channelName} SUBSCRIBED`);
+            } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+              setRealtimeStatus("ERROR");
+              console.warn(`[Messaging] Realtime channel ${channelName} status: ${status}`, err);
+            }
+          });
+
+        return () => {
+          supabase.removeChannel(channel);
+        };
+      } catch (error) {
+        if (!isMounted) return;
+        setRealtimeStatus("ERROR");
+        console.error("[Messaging] Realtime setup error:", String(error));
+      }
+    };
+
+    let cleanupFn: (() => void) | undefined;
+    setupRealtimeChannel().then((cleanup) => {
+      cleanupFn = cleanup;
     });
 
-    channel
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "messages",
-          filter: `conversationId=eq.${selectedConvId}`,
-        },
-        (payload) => {
-          const newMsg = payload.new as any;
-          if (newMsg && newMsg.id && newMsg.conversationId === selectedConvId) {
-            setMessages((prev) => {
-              if (prev.some((m) => m.id === newMsg.id)) {
-                return prev;
-              }
-              return [
-                ...prev,
-                {
-                  id: newMsg.id,
-                  conversationId: newMsg.conversationId,
-                  senderId: newMsg.senderId,
-                  content: newMsg.content,
-                  isRead: newMsg.isRead ?? false,
-                  createdAt: new Date(newMsg.createdAt),
-                },
-              ];
-            });
-            refetchConversations();
-          }
-        }
-      )
-      .subscribe((status, err) => {
-        if (status === "SUBSCRIBED") {
-          setRealtimeStatus("CONNECTED");
-          console.log(`[Messaging] Realtime channel ${channelName} SUBSCRIBED`);
-        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-          setRealtimeStatus("ERROR");
-          console.warn(`[Messaging] Realtime channel ${channelName} status: ${status}`, err);
-        }
-      });
-
     return () => {
-      supabase.removeChannel(channel);
+      isMounted = false;
+      if (cleanupFn) {
+        cleanupFn();
+      }
       setRealtimeStatus("CONNECTING");
     };
   }, [isAuthenticated, selectedConvId, refetchConversations]);
-
-
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -151,17 +174,16 @@ export default function Messaging() {
           },
         ];
       });
+      setInputValue("");
       refetchConversations();
     },
   });
 
   const sendMessage = useCallback(() => {
     if (!inputValue.trim() || !selectedConvId || sendMessageMutation.isPending) return;
-    const contentToSend = inputValue.trim();
-    setInputValue("");
     sendMessageMutation.mutate({
       conversationId: selectedConvId,
-      content: contentToSend,
+      content: inputValue.trim(),
     });
   }, [inputValue, selectedConvId, sendMessageMutation]);
 
@@ -342,15 +364,9 @@ export default function Messaging() {
                       onChange={(e) => setInputValue(e.target.value)}
                       onKeyDown={handleKeyDown}
                       placeholder="Type a message..."
-                      className="flex-1 bg-background border-border"
-                      maxLength={5000}
+                      className="flex-1"
                     />
-                    <Button
-                      onClick={sendMessage}
-                      disabled={!inputValue.trim() || !selectedConvId || sendMessageMutation.isPending}
-                      size="icon"
-                      className="bg-primary hover:bg-primary/90 shrink-0"
-                    >
+                    <Button onClick={sendMessage} disabled={!inputValue.trim() || sendMessageMutation.isPending}>
                       {sendMessageMutation.isPending ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
