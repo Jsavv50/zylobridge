@@ -53,3 +53,14 @@ describe("Messaging Realtime Integration & Architecture", () => {
     expect(code).toContain("allowedSocketOrigins");
     expect(code).toContain("credentials: true");
   });
+  it("verifies Messaging.tsx uses Supabase Realtime statuses (CONNECTING, CONNECTED, ERROR) and does not reference socket.io", () => {
+    const messagingPath = path.resolve(__dirname, "../client/src/pages/Messaging.tsx");
+    const code = fs.readFileSync(messagingPath, "utf-8");
+
+    expect(code).toContain("CONNECTING");
+    expect(code).toContain("CONNECTED");
+    expect(code).toContain("ERROR");
+    expect(code).not.toContain("socket.io-client");
+    expect(code).not.toContain("socketConnected");
+    expect(code).not.toContain("getSocket");
+  });

@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { io, Socket } from "socket.io-client";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -30,38 +29,15 @@ interface Conversation {
   createdAt: Date;
 }
 
-
-/**
- * SOCKET_URL — Railway backend WebSocket endpoint.
- * Reads VITE_API_URL (same variable used by tRPC) so both HTTP and WebSocket
- * traffic go to the same Railway service.
- * Falls back to window.location.origin for local development.
- */
-const SOCKET_URL =
-  ((import.meta.env.VITE_API_URL as string | undefined) ?? "").replace(/\/$/, "") ||
-  window.location.origin;
-
-let socketInstance: Socket | null = null;
-
-function getSocket(): Socket {
-  if (!socketInstance) {
-    socketInstance = io(SOCKET_URL, {
-      path: "/socket.io",
-      withCredentials: true,
-      transports: ["websocket", "polling"],
-    });
-  }
-  return socketInstance;
-}
+type RealtimeStatus = "CONNECTING" | "CONNECTED" | "ERROR";
 
 export default function Messaging() {
   const { user, isAuthenticated, loading } = useAuth();
   const [selectedConvId, setSelectedConvId] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
-  const [socketConnected, setSocketConnected] = useState(false);
+  const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>("CONNECTING");
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const socketRef = useRef<Socket | null>(null);
 
   const { data: conversations, refetch: refetchConversations } = trpc.messaging.myConversations.useQuery(
     undefined,
@@ -90,8 +66,12 @@ export default function Messaging() {
 
   // Supabase Realtime channel subscription for the active conversation
   useEffect(() => {
-    if (!isAuthenticated || !selectedConvId) return;
+    if (!isAuthenticated || !selectedConvId) {
+      setRealtimeStatus("CONNECTING");
+      return;
+    }
 
+    setRealtimeStatus("CONNECTING");
     const supabase = getSupabaseBrowserClient();
     const channelName = `private-conversation-${selectedConvId}`;
     const channel = supabase.channel(channelName, {
@@ -134,57 +114,21 @@ export default function Messaging() {
       )
       .subscribe((status, err) => {
         if (status === "SUBSCRIBED") {
+          setRealtimeStatus("CONNECTED");
           console.log(`[Messaging] Realtime channel ${channelName} SUBSCRIBED`);
         } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          setRealtimeStatus("ERROR");
           console.warn(`[Messaging] Realtime channel ${channelName} status: ${status}`, err);
         }
       });
 
     return () => {
       supabase.removeChannel(channel);
+      setRealtimeStatus("CONNECTING");
     };
   }, [isAuthenticated, selectedConvId, refetchConversations]);
 
-  // Socket.io setup
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    const socket = getSocket();
-    socketRef.current = socket;
 
-    socket.on("connect", () => setSocketConnected(true));
-    socket.on("disconnect", () => setSocketConnected(false));
-
-    socket.on("new_message", (msg: Message) => {
-      if (msg.conversationId === selectedConvId) {
-        setMessages((prev) => {
-          if (prev.some((m) => m.id === msg.id)) {
-            return prev;
-          }
-          return [...prev, { ...msg, createdAt: new Date(msg.createdAt) }];
-        });
-      }
-      refetchConversations();
-    });
-
-    socket.on("conversation_updated", () => {
-      refetchConversations();
-    });
-
-    return () => {
-      socket.off("new_message");
-      socket.off("conversation_updated");
-      socket.off("connect");
-      socket.off("disconnect");
-    };
-  }, [isAuthenticated, selectedConvId, refetchConversations]);
-
-  // Join conversation room when selected
-  useEffect(() => {
-    if (selectedConvId && socketRef.current) {
-      socketRef.current.emit("join_conversation", selectedConvId);
-      socketRef.current.emit("mark_read", selectedConvId);
-    }
-  }, [selectedConvId]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -256,9 +200,21 @@ export default function Messaging() {
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-bold text-foreground">Messages</h1>
           <div className="flex items-center gap-2">
-            <div className={`h-2 w-2 rounded-full ${socketConnected ? "bg-green-500" : "bg-red-500"}`} />
+            <div
+              className={`h-2 w-2 rounded-full ${
+                realtimeStatus === "CONNECTED"
+                  ? "bg-green-500"
+                  : realtimeStatus === "ERROR"
+                  ? "bg-red-500"
+                  : "bg-amber-500 animate-pulse"
+              }`}
+            />
             <span className="text-sm text-muted-foreground">
-              {socketConnected ? "Connected" : "Connecting..."}
+              {realtimeStatus === "CONNECTED"
+                ? "Connected"
+                : realtimeStatus === "ERROR"
+                ? "Connection error"
+                : "Connecting..."}
             </span>
           </div>
         </div>
