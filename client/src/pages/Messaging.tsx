@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Send, MessageSquare, Loader2 } from "lucide-react";
 import { getLoginUrl } from "@/const";
 import { formatDistanceToNow } from "date-fns";
+import { getSupabaseBrowserClient, initSupabaseRealtimeAuth } from "@/lib/supabase";
 
 interface Message {
   id: number;
@@ -79,6 +80,71 @@ export default function Messaging() {
     }
   }, [fetchedMessages]);
 
+  // Initialize Supabase Realtime authentication once per authenticated session
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    initSupabaseRealtimeAuth().catch((err) => {
+      console.warn("[Messaging] Supabase Realtime init failed:", String(err));
+    });
+  }, [isAuthenticated]);
+
+  // Supabase Realtime channel subscription for the active conversation
+  useEffect(() => {
+    if (!isAuthenticated || !selectedConvId) return;
+
+    const supabase = getSupabaseBrowserClient();
+    const channelName = `private-conversation-${selectedConvId}`;
+    const channel = supabase.channel(channelName, {
+      config: {
+        private: true,
+      },
+    });
+
+    channel
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+          filter: `conversationId=eq.${selectedConvId}`,
+        },
+        (payload) => {
+          const newMsg = payload.new as any;
+          if (newMsg && newMsg.id && newMsg.conversationId === selectedConvId) {
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === newMsg.id)) {
+                return prev;
+              }
+              return [
+                ...prev,
+                {
+                  id: newMsg.id,
+                  conversationId: newMsg.conversationId,
+                  senderId: newMsg.senderId,
+                  content: newMsg.content,
+                  isRead: newMsg.isRead ?? false,
+                  createdAt: new Date(newMsg.createdAt),
+                },
+              ];
+            });
+            refetchConversations();
+          }
+        }
+      )
+      .subscribe((status, err) => {
+        if (status === "SUBSCRIBED") {
+          console.log(`[Messaging] Realtime channel ${channelName} SUBSCRIBED`);
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          console.warn(`[Messaging] Realtime channel ${channelName} status: ${status}`, err);
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isAuthenticated, selectedConvId, refetchConversations]);
+
   // Socket.io setup
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -90,7 +156,12 @@ export default function Messaging() {
 
     socket.on("new_message", (msg: Message) => {
       if (msg.conversationId === selectedConvId) {
-        setMessages((prev) => [...prev, { ...msg, createdAt: new Date(msg.createdAt) }]);
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === msg.id)) {
+            return prev;
+          }
+          return [...prev, { ...msg, createdAt: new Date(msg.createdAt) }];
+        });
       }
       refetchConversations();
     });

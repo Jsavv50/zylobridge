@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import "./supabase-mock";
 import { appRouter } from "./routers";
 import { COOKIE_NAME } from "../shared/const";
 import type { TrpcContext } from "./_core/context";
