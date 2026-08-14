@@ -45,3 +45,11 @@ describe("Messaging Realtime Integration & Architecture", () => {
     expect(code).not.toContain("socketRef.current.emit(\"send_message\"");
     expect(code).not.toContain("!socketConnected");
   });
+  it("verifies Socket.io server does not use wildcard origin with credentials", () => {
+    const socketPath = path.resolve(__dirname, "../server/socket.ts");
+    const code = fs.readFileSync(socketPath, "utf-8");
+
+    expect(code).not.toContain('origin: "*"');
+    expect(code).toContain("allowedSocketOrigins");
+    expect(code).toContain("credentials: true");
+  });
