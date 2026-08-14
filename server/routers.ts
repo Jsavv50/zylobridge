@@ -5,7 +5,7 @@ import { COOKIE_NAME } from "../shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { enterpriseProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { storagePut } from "./storage";
+import { storagePut, storageGetSignedUrl } from "./storage";
 import { getDb } from "./db";
 import { conversations } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
@@ -604,6 +604,19 @@ export const appRouter = router({
     adminList: adminProcedure.query(async () => {
       return getAllVerificationRequests();
     }),
+
+    // Admin: get signed document URL for secure private review
+    adminGetDocumentUrl: adminProcedure
+      .input(z.object({ requestId: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const requests = await getAllVerificationRequests();
+        const req = requests.find((r) => r.id === input.requestId);
+        if (!req || !req.documentKey) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Verification request or document key not found." });
+        }
+        const signedUrl = await storageGetSignedUrl(req.documentKey);
+        return { signedUrl };
+      }),
 
     // Admin: approve or reject
     adminReview: adminProcedure
