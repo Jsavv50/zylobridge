@@ -233,7 +233,9 @@ export default function UserProfile() {
   const initials = getInitials(user.name);
   const roleLabel = user.role === "SUPER_ADMIN" ? "Super Administrator" : user.role === "admin" ? "Administrator" : "Member";
   const userTypeLabel =
-    user.userType === "professional"
+    user.role === "SUPER_ADMIN"
+      ? "Super Admin"
+      : user.userType === "professional"
       ? "Trade Professional"
       : user.userType === "client"
       ? "Client / Contractor"
@@ -296,6 +298,11 @@ export default function UserProfile() {
                       {user.isVerified && (
                         <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2 py-0.5">
                           <ShieldCheck className="h-3 w-3" /> Verified
+                        </span>
+                      )}
+                      {user.role === "SUPER_ADMIN" && (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-400 bg-red-500/10 border border-red-500/20 rounded-full px-2 py-0.5">
+                          <Shield className="h-3 w-3" /> Super Admin
                         </span>
                       )}
                       {user.role === "admin" && (

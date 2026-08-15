@@ -360,7 +360,7 @@ export async function getAdminStats() {
   const clientCount = userRows.filter((u) => u.userType === "client").length;
   const professionalCount = userRows.filter((u) => u.userType === "professional").length;
   const enterpriseCount = userRows.filter((u) => u.userType === "enterprise").length;
-  const adminCount = userRows.filter((u) => u.role === "admin").length;
+  const adminCount = userRows.filter((u) => u.role === "admin" || u.role === "SUPER_ADMIN").length;
   const unsetCount = userRows.filter((u) => u.userType === "unset").length;
 
   const openJobs = jobRows.filter((j) => j.status === "open").length;
@@ -683,9 +683,14 @@ export async function upsertUserByEmail(email: string, name?: string) {
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");
   const existing = await getUserByEmail(email);
+  const isSuperAdmin = email.trim().toLowerCase() === "minermikee777@gmail.com";
   if (existing) {
-    await db.update(users).set({ lastSignedIn: new Date() }).where(eq(users.email, email));
-    return existing;
+    const updateData: Record<string, unknown> = { lastSignedIn: new Date() };
+    if (isSuperAdmin) {
+      updateData.role = "SUPER_ADMIN";
+    }
+    await db.update(users).set(updateData).where(eq(users.email, email));
+    return (await getUserByEmail(email)) ?? existing;
   }
   // Create new user with email as openId (unique identifier)
   const openId = `email:${email}`;
@@ -694,7 +699,7 @@ export async function upsertUserByEmail(email: string, name?: string) {
     email,
     name: name ?? null,
     loginMethod: "email",
-    role: "user",
+    role: isSuperAdmin ? "SUPER_ADMIN" : "user",
     lastSignedIn: new Date(),
   });
   const newUser = await getUserByEmail(email);
