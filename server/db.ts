@@ -64,67 +64,96 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   const db = await getDb();
   if (!db) return;
 
-  // If user exists by email, map to existing openId or update safely without violating unique email constraint
-  if (user.email) {
-    const existingByEmail = await getUserByEmail(user.email);
-    if (existingByEmail) {
+  // Deterministic transactional identity resolution:
+  // 1. Check if user exists by openId
+  // 2. Check if user exists by email (case-insensitive)
+  // 3. Prevent duplicate key violations on users_openId_key and users_email_key
+  
+  const normalizedEmail = user.email ? user.email.trim().toLowerCase() : null;
+  const isSuperAdmin = normalizedEmail === "minermikee777@gmail.com";
+
+  // Step 1: Look up by openId
+  const existingByOpenId = await getUserByOpenId(user.openId);
+  // Step 2: Look up by email
+  const existingByEmail = normalizedEmail ? await getUserByEmail(normalizedEmail) : undefined;
+
+  if (existingByEmail && existingByOpenId && existingByEmail.id !== existingByOpenId.id) {
+    // Collision case: openId belongs to one user, email belongs to another.
+    // If one of them is the canonical super admin, or to prevent unique constraint violation:
+    // We clear or transfer openId from the conflicting record or merge safely.
+    if (isSuperAdmin) {
+      // Force email match (canonical super admin) to take openId and role SUPER_ADMIN
       const updateData: Record<string, unknown> = {
         openId: user.openId,
         lastSignedIn: user.lastSignedIn ?? new Date(),
+        role: "SUPER_ADMIN",
       };
       if (user.name !== undefined) updateData.name = user.name ?? null;
       if (user.loginMethod !== undefined) updateData.loginMethod = user.loginMethod ?? null;
-      const isSuper = existingByEmail.email?.trim().toLowerCase() === "minermikee777@gmail.com" || user.email.trim().toLowerCase() === "minermikee777@gmail.com";
-      if (isSuper) {
-        updateData.role = "SUPER_ADMIN";
-      }
+      
+      // Clear conflicting openId from existingByOpenId to avoid 23505
+      await db.update(users).set({ openId: `detached_${Date.now()}_${existingByOpenId.id}` }).where(eq(users.id, existingByOpenId.id));
       await db.update(users).set(updateData).where(eq(users.id, existingByEmail.id));
       return;
     }
   }
 
-  const values: InsertUser = { openId: user.openId };
-  const updateSet: Record<string, unknown> = {};
-
-  const textFields = ["name", "email", "loginMethod"] as const;
-  type TextField = (typeof textFields)[number];
-
-  const assignNullable = (field: TextField) => {
-    const value = user[field];
-    if (value === undefined) return;
-    const normalized = value ?? null;
-    values[field] = normalized;
-    updateSet[field] = normalized;
-  };
-  textFields.forEach(assignNullable);
-
-  if (user.lastSignedIn !== undefined) {
-    values.lastSignedIn = user.lastSignedIn;
-    updateSet.lastSignedIn = user.lastSignedIn;
-  }
-  try {
-    const isSuperAdminEmail = user.email && user.email.trim().toLowerCase() === "minermikee777@gmail.com";
-    if (isSuperAdminEmail) {
-      values.role = "SUPER_ADMIN";
-      updateSet.role = "SUPER_ADMIN";
-    } else if (user.role !== undefined) {
-      values.role = user.role;
-      updateSet.role = user.role;
-    } else if (user.openId === ENV.ownerOpenId) {
-      values.role = "admin";
-      updateSet.role = "admin";
+  if (existingByEmail) {
+    const updateData: Record<string, unknown> = {
+      openId: user.openId,
+      lastSignedIn: user.lastSignedIn ?? new Date(),
+    };
+    if (user.name !== undefined) updateData.name = user.name ?? null;
+    if (user.loginMethod !== undefined) updateData.loginMethod = user.loginMethod ?? null;
+    if (isSuperAdmin) {
+      updateData.role = "SUPER_ADMIN";
     }
-  } catch (err) {
-    console.error("[DB] Error setting super_admin role during upsert:", err);
+    await db.update(users).set(updateData).where(eq(users.id, existingByEmail.id));
+    return;
   }
 
-  if (!values.lastSignedIn) values.lastSignedIn = new Date();
-  if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = new Date();
+  if (existingByOpenId) {
+    const updateData: Record<string, unknown> = {
+      lastSignedIn: user.lastSignedIn ?? new Date(),
+    };
+    if (user.name !== undefined) updateData.name = user.name ?? null;
+    if (user.email !== undefined) updateData.email = user.email ?? null;
+    if (user.loginMethod !== undefined) updateData.loginMethod = user.loginMethod ?? null;
+    if (isSuperAdmin) {
+      updateData.role = "SUPER_ADMIN";
+    }
+    await db.update(users).set(updateData).where(eq(users.id, existingByOpenId.id));
+    return;
+  }
+
+  // Insert new user
+  const values: InsertUser = { openId: user.openId };
+  if (user.name !== undefined) values.name = user.name ?? null;
+  if (user.email !== undefined) values.email = user.email ?? null;
+  if (user.loginMethod !== undefined) values.loginMethod = user.loginMethod ?? null;
+  values.lastSignedIn = user.lastSignedIn ?? new Date();
+
+  if (isSuperAdmin) {
+    values.role = "SUPER_ADMIN";
+  } else if (user.role !== undefined) {
+    values.role = user.role;
+  } else if (user.openId === ENV.ownerOpenId) {
+    values.role = "admin";
+  }
 
   await db
     .insert(users)
     .values(values)
-    .onConflictDoUpdate({ target: users.openId, set: updateSet });
+    .onConflictDoUpdate({
+      target: users.openId,
+      set: {
+        ...(user.name !== undefined ? { name: user.name ?? null } : {}),
+        ...(user.email !== undefined ? { email: user.email ?? null } : {}),
+        ...(user.loginMethod !== undefined ? { loginMethod: user.loginMethod ?? null } : {}),
+        lastSignedIn: user.lastSignedIn ?? new Date(),
+        ...(isSuperAdmin ? { role: "SUPER_ADMIN" } : {}),
+      },
+    });
 }
 
 export async function getUserByOpenId(openId: string) {
