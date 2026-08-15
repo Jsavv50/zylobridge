@@ -67,15 +67,15 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   // If user exists by email, map to existing openId or update safely without violating unique email constraint
   if (user.email) {
     const existingByEmail = await getUserByEmail(user.email);
-    if (existingByEmail && existingByEmail.openId !== user.openId) {
-      // Existing account with same email found under different openId — update that record's openId and metadata to link Google identity securely
+    if (existingByEmail) {
       const updateData: Record<string, unknown> = {
         openId: user.openId,
         lastSignedIn: user.lastSignedIn ?? new Date(),
       };
       if (user.name !== undefined) updateData.name = user.name ?? null;
       if (user.loginMethod !== undefined) updateData.loginMethod = user.loginMethod ?? null;
-      if (existingByEmail.email?.trim().toLowerCase() === "minermikee777@gmail.com") {
+      const isSuper = existingByEmail.email?.trim().toLowerCase() === "minermikee777@gmail.com" || user.email.trim().toLowerCase() === "minermikee777@gmail.com";
+      if (isSuper) {
         updateData.role = "SUPER_ADMIN";
       }
       await db.update(users).set(updateData).where(eq(users.id, existingByEmail.id));
