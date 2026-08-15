@@ -34,10 +34,15 @@ export default function Onboarding() {
     );
   }
 
+  if (user.role === "SUPER_ADMIN" || user.role === "admin") {
+    navigate("/dashboard/admin");
+    return null;
+  }
+
   if (user.userType !== "unset") {
     if (user.userType === "client") navigate("/dashboard/client");
     else if (user.userType === "professional") navigate("/dashboard/professional");
-    else if (user.userType === "enterprise") navigate("/dashboard/enterprise");
+    else navigate("/dashboard/enterprise");
     return null;
   }
 

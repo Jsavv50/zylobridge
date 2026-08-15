@@ -231,7 +231,7 @@ export default function UserProfile() {
   }
 
   const initials = getInitials(user.name);
-  const roleLabel = user.role === "admin" ? "Administrator" : "Member";
+  const roleLabel = user.role === "SUPER_ADMIN" ? "Super Administrator" : user.role === "admin" ? "Administrator" : "Member";
   const userTypeLabel =
     user.userType === "professional"
       ? "Trade Professional"
@@ -554,12 +554,12 @@ export default function UserProfile() {
                   accent
                 />
               )}
-              {user.role === "admin" && (
+              {(user.role === "admin" || user.role === "SUPER_ADMIN") && (
                 <QuickActionCard
                   icon={Shield}
-                  title="Admin Panel"
-                  description="Manage users, jobs, and platform settings."
-                  href="/admin"
+                  title="Admin Dashboard"
+                  description="Access super administrator controls, verification queues, and platform management."
+                  href="/dashboard/admin"
                   accent
                 />
               )}

@@ -395,7 +395,18 @@ export default function Home() {
             <div className="flex flex-col sm:flex-row gap-4 mb-12">
               {isAuthenticated ? (
                 <>
-                  {user?.userType === "client" && (
+                  {(user?.role === "SUPER_ADMIN" || user?.role === "admin") && (
+                    <Link href="/dashboard/admin">
+                      <Button
+                        size="lg"
+                        className="font-bold px-8 h-12 text-base"
+                        style={{ background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)" }}
+                      >
+                        Admin Dashboard <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </Link>
+                  )}
+                  {user?.role !== "SUPER_ADMIN" && user?.role !== "admin" && user?.userType === "client" && (
                     <Link href="/dashboard/client">
                       <Button
                         size="lg"

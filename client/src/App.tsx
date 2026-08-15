@@ -37,6 +37,7 @@ function Router() {
       <Route path="/dashboard/professional" component={ProfessionalDashboard} />
       <Route path="/dashboard/enterprise" component={EnterpriseDashboard} />
       <Route path="/dashboard/admin" component={AdminDashboard} />
+      <Route path="/dashboard/super-admin" component={AdminDashboard} />
       <Route path="/messages" component={Messaging} />
       <Route path="/verification" component={VerificationRequest} />
       <Route path="/how-it-works" component={HowItWorks} />
