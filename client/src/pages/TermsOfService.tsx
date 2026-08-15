@@ -456,10 +456,10 @@ function buildSections(q: string): Section[] {
             <div>
               <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Platform</p>
               <a
-                href="https://zylobridge.manus.space"
+                href="https://zylobridge.com"
                 className="text-sm text-violet-400 hover:text-violet-300 transition-colors mt-0.5 block"
               >
-                zylobridge.manus.space
+                zylobridge.com
               </a>
             </div>
           </div>
