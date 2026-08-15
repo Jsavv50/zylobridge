@@ -11,7 +11,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
-export const roleEnum = pgEnum("role", ["user", "admin", "super_admin"]);
+export const roleEnum = pgEnum("role", ["user", "admin", "SUPER_ADMIN"]);
 export const userTypeEnum = pgEnum("user_type", ["client", "professional", "enterprise", "unset"]);
 export const vocationEnum = pgEnum("vocation", [
   "electrician",

@@ -36,25 +36,25 @@ export default function AdminDashboard() {
   const utils = trpc.useUtils();
 
   const { data: adminStats, isLoading: statsLoading } = trpc.admin.stats.useQuery(undefined, {
-    enabled: !!user && (user.role === "admin" || user.role === "super_admin"),
+    enabled: !!user && (user.role === "admin" || user.role === "SUPER_ADMIN"),
   });
   const { data: allUsers, isLoading: usersLoading } = trpc.admin.listUsers.useQuery({}, {
-    enabled: !!user && (user.role === "admin" || user.role === "super_admin") && activeTab === "users",
+    enabled: !!user && (user.role === "admin" || user.role === "SUPER_ADMIN") && activeTab === "users",
   });
   const { data: allJobs, isLoading: jobsLoading } = trpc.admin.listAllJobs.useQuery({ limit: 200 }, {
-    enabled: !!user && (user.role === "admin" || user.role === "super_admin") && activeTab === "jobs",
+    enabled: !!user && (user.role === "admin" || user.role === "SUPER_ADMIN") && activeTab === "jobs",
   });
   const { data: allEscrow, isLoading: escrowLoading, refetch: refetchEscrow } = trpc.admin.listEscrow.useQuery(undefined, {
-    enabled: !!user && (user.role === "admin" || user.role === "super_admin") && activeTab === "escrow",
+    enabled: !!user && (user.role === "admin" || user.role === "SUPER_ADMIN") && activeTab === "escrow",
   });
   const { data: allVerifications, isLoading: verificationLoading, refetch: refetchVerifications } = trpc.verification.adminList.useQuery(undefined, {
-    enabled: !!user && (user.role === "admin" || user.role === "super_admin") && activeTab === "verification",
+    enabled: !!user && (user.role === "admin" || user.role === "SUPER_ADMIN") && activeTab === "verification",
   });
   const { data: allProducts, isLoading: productsLoading, refetch: refetchProducts } = trpc.products.list.useQuery({ activeOnly: false }, {
-    enabled: !!user && (user.role === "admin" || user.role === "super_admin") && activeTab === "products",
+    enabled: !!user && (user.role === "admin" || user.role === "SUPER_ADMIN") && activeTab === "products",
   });
   const { data: allOrders, isLoading: ordersLoading } = trpc.orders.all.useQuery(undefined, {
-    enabled: !!user && (user.role === "admin" || user.role === "super_admin") && activeTab === "orders",
+    enabled: !!user && (user.role === "admin" || user.role === "SUPER_ADMIN") && activeTab === "orders",
   });
 
   const createProductMutation = trpc.products.create.useMutation({
@@ -115,7 +115,7 @@ export default function AdminDashboard() {
     );
   }
 
-  if (user?.role !== "admin" && user?.role !== "super_admin") {
+  if (user?.role !== "admin" && user?.role !== "SUPER_ADMIN") {
     return (
       <div className="min-h-screen bg-[#0d1117] flex flex-col items-center justify-center gap-4 text-center px-4">
         <div className="h-16 w-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-2">
@@ -154,11 +154,11 @@ export default function AdminDashboard() {
           </div>
           <div className="ml-auto">
             <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${
-              user?.role === "super_admin"
+              user?.role === "SUPER_ADMIN"
                 ? "text-red-300 bg-red-500/10 border-red-500/20"
                 : "text-violet-300 bg-violet-500/10 border-violet-500/20"
             }`}>
-              {user?.role === "super_admin" ? "SUPER ADMIN" : "ADMIN"}
+              {user?.role === "SUPER_ADMIN" ? "SUPER ADMIN" : "ADMIN"}
             </span>
           </div>
         </div>
@@ -301,7 +301,7 @@ export default function AdminDashboard() {
                           </td>
                           <td className="px-5 py-4">
                             <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
-                              u.role === "super_admin" ? "bg-red-500/15 text-red-400 border-red-500/25" :
+                              u.role === "SUPER_ADMIN" ? "bg-red-500/15 text-red-400 border-red-500/25" :
                               u.role === "admin" ? "bg-amber-500/15 text-amber-400 border-amber-500/25" :
                               "bg-gray-500/15 text-gray-400 border-gray-500/25"
                             }`}>
@@ -312,10 +312,10 @@ export default function AdminDashboard() {
                             {new Date(u.createdAt).toLocaleDateString()}
                           </td>
                           <td className="px-5 py-4">
-                            {u.id !== user?.id && user?.role === "super_admin" && (
+                            {u.id !== user?.id && user?.role === "SUPER_ADMIN" && (
                               <Select
                                 value={u.role}
-                                onValueChange={(role) => updateUserRole({ userId: u.id, role: role as "user" | "admin" | "super_admin" })}
+                                onValueChange={(role) => updateUserRole({ userId: u.id, role: role as "user" | "admin" | "SUPER_ADMIN" })}
                               >
                                 <SelectTrigger className="w-[120px] h-7 text-xs bg-[#1c2740] border-white/10 text-gray-300">
                                   <SelectValue />
@@ -323,7 +323,7 @@ export default function AdminDashboard() {
                                 <SelectContent className="bg-[#1c2740] border-white/10">
                                   <SelectItem value="user" className="text-xs text-gray-300">User</SelectItem>
                                   <SelectItem value="admin" className="text-xs text-gray-300">Admin</SelectItem>
-                                  <SelectItem value="super_admin" className="text-xs text-gray-300">Super Admin</SelectItem>
+                                  <SelectItem value="SUPER_ADMIN" className="text-xs text-gray-300">Super Admin</SelectItem>
                                 </SelectContent>
                               </Select>
                             )}

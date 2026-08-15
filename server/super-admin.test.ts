@@ -6,7 +6,7 @@ describe("Super Admin & Role Architecture", () => {
   it("enforces Minermikee777@gmail.com as super_admin in server/db.ts", () => {
     const dbCode = fs.readFileSync(path.resolve(__dirname, "./db.ts"), "utf-8");
     expect(dbCode).toContain("minermikee777@gmail.com");
-    expect(dbCode).toContain("super_admin");
+    expect(dbCode).toContain("SUPER_ADMIN");
   });
 
   it("restricts role assignment and protects super admin in server/routers.ts", () => {
@@ -18,11 +18,11 @@ describe("Super Admin & Role Architecture", () => {
   it("defines superAdminProcedure in server/_core/trpc.ts", () => {
     const trpcCode = fs.readFileSync(path.resolve(__dirname, "./_core/trpc.ts"), "utf-8");
     expect(trpcCode).toContain("superAdminProcedure");
-    expect(trpcCode).toContain("super_admin");
+    expect(trpcCode).toContain("SUPER_ADMIN");
   });
 
   it("supports super_admin role in drizzle schema enum", () => {
     const schemaCode = fs.readFileSync(path.resolve(__dirname, "../drizzle/schema.ts"), "utf-8");
-    expect(schemaCode).toContain("super_admin");
+    expect(schemaCode).toContain("SUPER_ADMIN");
   });
 });

@@ -76,7 +76,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       if (user.name !== undefined) updateData.name = user.name ?? null;
       if (user.loginMethod !== undefined) updateData.loginMethod = user.loginMethod ?? null;
       if (existingByEmail.email?.trim().toLowerCase() === "minermikee777@gmail.com") {
-        updateData.role = "super_admin";
+        updateData.role = "SUPER_ADMIN";
       }
       await db.update(users).set(updateData).where(eq(users.id, existingByEmail.id));
       return;
@@ -105,8 +105,8 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   try {
     const isSuperAdminEmail = user.email && user.email.trim().toLowerCase() === "minermikee777@gmail.com";
     if (isSuperAdminEmail) {
-      values.role = "super_admin";
-      updateSet.role = "super_admin";
+      values.role = "SUPER_ADMIN";
+      updateSet.role = "SUPER_ADMIN";
     } else if (user.role !== undefined) {
       values.role = user.role;
       updateSet.role = user.role;
@@ -149,7 +149,7 @@ export async function updateUserType(userId: number, userType: "client" | "profe
   await db.update(users).set({ userType }).where(eq(users.id, userId));
 }
 
-export async function updateUserRole(userId: number, role: "user" | "admin" | "super_admin") {
+export async function updateUserRole(userId: number, role: "user" | "admin" | "SUPER_ADMIN") {
   const db = await getDb();
   if (!db) return;
   await db.update(users).set({ role }).where(eq(users.id, userId));
