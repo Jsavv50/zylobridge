@@ -668,6 +668,15 @@ export const appRouter = router({
         if (input.userId === ctx.user.id) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot change your own role." });
         }
+        // Only super_admin can assign admin or super_admin roles
+        if ((input.role === "admin" || input.role === "super_admin") && ctx.user.role !== "super_admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Only super administrators can assign admin or super admin roles." });
+        }
+        // Prevent targeting the designated super admin email for demotion/deletion
+        const targetUser = await getUserById(input.userId);
+        if (targetUser && targetUser.email && targetUser.email.trim().toLowerCase() === "minermikee777@gmail.com") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Cannot modify or demote the permanent super administrator." });
+        }
         await updateUserRole(input.userId, input.role);
         return { success: true };
       }),

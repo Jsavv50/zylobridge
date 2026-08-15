@@ -29,7 +29,7 @@ export default function Navbar() {
     },
   });
 
-  const isAdmin = user?.role === "admin";
+  const isAdmin = user?.role === "admin" || user?.role === "super_admin";
   const isClient = user?.userType === "client";
   const isProfessional = user?.userType === "professional";
   const isEnterprise = user?.userType === "enterprise";

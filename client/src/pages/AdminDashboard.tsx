@@ -153,8 +153,12 @@ export default function AdminDashboard() {
             <p className="text-gray-500 text-sm">Platform management — restricted access</p>
           </div>
           <div className="ml-auto">
-            <span className="text-xs font-semibold text-violet-300 bg-violet-500/10 border border-violet-500/20 rounded-full px-3 py-1">
-              ADMIN
+            <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${
+              user?.role === "super_admin"
+                ? "text-red-300 bg-red-500/10 border-red-500/20"
+                : "text-violet-300 bg-violet-500/10 border-violet-500/20"
+            }`}>
+              {user?.role === "super_admin" ? "SUPER ADMIN" : "ADMIN"}
             </span>
           </div>
         </div>
@@ -308,7 +312,7 @@ export default function AdminDashboard() {
                             {new Date(u.createdAt).toLocaleDateString()}
                           </td>
                           <td className="px-5 py-4">
-                            {u.id !== user?.id && (
+                            {u.id !== user?.id && user?.role === "super_admin" && (
                               <Select
                                 value={u.role}
                                 onValueChange={(role) => updateUserRole({ userId: u.id, role: role as "user" | "admin" | "super_admin" })}
