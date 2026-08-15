@@ -9,7 +9,7 @@ import {
   Loader2, Users, Briefcase, Shield, BarChart3,
   CheckCircle, Clock, AlertTriangle, Trash2,
   ChevronRight, Star, TrendingUp, Activity,
-  ShieldCheck, CreditCard, Building2, CheckCircle2, XCircle, Eye
+  ShieldCheck, CreditCard, Building2, CheckCircle2, XCircle, Eye, DollarSign
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { VOCATION_LABELS, type VocationKey } from "@shared/vocations";
@@ -591,6 +591,42 @@ export default function AdminDashboard() {
               <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-violet-400" /></div>
             ) : adminStats ? (
               <>
+                {/* Platform-wide Overview Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                  <div className="rounded-xl border border-white/8 bg-[#131a26] p-5">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-gray-500 font-medium uppercase tracking-wider">Active Jobs</span>
+                      <Briefcase className="h-4 w-4 text-blue-400" />
+                    </div>
+                    <div className="text-2xl font-bold text-white">{(adminStats.openJobs ?? 0) + (adminStats.inProgressJobs ?? 0)}</div>
+                    <p className="text-xs text-gray-400 mt-1">{adminStats.openJobs} open, {adminStats.inProgressJobs} in progress</p>
+                  </div>
+                  <div className="rounded-xl border border-white/8 bg-[#131a26] p-5">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-gray-500 font-medium uppercase tracking-wider">Platform Revenue</span>
+                      <DollarSign className="h-4 w-4 text-emerald-400" />
+                    </div>
+                    <div className="text-2xl font-bold text-white">${Number((adminStats as any).fundedEscrowAmount ?? 0).toLocaleString()}</div>
+                    <p className="text-xs text-gray-400 mt-1">Total escrow volume: ${(adminStats as any).totalEscrowAmount ?? 0}</p>
+                  </div>
+                  <div className="rounded-xl border border-white/8 bg-[#131a26] p-5">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-gray-500 font-medium uppercase tracking-wider">Verification Queue</span>
+                      <Clock className="h-4 w-4 text-amber-400" />
+                    </div>
+                    <div className="text-2xl font-bold text-white">{(adminStats as any).pendingVerificationCount ?? 0}</div>
+                    <p className="text-xs text-gray-400 mt-1">Pending review submissions</p>
+                  </div>
+                  <div className="rounded-xl border border-white/8 bg-[#131a26] p-5">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-gray-500 font-medium uppercase tracking-wider">Total Users</span>
+                      <Users className="h-4 w-4 text-violet-400" />
+                    </div>
+                    <div className="text-2xl font-bold text-white">{adminStats.totalUsers}</div>
+                    <p className="text-xs text-gray-400 mt-1">{adminStats.professionalCount} pros, {adminStats.clientCount} clients</p>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="rounded-xl border border-white/8 bg-[#131a26] p-5">
                     <div className="flex items-center gap-2 mb-3">

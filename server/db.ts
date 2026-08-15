@@ -92,14 +92,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     console.error("[DB] Error setting super_admin role during upsert:", err);
   }
 
-  // Also ensure existing database record for minermikee777@gmail.com is persistently upgraded to super_admin
-  if (user.email && user.email.trim().toLowerCase() === "minermikee777@gmail.com") {
-    try {
-      await db.update(users).set({ role: "super_admin", updatedAt: new Date() }).where(sql`lower(email) = 'minermikee777@gmail.com'`);
-    } catch (e) {
-      console.error("[DB] Failed direct super_admin role enforcement for minermikee777@gmail.com:", e);
-    }
-  }
+  // Role assignment is handled purely via values/updateSet mapping above without extra blocking query writes
   if (!values.lastSignedIn) values.lastSignedIn = new Date();
   if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = new Date();
 
@@ -325,12 +318,16 @@ export async function getAdminStats() {
     appRows,
     reviewRows,
     verifiedRows,
+    escrowRows,
+    verifRows,
   ] = await Promise.all([
     db.select({ role: users.role, userType: users.userType }).from(users),
     db.select({ status: jobs.status }).from(jobs),
     db.select({ status: applications.status }).from(applications),
     db.select({ count: sql<number>`count(*)` }).from(reviews),
     db.select({ count: sql<number>`count(*)` }).from(users).where(eq(users.isVerified, true)),
+    db.select({ amount: escrowPayments.amount, status: escrowPayments.status }).from(escrowPayments),
+    db.select({ status: verificationRequests.status }).from(verificationRequests),
   ]);
 
   const clientCount = userRows.filter((u) => u.userType === "client").length;
@@ -345,6 +342,10 @@ export async function getAdminStats() {
   const cancelledJobs = jobRows.filter((j) => j.status === "cancelled").length;
 
   const pendingApplications = appRows.filter((a) => a.status === "pending").length;
+
+  const totalEscrowAmount = escrowRows.reduce((sum, e) => sum + Number(e.amount ?? 0), 0);
+  const fundedEscrowAmount = escrowRows.filter(e => e.status === "funded" || e.status === "released").reduce((sum, e) => sum + Number(e.amount ?? 0), 0);
+  const pendingVerificationCount = verifRows.filter(v => v.status === "pending").length;
 
   return {
     totalUsers: userRows.length,
@@ -362,6 +363,9 @@ export async function getAdminStats() {
     pendingApplications,
     verifiedUsers: Number(verifiedRows[0]?.count ?? 0),
     totalReviews: Number(reviewRows[0]?.count ?? 0),
+    totalEscrowAmount,
+    fundedEscrowAmount,
+    pendingVerificationCount,
   };
 }
 
