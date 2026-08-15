@@ -127,6 +127,16 @@ export async function updateUserName(userId: number, name: string) {
   await db.update(users).set({ name, updatedAt: new Date() }).where(eq(users.id, userId));
 }
 
+export async function updateUserProfile(userId: number, data: { name?: string; phone?: string; avatarUrl?: string }) {
+  const db = await getDb();
+  if (!db) return;
+  const updateData: Record<string, any> = { updatedAt: new Date() };
+  if (data.name !== undefined) updateData.name = data.name;
+  if (data.phone !== undefined) updateData.phone = data.phone;
+  if (data.avatarUrl !== undefined) updateData.avatarUrl = data.avatarUrl;
+  await db.update(users).set(updateData).where(eq(users.id, userId));
+}
+
 export async function getAllUsers(limit = 50, offset = 0) {
   const db = await getDb();
   if (!db) return [];

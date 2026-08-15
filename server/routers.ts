@@ -16,6 +16,7 @@ import {
   updateUserType,
   updateUserRole,
   updateUserName,
+  updateUserProfile,
   getAllUsers,
   getUserCount,
   createJob,
@@ -145,6 +146,22 @@ export const appRouter = router({
       .input(z.object({ name: z.string().min(2).max(100).trim() }))
       .mutation(async ({ ctx, input }) => {
         await updateUserName(ctx.user.id, input.name);
+        return { success: true };
+      }),
+    updateProfile: protectedProcedure
+      .input(
+        z.object({
+          name: z.string().min(2).max(100).trim().optional(),
+          phone: z.string().max(20).trim().optional(),
+          avatarUrl: z.string().url().optional().or(z.literal("")),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        await updateUserProfile(ctx.user.id, {
+          name: input.name,
+          phone: input.phone || undefined,
+          avatarUrl: input.avatarUrl || undefined,
+        });
         return { success: true };
       }),
   }),

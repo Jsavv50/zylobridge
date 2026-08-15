@@ -309,15 +309,16 @@ export default function UserProfile() {
                 </div>
 
                 <div className="flex items-center gap-2 pb-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-white/10 text-gray-300 hover:text-white hover:border-white/20 bg-transparent gap-1.5"
-                    onClick={() => toast.info("Profile editing coming soon")}
-                  >
-                    <Edit3 className="h-3.5 w-3.5" />
-                    Edit Profile
-                  </Button>
+                  <Link href="/profile/edit">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-white/10 text-gray-300 hover:text-white hover:border-white/20 bg-transparent gap-1.5"
+                    >
+                      <Edit3 className="h-3.5 w-3.5" />
+                      Edit Profile
+                    </Button>
+                  </Link>
                   <Button
                     variant="outline"
                     size="sm"

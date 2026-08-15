@@ -22,6 +22,7 @@ import SignIn from "./pages/SignIn";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import UserProfile from "./pages/UserProfile";
+import EditProfile from "./pages/EditProfile";
 import CookiePolicy from "./pages/CookiePolicy";
 
 function Router() {
@@ -48,6 +49,7 @@ function Router() {
       <Route path="/terms" component={TermsOfService} />
       <Route path="/cookie-policy" component={CookiePolicy} />
       <Route path="/profile" component={UserProfile} />
+      <Route path="/profile/edit" component={EditProfile} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
