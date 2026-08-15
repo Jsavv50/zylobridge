@@ -57,6 +57,25 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   const db = await getDb();
   if (!db) return;
 
+  // If user exists by email, map to existing openId or update safely without violating unique email constraint
+  if (user.email) {
+    const existingByEmail = await getUserByEmail(user.email);
+    if (existingByEmail && existingByEmail.openId !== user.openId) {
+      // Existing account with same email found under different openId — update that record's openId and metadata to link Google identity securely
+      const updateData: Record<string, unknown> = {
+        openId: user.openId,
+        lastSignedIn: user.lastSignedIn ?? new Date(),
+      };
+      if (user.name !== undefined) updateData.name = user.name ?? null;
+      if (user.loginMethod !== undefined) updateData.loginMethod = user.loginMethod ?? null;
+      if (existingByEmail.email?.trim().toLowerCase() === "minermikee777@gmail.com") {
+        updateData.role = "super_admin";
+      }
+      await db.update(users).set(updateData).where(eq(users.id, existingByEmail.id));
+      return;
+    }
+  }
+
   const values: InsertUser = { openId: user.openId };
   const updateSet: Record<string, unknown> = {};
 
@@ -80,7 +99,6 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     const isSuperAdminEmail = user.email && user.email.trim().toLowerCase() === "minermikee777@gmail.com";
     if (isSuperAdminEmail) {
       values.role = "super_admin";
-      // Do NOT overwrite role in updateSet if already super_admin, or keep role = super_admin explicitly
       updateSet.role = "super_admin";
     } else if (user.role !== undefined) {
       values.role = user.role;
@@ -93,7 +111,6 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     console.error("[DB] Error setting super_admin role during upsert:", err);
   }
 
-  // Role assignment is handled purely via values/updateSet mapping above without extra blocking query writes
   if (!values.lastSignedIn) values.lastSignedIn = new Date();
   if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = new Date();
 
