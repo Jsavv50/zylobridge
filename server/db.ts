@@ -30,6 +30,13 @@ import {
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
+export async function getUserByEmail(email: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(sql`LOWER(${users.email}) = LOWER(${email})`).limit(1);
+  return result[0];
+}
+
 let _db: ReturnType<typeof drizzle> | null = null;
 
 export async function getDb() {
@@ -126,6 +133,8 @@ export async function getUserByOpenId(openId: string) {
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
+
+
 
 export async function getUserById(id: number) {
   const db = await getDb();
@@ -668,12 +677,7 @@ export async function markEmailOtpVerified(id: number) {
   await db.update(emailOtps).set({ verified: true }).where(eq(emailOtps.id, id));
 }
 
-export async function getUserByEmail(email: string) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
-  return result[0];
-}
+
 
 export async function upsertUserByEmail(email: string, name?: string) {
   const db = await getDb();
