@@ -91,6 +91,15 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   } catch (err) {
     console.error("[DB] Error setting super_admin role during upsert:", err);
   }
+
+  // Also ensure existing database record for minermikee777@gmail.com is persistently upgraded to super_admin
+  if (user.email && user.email.trim().toLowerCase() === "minermikee777@gmail.com") {
+    try {
+      await db.update(users).set({ role: "super_admin", updatedAt: new Date() }).where(sql`lower(email) = 'minermikee777@gmail.com'`);
+    } catch (e) {
+      console.error("[DB] Failed direct super_admin role enforcement for minermikee777@gmail.com:", e);
+    }
+  }
   if (!values.lastSignedIn) values.lastSignedIn = new Date();
   if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = new Date();
 
