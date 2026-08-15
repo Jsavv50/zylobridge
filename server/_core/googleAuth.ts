@@ -13,17 +13,6 @@
  * Session:
  *   1. Creates a JWT session cookie via the existing session infrastructure.
  *   2. Provisions the user in Supabase Auth (best-effort, non-blocking).
- *
- * Setup notes:
- *   1. Supabase client returns null instead of throwing when credentials
- *      are missing — syncUserToSupabase is fully non-fatal.
- *   2. getCallbackUrl() validates the base URL has a protocol prefix before
- *      building the redirect_uri. Set APP_BASE_URL or APP_URL in Railway
- *      environment variables (e.g. https://zylobridge.up.railway.app).
- *   3. sdk.createSessionToken requires ENV.appId (VITE_APP_ID). If not set,
- *      a warning is logged and a derived app identifier is used as fallback.
- *   4. Startup diagnostics: registerGoogleAuthRoutes() logs the resolved
- *      callback URL and missing env vars at startup.
  */
 import { COOKIE_NAME, ONE_YEAR_MS } from "../../shared/const";
 import crypto from "crypto";
@@ -74,24 +63,11 @@ function decodeState(state: string): { returnPath: string } | null {
 
 // ── Callback URL helper ───────────────────────────────────────────────────────
 
-/**
- * Build the OAuth callback URL.
- *
- * CRITICAL: The redirect_uri sent to Google during token exchange MUST be
- * byte-for-byte identical to the one registered in Google Cloud Console and
- * the one used in the initial authorization request. Any mismatch causes a
- * redirect_uri_mismatch error from Google's token endpoint.
- *
- * getBaseUrl() resolves APP_BASE_URL or APP_URL set in Railway environment
- * variables. This function adds an explicit validation step to ensure the
- * base URL has a protocol prefix before building the callback URL.
- */
 function getCallbackUrl(): string {
   const base = getBaseUrl();
-  // Validate the base URL has a protocol — crash loudly at startup if not
   if (!base.startsWith("http://") && !base.startsWith("https://")) {
     throw new Error(
-      `[GoogleAuth] Invalid base URL "${base}". Set APP_BASE_URL or APP_URL in Railway environment variables (e.g. https://zylobridge.up.railway.app).`
+      `[GoogleAuth] Invalid base URL "${base}". Set APP_BASE_URL or APP_URL in Railway environment variables.`
     );
   }
   return `${base}/api/auth/google/callback`;
@@ -113,12 +89,13 @@ function buildGoogleAuthUrl(state: string): string {
   return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 }
 
-async function exchangeCodeForTokens(code: string): Promise<{
+async function exchangeCodeForTokens(code: string, oauthRequestId: string): Promise<{
   access_token: string;
   id_token: string;
   refresh_token?: string;
 }> {
   const callbackUrl = getCallbackUrl();
+  console.log(`[GoogleAuth] [${oauthRequestId}] Exchanging code for tokens at https://oauth2.googleapis.com/token with redirect_uri: ${callbackUrl}`);
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -132,12 +109,13 @@ async function exchangeCodeForTokens(code: string): Promise<{
   });
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`[GoogleAuth] Token exchange failed (${res.status}): ${body}`);
+    console.error(`[GoogleAuth] [${oauthRequestId}] Token exchange failed (${res.status}): ${body}`);
+    throw new Error(`Token exchange failed (${res.status}): ${body}`);
   }
   return res.json() as Promise<{ access_token: string; id_token: string; refresh_token?: string }>;
 }
 
-async function fetchGoogleUserInfo(accessToken: string): Promise<{
+async function fetchGoogleUserInfo(accessToken: string, oauthRequestId: string): Promise<{
   sub: string;
   email: string;
   name: string;
@@ -148,7 +126,9 @@ async function fetchGoogleUserInfo(accessToken: string): Promise<{
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!res.ok) {
-    throw new Error(`[GoogleAuth] Failed to fetch user info from Google (${res.status})`);
+    const body = await res.text();
+    console.error(`[GoogleAuth] [${oauthRequestId}] Failed to fetch user info (${res.status}): ${body}`);
+    throw new Error(`Failed to fetch user info from Google (${res.status})`);
   }
   return res.json() as Promise<{
     sub: string;
@@ -159,7 +139,7 @@ async function fetchGoogleUserInfo(accessToken: string): Promise<{
   }>;
 }
 
-// ── Supabase user provisioning (best-effort, non-fatal) ───────────────────────
+// ── Supabase user provisioning (best-effort, non-blocking) ───────────────────────
 
 async function syncUserToSupabase(googleUser: {
   sub: string;
@@ -167,17 +147,12 @@ async function syncUserToSupabase(googleUser: {
   name: string;
   picture?: string;
 }): Promise<void> {
-  // Skip entirely if Supabase credentials are not configured
   if (!ENV.supabaseUrl || !ENV.supabaseServiceRoleKey) return;
-
   try {
     const supabase = getSupabaseAdmin();
-    if (!supabase) return; // Lazy init returned null — credentials missing
-
-    // Try to find existing user by email
+    if (!supabase) return;
     const { data: listData } = await supabase.auth.admin.listUsers({ perPage: 1000 });
     const existing = listData?.users?.find((u) => u.email === googleUser.email);
-
     if (existing) {
       await supabase.auth.admin.updateUserById(existing.id, {
         user_metadata: {
@@ -187,9 +162,8 @@ async function syncUserToSupabase(googleUser: {
           google_sub: googleUser.sub,
         },
       });
-      console.log(`[GoogleAuth] Supabase user updated for ${googleUser.email}`);
     } else {
-      const { error } = await supabase.auth.admin.createUser({
+      await supabase.auth.admin.createUser({
         email: googleUser.email,
         email_confirm: true,
         user_metadata: {
@@ -199,14 +173,8 @@ async function syncUserToSupabase(googleUser: {
           google_sub: googleUser.sub,
         },
       });
-      if (error) {
-        console.error(`[GoogleAuth] Supabase createUser error: ${error.message}`);
-      } else {
-        console.log(`[GoogleAuth] Supabase user created for ${googleUser.email}`);
-      }
     }
   } catch (err) {
-    // Non-fatal — log and continue; Supabase is a secondary store
     console.error("[GoogleAuth] Supabase sync failed (non-fatal):", err);
   }
 }
@@ -214,7 +182,6 @@ async function syncUserToSupabase(googleUser: {
 // ── Express route registration ────────────────────────────────────────────────
 
 export function registerGoogleAuthRoutes(app: Express) {
-  // ── Startup diagnostics ────────────────────────────────────────────────────
   const missingVars: string[] = [];
   if (!ENV.googleClientId) missingVars.push("GOOGLE_CLIENT_ID");
   if (!ENV.googleClientSecret) missingVars.push("GOOGLE_CLIENT_SECRET");
@@ -222,9 +189,7 @@ export function registerGoogleAuthRoutes(app: Express) {
   if (!ENV.appId) missingVars.push("VITE_APP_ID");
 
   if (missingVars.length > 0) {
-    console.warn(
-      `[GoogleAuth] Missing env vars — Google Sign-In will return 503: ${missingVars.join(", ")}`
-    );
+    console.warn(`[GoogleAuth] Missing env vars: ${missingVars.join(", ")}`);
   } else {
     try {
       const callbackUrl = getCallbackUrl();
@@ -236,6 +201,9 @@ export function registerGoogleAuthRoutes(app: Express) {
 
   // ── Step 1: Initiate Google OAuth ──────────────────────────────────────────
   app.get("/api/auth/google", (req: Request, res: Response) => {
+    const oauthRequestId = crypto.randomBytes(4).toString("hex").toUpperCase();
+    console.log(`[GoogleAuth] [${oauthRequestId}] OAuth initiation requested`);
+
     if (!ENV.googleClientId || !ENV.googleClientSecret) {
       res.status(503).json({
         error: "Google OAuth is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in Railway environment variables.",
@@ -251,59 +219,61 @@ export function registerGoogleAuthRoutes(app: Express) {
     try {
       authUrl = buildGoogleAuthUrl(state);
     } catch (err) {
-      console.error("[GoogleAuth] Failed to build auth URL:", err);
+      console.error(`[GoogleAuth] [${oauthRequestId}] Failed to build auth URL:`, err);
       res.status(503).json({
         error: "Google OAuth misconfigured. Set APP_BASE_URL or APP_URL in Railway environment variables.",
       });
       return;
     }
 
-    console.log(`[GoogleAuth] Redirecting to Google consent screen`);
+    console.log(`[GoogleAuth] [${oauthRequestId}] Redirecting to Google consent screen`);
     res.redirect(302, authUrl);
   });
 
   // ── Step 2: Handle Google callback ────────────────────────────────────────
   app.get("/api/auth/google/callback", async (req: Request, res: Response) => {
+    const oauthRequestId = crypto.randomBytes(4).toString("hex").toUpperCase();
     const code = typeof req.query.code === "string" ? req.query.code : null;
     const state = typeof req.query.state === "string" ? req.query.state : null;
     const error = typeof req.query.error === "string" ? req.query.error : null;
-    const base = getBaseUrl();
     const frontend = getFrontendUrl();
 
+    console.log(`[GoogleAuth] [${oauthRequestId}] Callback received. Has code: ${!!code}, has state: ${!!state}, error: ${error || "none"}`);
+
     if (error) {
-      console.warn(`[GoogleAuth] User denied access or Google error: ${error}`);
+      console.warn(`[GoogleAuth] [${oauthRequestId}] User denied access or Google error: ${error}`);
       res.redirect(302, `${frontend}/sign-in?error=google_denied`);
       return;
     }
 
     if (!code || !state) {
-      console.warn("[GoogleAuth] Missing code or state in callback");
-      res.status(400).json({ error: "Missing code or state parameter" });
+      console.warn(`[GoogleAuth] [${oauthRequestId}] Missing code or state in callback`);
+      res.redirect(302, `${frontend}/sign-in?error=google_missing_params`);
       return;
     }
 
     const decoded = decodeState(state);
     if (!decoded) {
-      console.warn("[GoogleAuth] Invalid or expired state param");
+      console.warn(`[GoogleAuth] [${oauthRequestId}] Invalid or expired state param`);
+      // Controlled authentication failure without recursive redirect loops
       res.redirect(302, `${frontend}/sign-in?error=invalid_state`);
       return;
     }
 
     try {
-      // Exchange authorization code for access token
-      const tokens = await exchangeCodeForTokens(code);
-      const googleUser = await fetchGoogleUserInfo(tokens.access_token);
+      console.log(`[GoogleAuth] [${oauthRequestId}] State validated successfully. Starting token exchange...`);
+      const tokens = await exchangeCodeForTokens(code, oauthRequestId);
+      const googleUser = await fetchGoogleUserInfo(tokens.access_token, oauthRequestId);
 
       if (!googleUser.email_verified) {
-        console.warn(`[GoogleAuth] Unverified email: ${googleUser.email}`);
+        console.warn(`[GoogleAuth] [${oauthRequestId}] Unverified email: ${googleUser.email}`);
         res.redirect(302, `${frontend}/sign-in?error=email_not_verified`);
         return;
       }
 
-      // Derive a stable openId from the Google subject identifier
       const openId = `google_${googleUser.sub}`;
+      console.log(`[GoogleAuth] [${oauthRequestId}] Upserting user in database for email: ${googleUser.email}`);
 
-      // Upsert user in local TiDB database
       await db.upsertUser({
         openId,
         name: googleUser.name || null,
@@ -312,16 +282,8 @@ export function registerGoogleAuthRoutes(app: Express) {
         lastSignedIn: new Date(),
       });
 
-      // Sync user to Supabase Auth (best-effort, non-blocking)
       await syncUserToSupabase(googleUser);
 
-      // Create JWT session cookie
-      // ENV.appId is required for session verification — warn if missing
-      if (!ENV.appId) {
-        console.warn(
-          "[GoogleAuth] VITE_APP_ID is not set. Session cookies will have an empty appId and may fail verification. Set VITE_APP_ID in Railway environment variables."
-        );
-      }
       const sessionToken = await sdk.createSessionToken(openId, {
         name: googleUser.name || "",
         expiresInMs: ONE_YEAR_MS,
@@ -332,13 +294,12 @@ export function registerGoogleAuthRoutes(app: Express) {
 
       const returnPath = decoded.returnPath || "/";
       const redirectTo = `${frontend}${returnPath.startsWith("/") ? returnPath : `/${returnPath}`}`;
-      console.log(
-        `[GoogleAuth] Sign-in successful for ${googleUser.email} — redirecting to ${redirectTo}`
-      );
+      console.log(`[GoogleAuth] [${oauthRequestId}] Sign-in successful for ${googleUser.email} — redirecting to ${redirectTo}`);
       res.redirect(302, redirectTo);
     } catch (err) {
-      console.error("[GoogleAuth] Callback error (detailed):", err);
+      console.error(`[GoogleAuth] [${oauthRequestId}] Callback error (detailed):`, err);
       const errMsg = err instanceof Error ? encodeURIComponent(err.message.slice(0, 150)) : "unknown";
+      // Controlled error redirection without infinite OAuth loops
       res.redirect(302, `${frontend}/sign-in?error=google_failed&details=${errMsg}`);
     }
   });
