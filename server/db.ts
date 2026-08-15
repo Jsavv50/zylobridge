@@ -80,6 +80,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     const isSuperAdminEmail = user.email && user.email.trim().toLowerCase() === "minermikee777@gmail.com";
     if (isSuperAdminEmail) {
       values.role = "super_admin";
+      // Do NOT overwrite role in updateSet if already super_admin, or keep role = super_admin explicitly
       updateSet.role = "super_admin";
     } else if (user.role !== undefined) {
       values.role = user.role;
