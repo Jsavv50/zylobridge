@@ -530,11 +530,24 @@ export default function AdminDashboard() {
                         )}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <a href={v.documentUrl} target="_blank" rel="noopener noreferrer">
-                          <Button size="sm" variant="ghost" className="h-8 text-xs text-cyan-400 border border-cyan-500/20">
-                            <Eye className="h-3 w-3 mr-1" /> View Doc
-                          </Button>
-                        </a>
+                        <Button
+                          size="sm" variant="ghost"
+                          className="h-8 text-xs text-cyan-400 border border-cyan-500/20"
+                          onClick={async () => {
+                            try {
+                              const res = await utils.client.verification.adminGetDocumentUrl.query({ requestId: v.id });
+                              if (res?.signedUrl) {
+                                window.open(res.signedUrl, "_blank", "noopener,noreferrer");
+                              } else {
+                                toast.error("Could not generate document view URL");
+                              }
+                            } catch (err: any) {
+                              toast.error(err.message || "Failed to load document");
+                            }
+                          }}
+                        >
+                          <Eye className="h-3 w-3 mr-1" /> View Doc
+                        </Button>
                         {v.status === "pending" && (
                           <>
                             <Button
