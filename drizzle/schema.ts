@@ -258,3 +258,55 @@ export const phoneOtps = pgTable("phone_otps", {
 });
 export type PhoneOtp = typeof phoneOtps.$inferSelect;
 export type InsertPhoneOtp = typeof phoneOtps.$inferInsert;
+
+// ─── Disputes ─────────────────────────────────────────────────────────────────
+export const disputeStatusEnum = pgEnum("dispute_status", [
+  "open",
+  "under_review",
+  "awaiting_information",
+  "escalated",
+  "resolved",
+  "rejected",
+  "closed",
+]);
+
+export const disputePriorityEnum = pgEnum("dispute_priority", ["low", "medium", "high", "urgent"]);
+
+export const disputes = pgTable("disputes", {
+  id: serial("id").primaryKey(),
+  jobId: integer("jobId").notNull(),
+  escrowId: integer("escrowId"),
+  claimantId: integer("claimantId").notNull(),
+  respondentId: integer("respondentId").notNull(),
+  reason: varchar("reason", { length: 255 }).notNull(),
+  description: text("description").notNull(),
+  status: disputeStatusEnum("status").default("open").notNull(),
+  priority: disputePriorityEnum("priority").default("medium").notNull(),
+  evidenceUrls: text("evidenceUrls"), // JSON or comma-separated URLs
+  resolution: text("resolution"),
+  adminNotes: text("adminNotes"),
+  resolvedBy: integer("resolvedBy"),
+  resolvedAt: timestamp("resolvedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+export type Dispute = typeof disputes.$inferSelect;
+export type InsertDispute = typeof disputes.$inferInsert;
+
+// ─── Audit Logs ───────────────────────────────────────────────────────────────
+export const auditLogs = pgTable("audit_logs", {
+  id: serial("id").primaryKey(),
+  actorUserId: integer("actorUserId").notNull(),
+  actorRole: varchar("actorRole", { length: 50 }).notNull(),
+  action: varchar("action", { length: 120 }).notNull(),
+  resourceType: varchar("resourceType", { length: 64 }).notNull(),
+  resourceId: varchar("resourceId", { length: 64 }),
+  previousState: text("previousState"),
+  newState: text("newState"),
+  metadata: text("metadata"), // JSON string
+  ipAddress: varchar("ipAddress", { length: 64 }),
+  userAgent: text("userAgent"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type InsertAuditLog = typeof auditLogs.$inferInsert;

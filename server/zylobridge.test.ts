@@ -197,7 +197,7 @@ describe("admin RBAC", () => {
   it("blocks unauthenticated user from admin routes", async () => {
     const ctx = createUnauthCtx();
     const caller = appRouter.createCaller(ctx);
-    await expect(caller.admin.stats()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    await expect(caller.admin.stats()).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });
 

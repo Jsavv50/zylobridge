@@ -4,7 +4,7 @@ import { z } from "zod";
 import { COOKIE_NAME } from "../shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { enterpriseProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { enterpriseProcedure, adminProcedure, superAdminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { storagePut, storageGetSignedUrl } from "./storage";
 import { getDb } from "./db";
 import { conversations } from "../drizzle/schema";
@@ -43,7 +43,13 @@ import {
   getMessagesByConversationId,
   getUnreadMessageCount,
   createMessage,
-  createEscrowPayment,
+  listDisputes,
+  getDisputeById,
+  createDispute,
+  updateDispute,
+  createAuditLog,
+  listAuditLogs,
+  getPlatformReportsData,
   getEscrowByJobId,
   updateEscrowStatus,
   getAllEscrowPayments,
@@ -78,12 +84,6 @@ import {
 import { maskPhoneNumber, normalizePhoneNumber, sendPhoneOtpSms, SmsDeliveryError } from "./sms";
 
 // ── Admin guard ────────────────────────────────────────────────────────────────
-const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required." });
-  }
-  return next({ ctx });
-});
 
 // ── Input schemas ──────────────────────────────────────────────────────────────
 const jobFilterSchema = z.object({
@@ -956,6 +956,115 @@ export const appRouter = router({
         ctx.res.cookie(CNAME, token, { ...cookieOpts, maxAge: 365 * 24 * 60 * 60 * 1000 });
         return { success: true, user: { id: user.id, name: user.name, phone: user.phone, role: user.role } };
       }),
+  }),
+  adminDisputes: router({
+    list: adminProcedure.query(async () => {
+      return listDisputes();
+    }),
+    get: adminProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const dispute = await getDisputeById(input.id);
+        if (!dispute) throw new TRPCError({ code: "NOT_FOUND", message: "Dispute not found." });
+        return dispute;
+      }),
+    updateStatus: adminProcedure
+      .input(z.object({ id: z.number().int().positive(), status: z.enum(["open", "under_review", "awaiting_information", "escalated", "resolved", "rejected", "closed"]) }))
+      .mutation(async ({ ctx, input }) => {
+        const prev = await getDisputeById(input.id);
+        await updateDispute(input.id, { status: input.status, updatedAt: new Date() });
+        await createAuditLog({
+          actorUserId: ctx.user.id,
+          actorRole: ctx.user.role,
+          action: "UPDATE_DISPUTE_STATUS",
+          resourceType: "dispute",
+          resourceId: String(input.id),
+          previousState: prev ? JSON.stringify({ status: prev.status }) : null,
+          newState: JSON.stringify({ status: input.status }),
+          metadata: JSON.stringify({ reason: "Status update by admin" }),
+          ipAddress: ctx.req.ip ?? null,
+          userAgent: ctx.req.headers["user-agent"] ?? null,
+        });
+        return { success: true };
+      }),
+    addNote: adminProcedure
+      .input(z.object({ id: z.number().int().positive(), note: z.string().min(1).max(2000) }))
+      .mutation(async ({ ctx, input }) => {
+        const dispute = await getDisputeById(input.id);
+        if (!dispute) throw new TRPCError({ code: "NOT_FOUND" });
+        const existingNotes = dispute.adminNotes || "";
+        const timestampedNote = `[${new Date().toISOString()} - Admin #${ctx.user.id}]: ${input.note}\n${existingNotes}`;
+        await updateDispute(input.id, { adminNotes: timestampedNote, updatedAt: new Date() });
+        await createAuditLog({
+          actorUserId: ctx.user.id,
+          actorRole: ctx.user.role,
+          action: "ADD_DISPUTE_NOTE",
+          resourceType: "dispute",
+          resourceId: String(input.id),
+          previousState: null,
+          newState: JSON.stringify({ noteAdded: input.note }),
+          metadata: null,
+          ipAddress: ctx.req.ip ?? null,
+          userAgent: ctx.req.headers["user-agent"] ?? null,
+        });
+        return { success: true };
+      }),
+    resolve: adminProcedure
+      .input(z.object({ id: z.number().int().positive(), resolution: z.string().min(2).max(2000) }))
+      .mutation(async ({ ctx, input }) => {
+        const prev = await getDisputeById(input.id);
+        await updateDispute(input.id, {
+          status: "resolved",
+          resolution: input.resolution,
+          resolvedBy: ctx.user.id,
+          resolvedAt: new Date(),
+          updatedAt: new Date(),
+        });
+        await createAuditLog({
+          actorUserId: ctx.user.id,
+          actorRole: ctx.user.role,
+          action: "RESOLVE_DISPUTE",
+          resourceType: "dispute",
+          resourceId: String(input.id),
+          previousState: prev ? JSON.stringify({ status: prev.status }) : null,
+          newState: JSON.stringify({ status: "resolved", resolution: input.resolution }),
+          metadata: null,
+          ipAddress: ctx.req.ip ?? null,
+          userAgent: ctx.req.headers["user-agent"] ?? null,
+        });
+        return { success: true };
+      }),
+    escalate: adminProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const prev = await getDisputeById(input.id);
+        await updateDispute(input.id, { status: "escalated", updatedAt: new Date() });
+        await createAuditLog({
+          actorUserId: ctx.user.id,
+          actorRole: ctx.user.role,
+          action: "ESCALATE_DISPUTE",
+          resourceType: "dispute",
+          resourceId: String(input.id),
+          previousState: prev ? JSON.stringify({ status: prev.status }) : null,
+          newState: JSON.stringify({ status: "escalated" }),
+          metadata: null,
+          ipAddress: ctx.req.ip ?? null,
+          userAgent: ctx.req.headers["user-agent"] ?? null,
+        });
+        return { success: true };
+      }),
+  }),
+  adminAudit: router({
+    list: superAdminProcedure
+      .input(z.object({ limit: z.number().int().max(200).optional().default(100) }))
+      .query(async ({ input }) => {
+        return listAuditLogs(input.limit);
+      }),
+  }),
+  adminReports: router({
+    get: adminProcedure.query(async () => {
+      return getPlatformReportsData();
+    }),
   }),
 });
 

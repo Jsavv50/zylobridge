@@ -56,6 +56,28 @@ export default function AdminDashboard() {
   const { data: allOrders, isLoading: ordersLoading } = trpc.orders.all.useQuery(undefined, {
     enabled: !!user && (user.role === "admin" || user.role === "SUPER_ADMIN") && activeTab === "orders",
   });
+  const { data: allDisputes, isLoading: disputesLoading, refetch: refetchDisputes } = trpc.adminDisputes.list.useQuery(undefined, {
+    enabled: !!user && (user.role === "admin" || user.role === "SUPER_ADMIN") && activeTab === "disputes",
+  });
+  const { data: allAuditLogs, isLoading: auditLoading } = trpc.adminAudit.list.useQuery({ limit: 100 }, {
+    enabled: !!user && user.role === "SUPER_ADMIN" && activeTab === "audit",
+  });
+  const { data: platformReports, isLoading: reportsLoading } = trpc.adminReports.get.useQuery(undefined, {
+    enabled: !!user && (user.role === "admin" || user.role === "SUPER_ADMIN") && activeTab === "reports",
+  });
+
+  const updateDisputeStatusMutation = trpc.adminDisputes.updateStatus.useMutation({
+    onSuccess: () => { toast.success("Dispute status updated."); refetchDisputes(); },
+    onError: (err) => toast.error(err.message),
+  });
+  const resolveDisputeMutation = trpc.adminDisputes.resolve.useMutation({
+    onSuccess: () => { toast.success("Dispute resolved."); refetchDisputes(); },
+    onError: (err) => toast.error(err.message),
+  });
+  const addDisputeNoteMutation = trpc.adminDisputes.addNote.useMutation({
+    onSuccess: () => { toast.success("Administrative note added."); refetchDisputes(); },
+    onError: (err) => toast.error(err.message),
+  });
 
   const createProductMutation = trpc.products.create.useMutation({
     onSuccess: () => { toast.success("Product created."); refetchProducts(); setShowProductForm(false); setProductForm({ name: "", description: "", price: "", currency: "NGN", category: "", stock: "-1" }); },

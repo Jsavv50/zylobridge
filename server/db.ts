@@ -705,3 +705,96 @@ export async function upsertUserByEmail(email: string, name?: string) {
   const newUser = await getUserByEmail(email);
   return newUser!;
 }
+
+// ─── Disputes & Audit Logs ────────────────────────────────────────────────────
+export async function listDisputes() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(disputes).orderBy(desc(disputes.createdAt));
+}
+
+export async function getDisputeById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const [row] = await db.select().from(disputes).where(eq(disputes.id, id));
+  return row || null;
+}
+
+export async function createDispute(data: InsertDispute) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  const [inserted] = await db.insert(disputes).values(data);
+  return inserted;
+}
+
+export async function updateDispute(id: number, data: Partial<Dispute>) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.update(disputes).set(data).where(eq(disputes.id, id));
+}
+
+export async function createAuditLog(data: InsertAuditLog) {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db.insert(auditLogs).values(data);
+  } catch (err) {
+    console.error("[AuditLog] Failed to record audit log:", err);
+  }
+}
+
+export async function listAuditLogs(limit = 100) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(auditLogs).orderBy(desc(auditLogs.createdAt)).limit(limit);
+}
+
+export async function getPlatformReportsData() {
+  const db = await getDb();
+  if (!db) return null;
+  const allU = await db.select().from(users);
+  const allJ = await db.select().from(jobs);
+  const allV = await db.select().from(verificationRequests);
+  const allD = await db.select().from(disputes);
+  const allE = await db.select().from(escrowPayments);
+  const allO = await db.select().from(orders);
+
+  return {
+    users: {
+      total: allU.length,
+      clients: allU.filter(u => u.userType === "client").length,
+      professionals: allU.filter(u => u.userType === "professional").length,
+      enterprise: allU.filter(u => u.userType === "enterprise").length,
+      admins: allU.filter(u => u.role === "admin" || u.role === "SUPER_ADMIN").length,
+      verified: allU.filter(u => u.isVerified).length,
+    },
+    jobs: {
+      total: allJ.length,
+      open: allJ.filter(j => j.status === "open").length,
+      inProgress: allJ.filter(j => j.status === "in_progress").length,
+      completed: allJ.filter(j => j.status === "completed").length,
+      cancelled: allJ.filter(j => j.status === "cancelled").length,
+    },
+    verification: {
+      total: allV.length,
+      pending: allV.filter(v => v.status === "pending").length,
+      approved: allV.filter(v => v.status === "approved").length,
+      rejected: allV.filter(v => v.status === "rejected").length,
+    },
+    disputes: {
+      total: allD.length,
+      open: allD.filter(d => d.status === "open" || d.status === "under_review" || d.status === "escalated").length,
+      resolved: allD.filter(d => d.status === "resolved").length,
+      rejected: allD.filter(d => d.status === "rejected" || d.status === "closed").length,
+    },
+    escrow: {
+      totalVolume: allE.reduce((acc, e) => acc + Number(e.amount || 0), 0),
+      fundedCount: allE.filter(e => e.status === "funded").length,
+      releasedCount: allE.filter(e => e.status === "released").length,
+      refundedCount: allE.filter(e => e.status === "refunded").length,
+    },
+    revenue: {
+      totalOrdersAmount: allO.filter(o => o.status === "paid").reduce((acc, o) => acc + Number(o.amount || 0), 0),
+    }
+  };
+}
