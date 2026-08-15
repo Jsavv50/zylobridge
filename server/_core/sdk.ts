@@ -293,12 +293,16 @@ class SDKServer {
       throw ForbiddenError("User not found");
     }
 
-    await db.upsertUser({
-      openId: user.openId,
-      email: user.email,
-      name: user.name,
-      lastSignedIn: signedInAt,
-    });
+    try {
+      await db.upsertUser({
+        openId: user.openId,
+        email: user.email,
+        name: user.name,
+        lastSignedIn: signedInAt,
+      });
+    } catch (err) {
+      console.error("[Auth] Non-fatal upsert error during authenticateRequest:", err);
+    }
 
     return user;
   }
