@@ -402,3 +402,10 @@
 - [x] Consolidate Supabase Auth email OTP into one authoritative flow with strict case-insensitive email normalization
 - [x] Fix session cookie clearing (remove deprecated maxAge from clearCookie) and route classification
 - [x] Run full test suite, build verification, and live acceptance testing across multiple Google accounts and email OTP flows
+
+## Phase 39: Comprehensive Auth Diagnostic & Repair (Google & Email Sign-Up)
+- [x] Trace Google OAuth initiation, redirect URI, state validation, and token exchange across Railway runtime
+- [x] Trace Supabase Auth email OTP send and verify pipeline across Supabase project configuration and frontend/backend integration
+- [x] Diagnose why email OTP verification returns "This code has expired or is invalid"
+- [x] Implement robust, production-safe fixes for both Google OAuth and email OTP authentication
+- [x] Run full test suite, build checks, and verify zero errors
