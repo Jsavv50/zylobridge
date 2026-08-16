@@ -310,3 +310,18 @@ export const auditLogs = pgTable("audit_logs", {
 });
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertAuditLog = typeof auditLogs.$inferInsert;
+
+// ─── OAuth Transactions ────────────────────────────────────────────────────────
+export const oauthTransactions = pgTable("oauth_transactions", {
+  id: serial("id").primaryKey(),
+  requestId: varchar("requestId", { length: 32 }).notNull(),
+  stateHash: varchar("stateHash", { length: 64 }).notNull().unique(),
+  authCodeHash: varchar("authCodeHash", { length: 64 }),
+  status: varchar("status", { length: 32 }).default("initiated").notNull(), // initiated, claimed, completed, failed
+  userId: integer("userId"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  completedAt: timestamp("completedAt"),
+});
+export type OAuthTransaction = typeof oauthTransactions.$inferSelect;
+export type InsertOAuthTransaction = typeof oauthTransactions.$inferInsert;
