@@ -9,6 +9,7 @@ import { getSessionCookieOptions } from "./cookies";
 import { ENV, getBaseUrl, getFrontendUrl } from "./env";
 import { sdk } from "./sdk";
 import { getSupabaseAdmin } from "./supabase";
+import { sql } from "drizzle-orm";
 
 const STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -74,7 +75,7 @@ async function exchangeCodeForTokens(code: string, oauthRequestId: string): Prom
   refresh_token?: string;
 }> {
   const callbackUrl = getCallbackUrl();
-  console.log(`[GoogleAuth] [${oauthRequestId}] Exchanging code for tokens...`);
+  console.log(`[GoogleAuth] [${oauthRequestId}] token exchange started at https://oauth2.googleapis.com/token`);
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -91,6 +92,7 @@ async function exchangeCodeForTokens(code: string, oauthRequestId: string): Prom
     console.error(`[GoogleAuth] [${oauthRequestId}] Token exchange failed (${res.status}): ${body}`);
     throw new Error(`Token exchange failed (${res.status}): ${body}`);
   }
+  console.log(`[GoogleAuth] [${oauthRequestId}] token exchange completed`);
   return res.json() as Promise<{ access_token: string; id_token: string; refresh_token?: string }>;
 }
 
@@ -101,6 +103,7 @@ async function fetchGoogleUserInfo(accessToken: string, oauthRequestId: string):
   picture?: string;
   email_verified: boolean;
 }> {
+  console.log(`[GoogleAuth] [${oauthRequestId}] Google userinfo request started`);
   const res = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
@@ -109,6 +112,7 @@ async function fetchGoogleUserInfo(accessToken: string, oauthRequestId: string):
     console.error(`[GoogleAuth] [${oauthRequestId}] Failed to fetch user info (${res.status}): ${body}`);
     throw new Error(`Failed to fetch user info from Google (${res.status})`);
   }
+  console.log(`[GoogleAuth] [${oauthRequestId}] Google userinfo completed`);
   return res.json() as Promise<{
     sub: string;
     email: string;
@@ -116,44 +120,6 @@ async function fetchGoogleUserInfo(accessToken: string, oauthRequestId: string):
     picture?: string;
     email_verified: boolean;
   }>;
-}
-
-async function syncUserToSupabase(googleUser: {
-  sub: string;
-  email: string;
-  name: string;
-  picture?: string;
-}): Promise<void> {
-  if (!ENV.supabaseUrl || !ENV.supabaseServiceRoleKey) return;
-  try {
-    const supabase = getSupabaseAdmin();
-    if (!supabase) return;
-    const { data: listData } = await supabase.auth.admin.listUsers({ perPage: 1000 });
-    const existing = listData?.users?.find((u) => u.email === googleUser.email);
-    if (existing) {
-      await supabase.auth.admin.updateUserById(existing.id, {
-        user_metadata: {
-          name: googleUser.name,
-          picture: googleUser.picture,
-          provider: "google",
-          google_sub: googleUser.sub,
-        },
-      });
-    } else {
-      await supabase.auth.admin.createUser({
-        email: googleUser.email,
-        email_confirm: true,
-        user_metadata: {
-          name: googleUser.name,
-          picture: googleUser.picture,
-          provider: "google",
-          google_sub: googleUser.sub,
-        },
-      });
-    }
-  } catch (err) {
-    console.error("[GoogleAuth] Supabase sync failed (non-fatal):", err);
-  }
 }
 
 export function registerGoogleAuthRoutes(app: Express) {
@@ -187,7 +153,7 @@ export function registerGoogleAuthRoutes(app: Express) {
     const error = typeof req.query.error === "string" ? req.query.error : null;
     const frontend = getFrontendUrl();
 
-    console.log(`[GoogleAuth] [${oauthRequestId}] Callback received. Has code: ${!!code}, has state: ${!!state}, error: ${error || "none"}`);
+    console.log(`[GoogleAuth] [${oauthRequestId}] 1. callback received. Has code: ${!!code}, has state: ${!!state}, error: ${error || "none"}`);
 
     if (error) {
       console.warn(`[GoogleAuth] [${oauthRequestId}] User denied access: ${error}`);
@@ -207,11 +173,20 @@ export function registerGoogleAuthRoutes(app: Express) {
       res.redirect(302, `${frontend}/sign-in?error=invalid_state`);
       return;
     }
+    console.log(`[GoogleAuth] [${oauthRequestId}] 2. state validated`);
 
     try {
-      console.log(`[GoogleAuth] [${oauthRequestId}] State validated. Exchanging code for tokens...`);
+      // 3. Token exchange started
+      console.log(`[GoogleAuth] [${oauthRequestId}] 3. token exchange started`);
       const tokens = await exchangeCodeForTokens(code, oauthRequestId);
+      // 4. Token exchange completed
+      console.log(`[GoogleAuth] [${oauthRequestId}] 4. token exchange completed`);
+
+      // 5. Google userinfo started
+      console.log(`[GoogleAuth] [${oauthRequestId}] 5. Google userinfo started`);
       const googleUser = await fetchGoogleUserInfo(tokens.access_token, oauthRequestId);
+      // 6. Google userinfo completed
+      console.log(`[GoogleAuth] [${oauthRequestId}] 6. Google userinfo completed. Email: ${googleUser.email}`);
 
       if (!googleUser.email_verified) {
         console.warn(`[GoogleAuth] [${oauthRequestId}] Unverified email: ${googleUser.email}`);
@@ -219,9 +194,22 @@ export function registerGoogleAuthRoutes(app: Express) {
         return;
       }
 
+      // 7. Email resolved
+      console.log(`[GoogleAuth] [${oauthRequestId}] 7. email resolved: ${googleUser.email}`);
+
+      // 8 & 9. Database connectivity & lookup check
+      console.log(`[GoogleAuth] [${oauthRequestId}] 8. database lookup started`);
+      const clientDb = await db.getDb();
+      if (!clientDb) {
+        throw new Error("Database connection unavailable during callback");
+      }
+      const dbStart = Date.now();
+      const connTest = await clientDb.execute(sql`SELECT current_database(), current_user, version()`);
+      console.log(`[GoogleAuth] [${oauthRequestId}] 9. database lookup completed in ${Date.now() - dbStart}ms. Connected DB: ${JSON.stringify(connTest[0])}`);
+
+      // 10 & 11. Database upsert/update started & completed
+      console.log(`[GoogleAuth] [${oauthRequestId}] 10. database upsert/update started`);
       const openId = `google_${googleUser.sub}`;
-      console.log(`[GoogleAuth] [${oauthRequestId}] User upsert starting for email: ${googleUser.email}`);
-      
       await db.upsertUser({
         openId,
         name: googleUser.name || null,
@@ -229,33 +217,30 @@ export function registerGoogleAuthRoutes(app: Express) {
         loginMethod: "google",
         lastSignedIn: new Date(),
       });
-      console.log(`[GoogleAuth] [${oauthRequestId}] User upsert completed`);
-
-      // Resolve user record to verify ID and role
       const dbUser = await db.getUserByEmail(googleUser.email);
-      console.log(`[GoogleAuth] [${oauthRequestId}] Resolved user ID: ${dbUser?.id}, role: ${dbUser?.role}`);
+      console.log(`[GoogleAuth] [${oauthRequestId}] 11. database upsert/update completed. User ID: ${dbUser?.id}, role: ${dbUser?.role}`);
 
-      // Non-blocking background Supabase sync
-      syncUserToSupabase(googleUser).catch((e) => console.error(`[GoogleAuth] [${oauthRequestId}] Background Supabase sync error:`, e));
-
-      console.log(`[GoogleAuth] [${oauthRequestId}] Starting session creation...`);
+      // 12 & 13. Session creation started & completed
+      console.log(`[GoogleAuth] [${oauthRequestId}] 12. session creation started`);
       const sessionToken = await sdk.createSessionToken(openId, {
         name: googleUser.name || "",
         expiresInMs: ONE_YEAR_MS,
       });
-      console.log(`[GoogleAuth] [${oauthRequestId}] Session creation completed`);
+      console.log(`[GoogleAuth] [${oauthRequestId}] 13. session creation completed`);
 
+      // 14. Set-Cookie generated
       const cookieOptions = getSessionCookieOptions(req);
-      console.log(`[GoogleAuth] [${oauthRequestId}] Setting session cookie (${COOKIE_NAME}) with domain: ${cookieOptions.domain || "default"}, secure: ${cookieOptions.secure}, httpOnly: ${cookieOptions.httpOnly}`);
+      console.log(`[GoogleAuth] [${oauthRequestId}] 14. Set-Cookie generated with domain: ${cookieOptions.domain || "default"}, secure: ${cookieOptions.secure}, httpOnly: ${cookieOptions.httpOnly}`);
       res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
-      console.log(`[GoogleAuth] [${oauthRequestId}] Session cookie set successfully`);
 
+      // 15. Redirect issued
       const returnPath = decoded.returnPath || "/";
       const redirectTo = `${frontend}${returnPath.startsWith("/") ? returnPath : `/${returnPath}`}`;
-      const duration = Date.now() - startTime;
-      console.log(`[GoogleAuth] [${oauthRequestId}] Callback completed successfully in ${duration}ms — redirecting to ${redirectTo}`);
-      
+      console.log(`[GoogleAuth] [${oauthRequestId}] 15. redirect issued to ${redirectTo}`);
+
+      // 16. Callback response completed
       res.redirect(302, redirectTo);
+      console.log(`[GoogleAuth] [${oauthRequestId}] 16. callback response completed in ${Date.now() - startTime}ms`);
     } catch (err) {
       const duration = Date.now() - startTime;
       console.error(`[GoogleAuth] [${oauthRequestId}] Callback failed after ${duration}ms with error:`, err);
