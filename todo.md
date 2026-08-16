@@ -388,3 +388,9 @@
 - [x] Add unit tests for Realtime auth token generation, configuration validation, and endpoint security (`server/realtime-auth.test.ts`)
 - [x] Run TypeScript check, test suite, `build:client`, and `build:server` successfully without breaking existing auth, schema, RLS, or messaging
 - [x] Save checkpoint, publish, and report exact implementation details
+
+## Phase 37: Production Auth Repair (Google OAuth & Email OTP)
+- [ ] Investigate and fix live Google OAuth OAUTH_STORAGE_UNAVAILABLE error (requestId 8CCF9561)
+- [ ] Investigate and fix email OTP "This code has expired or is invalid" verification error across all accounts
+- [ ] Verify production database connectivity and oauth_transactions table visibility under Railway runtime
+- [ ] Verify authoritative Supabase Auth OTP verification and normalization
