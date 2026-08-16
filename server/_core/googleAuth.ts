@@ -1,5 +1,5 @@
 /**
- * Direct Google OAuth 2.0 integration — production-safe for Railway with non-blocking optional PostgreSQL transaction logging.
+ * Direct Google OAuth 2.0 integration — production-safe for Railway with strict PostgreSQL atomic transaction protection.
  */
 import { COOKIE_NAME, ONE_YEAR_MS } from "../../shared/const";
 import crypto from "crypto";
@@ -170,27 +170,29 @@ export function registerGoogleAuthRoutes(app: Express) {
 
     try {
       const clientDb = await db.getDb();
-      if (clientDb) {
-        // Non-blocking try/catch insert to prevent any statement timeout from crashing initiation
-        try {
-          await clientDb.insert(oauthTransactions).values({
-            requestId: oauthRequestId,
-            stateHash: decodedState.stateHash,
-            status: "initiated",
-            expiresAt: new Date(Date.now() + STATE_TTL_MS),
-          }).onConflictDoNothing();
-          console.log(`[GoogleAuth] [${oauthRequestId}] OAuth transaction created`);
-        } catch (dbErr) {
-          console.warn(`[GoogleAuth] [${oauthRequestId}] Non-fatal oauth_transactions insert warning:`, dbErr);
-        }
+      if (!clientDb) {
+        throw new Error("Database connection unavailable for oauth_transactions persistence.");
       }
+
+      // Required persistent transaction write
+      await clientDb.insert(oauthTransactions).values({
+        requestId: oauthRequestId,
+        stateHash: decodedState.stateHash,
+        status: "initiated",
+        expiresAt: new Date(Date.now() + STATE_TTL_MS),
+      }).onConflictDoNothing();
+      console.log(`[GoogleAuth] [${oauthRequestId}] OAuth transaction successfully persisted in PostgreSQL`);
 
       const authUrl = buildGoogleAuthUrl(state);
       console.log(`[GoogleAuth] [${oauthRequestId}] Redirecting to Google consent screen`);
       res.redirect(302, authUrl);
     } catch (err) {
-      console.error(`[GoogleAuth] [${oauthRequestId}] Failed to initiate OAuth transaction:`, err);
-      res.status(503).json({ error: "OAuth initiation failed.", code: "OAUTH_STORAGE_UNAVAILABLE" });
+      console.error(`[GoogleAuth] [${oauthRequestId}] Critical OAuth initiation storage failure:`, err);
+      res.status(503).json({ 
+        error: "OAuth temporarily unavailable", 
+        code: "OAUTH_STORAGE_UNAVAILABLE",
+        requestId: oauthRequestId 
+      });
     }
   });
 
@@ -225,35 +227,44 @@ export function registerGoogleAuthRoutes(app: Express) {
     console.log(`[GoogleAuth] [${oauthRequestId}] 2. State validated`);
 
     const clientDb = await db.getDb();
+    if (!clientDb) {
+      console.error(`[GoogleAuth] [${oauthRequestId}] Database connection unavailable in callback`);
+      res.redirect(302, `${frontend}/sign-in?error=database_unavailable`);
+      return;
+    }
+
     const authCodeHash = hashToken(code);
 
     try {
-      if (clientDb) {
-        try {
-          const txRows = await clientDb.select().from(oauthTransactions).where(eq(oauthTransactions.stateHash, decoded.stateHash)).limit(1);
-          const txRecord = txRows[0];
+      // 3. Atomically claim authorization code
+      console.log(`[GoogleAuth] [${oauthRequestId}] 3. Checking transaction and claiming auth code`);
+      
+      const txRows = await clientDb.select().from(oauthTransactions).where(eq(oauthTransactions.stateHash, decoded.stateHash)).limit(1);
+      const txRecord = txRows[0];
 
-          if (txRecord && txRecord.status === "completed") {
-            console.warn(`[GoogleAuth] [${oauthRequestId}] Duplicate callback detected — token exchange skipped (already completed)`);
-            res.redirect(302, `${frontend}${decoded.returnPath || "/"}`);
-            return;
-          }
-
-          if (txRecord && txRecord.authCodeHash && txRecord.authCodeHash === authCodeHash && txRecord.status === "claimed") {
-            console.warn(`[GoogleAuth] [${oauthRequestId}] Duplicate callback detected — token exchange skipped (currently processing/claimed)`);
-            res.redirect(302, `${frontend}${decoded.returnPath || "/"}`);
-            return;
-          }
-
-          await clientDb.update(oauthTransactions)
-            .set({ authCodeHash, status: "claimed" })
-            .where(eq(oauthTransactions.stateHash, decoded.stateHash));
-
-          console.log(`[GoogleAuth] [${oauthRequestId}] OAuth transaction claimed`);
-        } catch (dbErr) {
-          console.warn(`[GoogleAuth] [${oauthRequestId}] Non-fatal transaction claim warning:`, dbErr);
-        }
+      if (!txRecord) {
+        console.warn(`[GoogleAuth] [${oauthRequestId}] Transaction record not found for stateHash — rejecting orphan callback`);
+        res.redirect(302, `${frontend}/sign-in?error=invalid_state`);
+        return;
       }
+
+      if (txRecord.status === "completed") {
+        console.warn(`[GoogleAuth] [${oauthRequestId}] Duplicate callback detected — token exchange skipped (already completed)`);
+        res.redirect(302, `${frontend}${decoded.returnPath || "/"}`);
+        return;
+      }
+
+      if (txRecord.authCodeHash && txRecord.authCodeHash === authCodeHash && txRecord.status === "claimed") {
+        console.warn(`[GoogleAuth] [${oauthRequestId}] Duplicate callback detected — token exchange skipped (currently processing/claimed)`);
+        res.redirect(302, `${frontend}${decoded.returnPath || "/"}`);
+        return;
+      }
+
+      await clientDb.update(oauthTransactions)
+        .set({ authCodeHash, status: "claimed" })
+        .where(eq(oauthTransactions.stateHash, decoded.stateHash));
+
+      console.log(`[GoogleAuth] [${oauthRequestId}] OAuth transaction claimed successfully`);
 
       // 4. Token exchange started
       console.log(`[GoogleAuth] [${oauthRequestId}] 4. Token exchange started`);
@@ -286,16 +297,10 @@ export function registerGoogleAuthRoutes(app: Express) {
       const dbUser = await db.getUserByEmail(googleUser.email);
       console.log(`[GoogleAuth] [${oauthRequestId}] Database lookup & upsert completed in ${Date.now() - dbStart}ms. User ID: ${dbUser?.id}, role: ${dbUser?.role}`);
 
-      if (clientDb) {
-        try {
-          await clientDb.update(oauthTransactions)
-            .set({ status: "completed", userId: dbUser?.id || null, completedAt: new Date() })
-            .where(eq(oauthTransactions.stateHash, decoded.stateHash));
-          console.log(`[GoogleAuth] [${oauthRequestId}] OAuth transaction completed`);
-        } catch (dbErr) {
-          console.warn(`[GoogleAuth] [${oauthRequestId}] Non-fatal transaction completion warning:`, dbErr);
-        }
-      }
+      await clientDb.update(oauthTransactions)
+        .set({ status: "completed", userId: dbUser?.id || null, completedAt: new Date() })
+        .where(eq(oauthTransactions.stateHash, decoded.stateHash));
+      console.log(`[GoogleAuth] [${oauthRequestId}] OAuth transaction completed`);
 
       // 7. Session creation started
       console.log(`[GoogleAuth] [${oauthRequestId}] 7. Session creation started`);
@@ -320,13 +325,11 @@ export function registerGoogleAuthRoutes(app: Express) {
       const duration = Date.now() - startTime;
       console.error(`[GoogleAuth] [${oauthRequestId}] Callback failed after ${duration}ms with error:`, err);
 
-      if (clientDb) {
-        try {
-          await clientDb.update(oauthTransactions)
-            .set({ status: "failed" })
-            .where(eq(oauthTransactions.stateHash, decoded.stateHash));
-        } catch {}
-      }
+      try {
+        await clientDb.update(oauthTransactions)
+          .set({ status: "failed" })
+          .where(eq(oauthTransactions.stateHash, decoded.stateHash));
+      } catch {}
 
       const errMsg = err instanceof Error ? encodeURIComponent(err.message.slice(0, 120)) : "unknown";
       const isInvalidGrant = err instanceof Error && err.message.includes("invalid_grant");
