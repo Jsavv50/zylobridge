@@ -409,3 +409,11 @@
 - [x] Diagnose why email OTP verification returns "This code has expired or is invalid"
 - [x] Implement robust, production-safe fixes for both Google OAuth and email OTP authentication
 - [x] Run full test suite, build checks, and verify zero errors
+
+## Phase 40: Definitive Production Database & Authentication Reconciliation
+- [x] Verify exact Railway runtime database identity and physical `oauth_transactions` table presence
+- [x] Apply Drizzle/SQL migration strictly against `DIRECT_DATABASE_URL`
+- [x] Restore authoritative, mandatory `oauth_transactions` persistence in Google OAuth (remove non-blocking try/catch bypass)
+- [x] Consolidate email OTP into authoritative Supabase Auth flow with strict email normalization and no token-type fallback hacks
+- [x] Audit session cookies (`Domain=.zylobridge.com`, `Secure`, `HttpOnly`, `SameSite=Lax`) and remove deprecated `maxAge` from `clearCookie`
+- [x] Run comprehensive 5-attempt live acceptance testing for Google and email OTP flows across multiple accounts and edge cases
