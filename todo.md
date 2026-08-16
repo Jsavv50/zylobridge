@@ -394,3 +394,11 @@
 - [x] Investigate and fix email OTP "This code has expired or is invalid" verification error across all accounts
 - [x] Verify production database connectivity and oauth_transactions table visibility under Railway runtime
 - [x] Verify authoritative Supabase Auth OTP verification and normalization
+
+## Phase 38: Definitive Production Authentication & Database Fix (pasted_content_72.txt)
+- [x] Fix Railway container startup crash (ReferenceError: oauthRequestId is not defined in googleAuth.ts)
+- [x] Prove production runtime PostgreSQL database identity and physically verify table oauth_transactions via DIRECT_DATABASE_URL migration
+- [x] Restore mandatory, non-optional oauth_transactions persistence and atomic state/code claiming in Google OAuth
+- [x] Consolidate Supabase Auth email OTP into one authoritative flow with strict case-insensitive email normalization
+- [x] Fix session cookie clearing (remove deprecated maxAge from clearCookie) and route classification
+- [x] Run full test suite, build verification, and live acceptance testing across multiple Google accounts and email OTP flows
