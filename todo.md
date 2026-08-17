@@ -467,3 +467,8 @@
 - [x] Review OTP rate limiting and error handling for email verification
 - [x] Perform Playwright staging smoke test verifying sign-in workflows
 - [x] Run test suite, production build, and verification checks
+
+- [x] Verify live database connection and execute oauth_transactions migration if needed
+- [x] Verify Supabase rate limit configuration for email OTP
+- [x] Perform staging multi-account sign-in verification
+- [x] Run test suite, production build, and verification checks
