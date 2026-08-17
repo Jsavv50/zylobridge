@@ -476,3 +476,10 @@
 - [x] Diagnose root causes of sign-in outage and upstream error / failed to fetch
 - [x] Implement robust cookie, CORS, and auth route handling
 - [x] Run test suite, production build, and verification checks
+
+## Recovery Sequence Tracking (August 2026)
+- [x] 1. Verify production frontend API origin and credentials mode
+- [x] 2. Trace OTP verification response cookies and subsequent auth.me request
+- [x] 3. Validate production CORS, cookie domain/SameSite/Secure settings, and Railway runtime configuration
+- [x] 4. Verify live Railway database target and oauth_transactions table, then test Google OAuth callback
+- [x] 5. Apply minimal confirmed fix, run validation, and verify live sign-in flow
