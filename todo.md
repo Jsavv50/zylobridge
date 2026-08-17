@@ -438,3 +438,8 @@
 - [x] Implement Web Push API notification registration, preference toggle, and job-match push trigger
 - [x] Add Playwright end-to-end authentication tests for Google and OTP flows
 - [x] Run test suite, production build, and verification checks
+
+- [x] Fix Google OAuth upstream token exchange error handling and prompt parameter for multi-account selection
+- [x] Fix logout / session clearing to properly remove local storage and invalidate cached session state
+- [x] Remove deprecated maxAge parameter from res.clearCookie across server codebase
+- [x] Run test suite, production build, and verification checks

@@ -148,7 +148,7 @@ describe("auth.logout", () => {
     expect(result).toEqual({ success: true });
     expect(clearedCookies).toHaveLength(1);
     expect(clearedCookies[0]?.name).toBe(COOKIE_NAME);
-    expect(clearedCookies[0]?.options).toMatchObject({ maxAge: -1, httpOnly: true });
+    expect(clearedCookies[0]?.options).toMatchObject({ httpOnly: true });
   });
 
   it("auth.me returns null for unauthenticated user", async () => {
