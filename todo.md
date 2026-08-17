@@ -483,3 +483,4 @@
 - [x] 3. Validate production CORS, cookie domain/SameSite/Secure settings, and Railway runtime configuration
 - [x] 4. Verify live Railway database target and oauth_transactions table, then test Google OAuth callback
 - [x] 5. Apply minimal confirmed fix, run validation, and verify live sign-in flow
+- [x] Implement frontend auth error subscription guards to eliminate sign-in lag and redirect loops on unauthenticated pages
