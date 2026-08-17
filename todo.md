@@ -462,3 +462,8 @@
 - [x] Fix OAuth oauth_transactions missing table fallback and upstream errors
 - [x] Fix email OTP "Failed to fetch" and token expiration handling
 - [x] Run test suite, production build, and verification checks
+
+- [x] Verify production database connection and oauth_transactions migration status
+- [x] Review OTP rate limiting and error handling for email verification
+- [x] Perform Playwright staging smoke test verifying sign-in workflows
+- [x] Run test suite, production build, and verification checks
