@@ -454,7 +454,7 @@
 - [x] Create weekly staging smoke test script and schedule configuration
 - [x] Run test suite, production build, and verification checks
 
-- [ ] Create GitHub Actions workflow file for weekly Playwright smoke test execution
-- [ ] Configure Sentry DSN environment handling in server and client
-- [ ] Register audit log retention cron job via manus-heartbeat CLI
-- [ ] Run test suite, production build, and verification checks
+- [x] Create GitHub Actions workflow file for weekly Playwright smoke test execution
+- [x] Configure Sentry DSN environment handling in server and client
+- [x] Register audit log retention cron job via manus-heartbeat CLI
+- [x] Run test suite, production build, and verification checks
