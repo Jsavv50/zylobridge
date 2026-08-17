@@ -423,3 +423,8 @@
 - [x] Run focused tests, type checks, full production builds, and verify deployment
 - [x] Diagnose sign-in lag root cause across frontend redirection, Supabase OTP network roundtrips, database connection pooling, and Google OAuth exchange
 - [x] Implement targeted latency optimizations (connection reuse, non-blocking sync calls, optimized UI loading indicators)
+
+- [x] Implement Redis-backed session caching with seamless database fallback in server/_core/sdk.ts
+- [x] Implement optimistic UI transitions and instant skeleton feedback on sign-in form submissions in client/src/pages/SignIn.tsx
+- [x] Configure aggressive caching headers for static assets in vercel.json (or build config)
+- [x] Run type checks, tests, and production build verification

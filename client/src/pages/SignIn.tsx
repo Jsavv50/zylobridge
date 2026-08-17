@@ -390,10 +390,16 @@ export default function SignIn() {
                 <Button
                   type="submit"
                   disabled={verifyEmailOtp.isPending}
-                  className="w-full bg-violet-600 hover:bg-violet-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-violet-600/25"
+                  className="w-full bg-violet-600 hover:bg-violet-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-violet-600/25 cursor-pointer flex items-center justify-center gap-2"
                 >
-                  {verifyEmailOtp.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                  Verify & Sign In
+                  {verifyEmailOtp.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Verifying securely...</span>
+                    </>
+                  ) : (
+                    <span>Verify & Sign In</span>
+                  )}
                 </Button>
                 <div className="flex items-center justify-between text-xs pt-2">
                   <span className="text-gray-500">Didn't receive the code?</span>
@@ -492,10 +498,16 @@ export default function SignIn() {
                 <Button
                   type="submit"
                   disabled={verifyPhoneOtp.isPending}
-                  className="w-full bg-violet-600 hover:bg-violet-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-violet-600/25"
+                  className="w-full bg-violet-600 hover:bg-violet-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-violet-600/25 cursor-pointer flex items-center justify-center gap-2"
                 >
-                  {verifyPhoneOtp.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                  Verify & Sign In
+                  {verifyPhoneOtp.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Verifying SMS code...</span>
+                    </>
+                  ) : (
+                    <span>Verify SMS & Sign In</span>
+                  )}
                 </Button>
                 <div className="flex items-center justify-between text-xs pt-2">
                   <span className="text-gray-500">Didn't receive the SMS?</span>

@@ -269,6 +269,17 @@ class SDKServer {
 
     const sessionUserId = session.openId;
     const signedInAt = new Date();
+
+    // Fast in-memory session cache lookup to avoid repeated DB queries on every API request
+    const g = globalThis as unknown as { __zyloSessionCache?: Map<string, { user: User; expiresAt: number }> };
+    if (!g.__zyloSessionCache) {
+      g.__zyloSessionCache = new Map<string, { user: User; expiresAt: number }>();
+    }
+    const cachedEntry = g.__zyloSessionCache.get(sessionUserId);
+    if (cachedEntry && cachedEntry.expiresAt > Date.now()) {
+      return cachedEntry.user;
+    }
+
     let user = await db.getUserByOpenId(sessionUserId);
 
     // If user not in DB, sync from OAuth server automatically
@@ -292,6 +303,9 @@ class SDKServer {
     if (!user) {
       throw ForbiddenError("User not found");
     }
+
+    const g2 = globalThis as unknown as { __zyloSessionCache?: Map<string, { user: User; expiresAt: number }> };
+    g2.__zyloSessionCache?.set(sessionUserId, { user, expiresAt: Date.now() + 60 * 1000 });
 
     db.upsertUser({
       openId: user.openId,
