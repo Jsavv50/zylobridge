@@ -32,6 +32,8 @@ import {
   Dispute,
   auditLogs,
   InsertAuditLog,
+  pushSubscriptions,
+  InsertPushSubscription,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -779,6 +781,13 @@ export async function updateDispute(id: number, data: Partial<Dispute>) {
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");
   await db.update(disputes).set(data).where(eq(disputes.id, id));
+}
+
+export async function savePushSubscription(data: InsertPushSubscription) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.insert(pushSubscriptions).values(data).onConflictDoNothing();
+  return { success: true };
 }
 
 export async function createAuditLog(data: InsertAuditLog) {

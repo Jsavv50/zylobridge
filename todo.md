@@ -433,3 +433,8 @@
 - [x] Optimize cookie options, CORS/credentials, and authentication context handling in server/_core/sdk.ts and routers.ts
 - [x] Fix deprecated maxAge warning in Express res.clearCookie calls across server codebase
 - [x] Run test suite, production build, and verification checks
+
+- [ ] Implement Super Admin real-time session analytics and error tracking endpoints and UI
+- [ ] Implement Web Push API notification registration, preference toggle, and job-match push trigger
+- [ ] Add Playwright end-to-end authentication tests for Google and OTP flows
+- [ ] Run test suite, production build, and verification checks
