@@ -746,10 +746,10 @@ export async function upsertUserByEmail(email: string, name?: string) {
       openId,
       email: normalizedEmail,
       name: name ?? null,
-      loginMethod: "email_otp",
-      role: isSuperAdmin ? "SUPER_ADMIN" : (isAdmin ? "admin" : "client"),
+      loginMethod: "email",
+      role: isSuperAdmin ? "SUPER_ADMIN" : "user",
       lastSignedIn: new Date(),
-    }).onConflictDoNothing();
+    });
   } catch {}
   return (await getUserByEmail(normalizedEmail)) ?? null;
 }
