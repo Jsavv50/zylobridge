@@ -458,3 +458,7 @@
 - [x] Configure Sentry DSN environment handling in server and client
 - [x] Register audit log retention cron job via manus-heartbeat CLI
 - [x] Run test suite, production build, and verification checks
+
+- [x] Fix OAuth oauth_transactions missing table fallback and upstream errors
+- [x] Fix email OTP "Failed to fetch" and token expiration handling
+- [x] Run test suite, production build, and verification checks

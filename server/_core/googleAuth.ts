@@ -176,12 +176,16 @@ export function registerGoogleAuthRoutes(app: Express) {
 
       // Required persistent transaction write with non-blocking fallback
       try {
-        await clientDb.insert(oauthTransactions).values({
-          requestId: oauthRequestId,
-          stateHash: decodedState.stateHash,
-          status: "initiated",
-          expiresAt: new Date(Date.now() + STATE_TTL_MS),
-        }).onConflictDoNothing();
+        try {
+          await clientDb.insert(oauthTransactions).values({
+            requestId: oauthRequestId,
+            stateHash: decodedState.stateHash,
+            status: "initiated",
+            expiresAt: new Date(Date.now() + STATE_TTL_MS),
+          }).onConflictDoNothing();
+        } catch (tableErr) {
+          console.warn(`[GoogleAuth] [${oauthRequestId}] oauth_transactions table missing or error (ignored for stateless fallback):`, tableErr);
+        }
         console.log(`[GoogleAuth] [${oauthRequestId}] OAuth transaction successfully persisted in PostgreSQL`);
       } catch (dbErr) {
         console.warn(`[GoogleAuth] [${oauthRequestId}] Warning: oauth_transactions table insert failed, proceeding with in-memory/stateless fallback:`, dbErr);

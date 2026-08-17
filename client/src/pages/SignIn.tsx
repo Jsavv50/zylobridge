@@ -99,6 +99,7 @@ export default function SignIn() {
       }
     },
     onError: (err) => {
+      setEmailOtp("");
       if (err.message.toLowerCase().includes("expired") || err.message.toLowerCase().includes("invalid")) {
         toast.error("This code has expired or is invalid. Please request a new one.");
       } else {
