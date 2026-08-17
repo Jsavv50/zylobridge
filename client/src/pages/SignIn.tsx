@@ -140,12 +140,20 @@ export default function SignIn() {
     },
   });
 
-  const completeName = trpc.emailAuth.completeName.useMutation({
+  const completeEmailName = trpc.emailAuth.completeName.useMutation({
     onSuccess: () => {
       toast.success("Account set up successfully!");
       window.location.href = "/";
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const completePhoneName = trpc.phoneAuth.completeName.useMutation({
+    onSuccess: () => {
+      toast.success("Account set up successfully!");
+      window.location.href = "/";
+    },
+    onError: (err: any) => toast.error(err.message),
   });
 
   const handleCompleteName = (e: React.FormEvent) => {
@@ -154,7 +162,11 @@ export default function SignIn() {
       toast.error("Please enter your name");
       return;
     }
-    completeName.mutate({ name: name.trim(), userId: verifiedUserId ?? undefined });
+    if (nameCaptureFor === "email") {
+      completeEmailName.mutate({ name: name.trim(), userId: verifiedUserId ?? undefined });
+    } else {
+      completePhoneName.mutate({ name: name.trim(), userId: verifiedUserId ?? undefined });
+    }
   };
 
   return (
@@ -358,7 +370,7 @@ export default function SignIn() {
                     toast.error("Please enter the full 6-digit code");
                     return;
                   }
-                  verifyEmailOtp.mutate({ email, token: emailOtp });
+                  verifyEmailOtp.mutate({ email, otp: emailOtp });
                 }}
                 className="space-y-4"
               >
@@ -460,7 +472,7 @@ export default function SignIn() {
                     toast.error("Please enter the full 6-digit code");
                     return;
                   }
-                  verifyPhoneOtp.mutate({ phone, token: phoneOtp });
+                  verifyPhoneOtp.mutate({ phone, otp: phoneOtp });
                 }}
                 className="space-y-4"
               >
@@ -522,10 +534,10 @@ export default function SignIn() {
                 </div>
                 <Button
                   type="submit"
-                  disabled={completeName.isPending}
+                  disabled={nameCaptureFor === "email" ? completeEmailName.isPending : completePhoneName.isPending}
                   className="w-full bg-violet-600 hover:bg-violet-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-violet-600/25"
                 >
-                  {completeName.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  {(nameCaptureFor === "email" ? completeEmailName.isPending : completePhoneName.isPending) ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                   Complete Sign Up
                 </Button>
               </form>

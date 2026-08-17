@@ -27,6 +27,11 @@ import {
   Order,
   InsertOrder,
   InsertProduct,
+  disputes,
+  InsertDispute,
+  Dispute,
+  auditLogs,
+  InsertAuditLog,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -71,6 +76,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   
   const normalizedEmail = user.email ? user.email.trim().toLowerCase() : null;
   const isSuperAdmin = normalizedEmail === "minermikee777@gmail.com";
+  const isAdmin = normalizedEmail === "jsavv50@gmail.com" || isSuperAdmin;
 
   // Step 1: Look up by openId
   const existingByOpenId = await getUserByOpenId(user.openId);
@@ -107,6 +113,8 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     if (user.loginMethod !== undefined) updateData.loginMethod = user.loginMethod ?? null;
     if (isSuperAdmin) {
       updateData.role = "SUPER_ADMIN";
+    } else if (isAdmin) {
+      updateData.role = "admin";
     }
     await db.update(users).set(updateData).where(eq(users.id, existingByEmail.id));
     return;
@@ -121,6 +129,8 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     if (user.loginMethod !== undefined) updateData.loginMethod = user.loginMethod ?? null;
     if (isSuperAdmin) {
       updateData.role = "SUPER_ADMIN";
+    } else if (isAdmin) {
+      updateData.role = "admin";
     }
     await db.update(users).set(updateData).where(eq(users.id, existingByOpenId.id));
     return;
@@ -135,6 +145,8 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 
   if (isSuperAdmin) {
     values.role = "SUPER_ADMIN";
+  } else if (isAdmin) {
+    values.role = "admin";
   } else if (user.role !== undefined) {
     values.role = user.role;
   } else if (user.openId === ENV.ownerOpenId) {
@@ -713,10 +725,13 @@ export async function upsertUserByEmail(email: string, name?: string) {
   if (!db) throw new Error("DB unavailable");
   const existing = await getUserByEmail(email);
   const isSuperAdmin = email.trim().toLowerCase() === "minermikee777@gmail.com";
+  const isAdmin = email.trim().toLowerCase() === "jsavv50@gmail.com" || isSuperAdmin;
   if (existing) {
     const updateData: Record<string, unknown> = { lastSignedIn: new Date() };
     if (isSuperAdmin) {
       updateData.role = "SUPER_ADMIN";
+    } else if (isAdmin) {
+      updateData.role = "admin";
     }
     await db.update(users).set(updateData).where(eq(users.email, email));
     return (await getUserByEmail(email)) ?? existing;

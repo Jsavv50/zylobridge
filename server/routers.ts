@@ -7,7 +7,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { enterpriseProcedure, adminProcedure, superAdminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { storagePut, storageGetSignedUrl } from "./storage";
 import { getDb } from "./db";
-import { conversations } from "../drizzle/schema";
+import { conversations, users } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import {
   upsertUser,
@@ -73,6 +73,7 @@ import {
   markOtpVerified,
   upsertUserByPhone,
   upsertUserByEmail,
+  createEscrowPayment,
 } from "./db";
 import {
   initializePaystackTransaction,
@@ -894,6 +895,19 @@ export const appRouter = router({
         console.log(`[EmailAuth] verifyOtp request ${requestId} session cookie set — returning success`);
         return { success: true, user: { id: user!.id, name: user!.name, email: user!.email, role: user!.role } };
       }),
+    completeName: publicProcedure
+      .input(z.object({
+        name: z.string().min(2).max(100).trim(),
+        userId: z.number().int().positive().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        if (!input.userId) return { success: true };
+        const db = await getDb();
+        if (db) {
+          await db.update(users).set({ name: input.name }).where(eq(users.id, input.userId));
+        }
+        return { success: true };
+      }),
   }),
 
   phoneAuth: router({
@@ -925,6 +939,19 @@ export const appRouter = router({
         await createPhoneOtp(phone, otp, expiresAt);
         console.log(`[PhoneAuth] OTP SMS request completed successfully for ${maskPhoneNumber(phone)}`);
         return { success: true, message: "OTP sent to your phone number." };
+      }),
+    completeName: publicProcedure
+      .input(z.object({
+        name: z.string().min(2).max(100).trim(),
+        userId: z.number().int().positive().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        if (!input.userId) return { success: true };
+        const db = await getDb();
+        if (db) {
+          await db.update(users).set({ name: input.name }).where(eq(users.id, input.userId));
+        }
+        return { success: true };
       }),
     verifyOtp: publicProcedure
       .input(z.object({
