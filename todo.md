@@ -417,3 +417,7 @@
 - [x] Consolidate email OTP into authoritative Supabase Auth flow with strict email normalization and no token-type fallback hacks
 - [x] Audit session cookies (`Domain=.zylobridge.com`, `Secure`, `HttpOnly`, `SameSite=Lax`) and remove deprecated `maxAge` from `clearCookie`
 - [x] Run comprehensive 5-attempt live acceptance testing for Google and email OTP flows across multiple accounts and edge cases
+
+- [ ] Diagnose and fix Google OAuth OAUTH_STORAGE_UNAVAILABLE error (requestId 22F4EBC4)
+- [ ] Verify oauth_transactions persistence and robust fallback handling in production
+- [ ] Run focused tests, type checks, full production builds, and verify deployment
