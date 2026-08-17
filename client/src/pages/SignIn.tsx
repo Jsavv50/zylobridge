@@ -69,6 +69,9 @@ export default function SignIn() {
     e.preventDefault();
     if (isGoogleRedirecting) return;
     setIsGoogleRedirecting(true);
+    try {
+      sessionStorage.setItem("zylo_oauth_init_at", Date.now().toString());
+    } catch {}
     const returnPath = window.location.pathname === "/sign-in" ? "/" : window.location.pathname;
     const targetUrl = `${API_URL}/api/auth/google?returnPath=${encodeURIComponent(returnPath)}`;
     window.location.href = targetUrl;

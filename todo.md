@@ -484,3 +484,7 @@
 - [x] 4. Verify live Railway database target and oauth_transactions table, then test Google OAuth callback
 - [x] 5. Apply minimal confirmed fix, run validation, and verify live sign-in flow
 - [x] Implement frontend auth error subscription guards to eliminate sign-in lag and redirect loops on unauthenticated pages
+- [x] Implement single-flight concurrency guards for email/phone OTP dispatch and Google OAuth initiation
+- [x] Optimize frontend auth state initialization to avoid duplicate background request waterfalls
+- [x] Streamline logout transition to immediate client-state invalidation
+- [x] Add timing instrumentation and regression tests for authentication request volume and latency
