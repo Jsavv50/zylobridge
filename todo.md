@@ -448,3 +448,8 @@
 - [x] Implement automated 30-day audit log retention cleanup procedure and scheduled endpoint
 - [x] Expand Playwright E2E tests for multi-account sign-in workflows
 - [x] Run test suite, production build, and verification checks
+
+- [x] Register audit log retention cron job via manus-heartbeat CLI / SDK
+- [x] Configure Sentry error monitoring instrumentation in server and client
+- [x] Create weekly staging smoke test script and schedule configuration
+- [x] Run test suite, production build, and verification checks
