@@ -22,10 +22,11 @@ export default function Navbar() {
   const { user, isAuthenticated, logout } = useAuth();
   const [location] = useLocation();
 
-  const { mutate: doLogout } = trpc.auth.logout.useMutation({
-    onSuccess: () => {
-      logout();
-      window.location.href = "/";
+  const { mutate: doLogout, isPending: isLoggingOut } = trpc.auth.logout.useMutation({
+    onSettled: () => {
+      logout().finally(() => {
+        window.location.href = "/";
+      });
     },
   });
 
