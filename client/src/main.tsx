@@ -33,6 +33,10 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
 
   if (!isUnauthorized) return;
 
+  // Do not redirect if already on sign-in or public landing/auth pages to prevent redirect loops / lag
+  const path = window.location.pathname;
+  if (path.startsWith("/sign-in") || path.startsWith("/login") || path === "/") return;
+
   window.location.href = getLoginUrl();
 };
 
