@@ -257,7 +257,7 @@ class SDKServer {
     } as GetUserInfoWithJwtResponse;
   }
 
-  async authenticateRequest(req: Request): Promise<User> {
+  async authenticateRequest(req: Request): Promise<User & { isCron?: boolean }> {
     // Regular authentication flow
     const cookies = this.parseCookies(req.headers.cookie);
     const sessionCookie = cookies.get(COOKIE_NAME);
@@ -268,6 +268,24 @@ class SDKServer {
     }
 
     const sessionUserId = session.openId;
+    if (sessionUserId.startsWith("cron_") || session.openId.startsWith("cron_")) {
+      return {
+        id: -1,
+        openId: sessionUserId,
+        name: "Cron System",
+        email: null,
+        phone: null,
+        avatarUrl: null,
+        isVerified: false,
+        loginMethod: null,
+        role: "user",
+        userType: "client",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastSignedIn: new Date(),
+        isCron: true,
+      } as any;
+    }
     const signedInAt = new Date();
 
     // Fast in-memory session cache lookup to avoid repeated DB queries on every API request

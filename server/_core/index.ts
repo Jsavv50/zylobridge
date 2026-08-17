@@ -9,6 +9,7 @@ import { registerGoogleAuthRoutes } from "./googleAuth";
 import { registerRealtimeAuthRoutes } from "./realtimeAuth";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
+import { sdk } from "./sdk";
 import { createContext } from "./context";
 import { setupVite } from "./vite";
 import { registerSocketIO } from "../socket";
@@ -123,6 +124,27 @@ async function startServer() {
 
   // ── Socket.io real-time messaging ──────────────────────────────────────────
   registerSocketIO(server);
+
+  // ── Scheduled Cron: Audit Log Retention (30 Days) ──────────────────────────
+  app.post("/api/scheduled/cleanupAuditLogs", async (req, res) => {
+    try {
+      const user = await sdk.authenticateRequest(req);
+      if (!user.isCron) {
+        return res.status(403).json({ error: "Unauthorized cron execution" });
+      }
+      const { deleteOldAuditLogs } = await import("../db");
+      const result = await deleteOldAuditLogs(30);
+      return res.json({ ok: true, cleanedAt: new Date().toISOString(), result });
+    } catch (err: any) {
+      console.error("[Cron] cleanupAuditLogs failed:", err);
+      return res.status(500).json({
+        error: err.message,
+        stack: err.stack,
+        context: { url: req.originalUrl },
+        timestamp: new Date().toISOString(),
+      });
+    }
+  });
 
   // ── Local development — Vite dev server (not used on Railway) ─────────────
   if (process.env.NODE_ENV === "development") {

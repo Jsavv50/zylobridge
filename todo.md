@@ -443,3 +443,8 @@
 - [x] Fix logout / session clearing to properly remove local storage and invalidate cached session state
 - [x] Remove deprecated maxAge parameter from res.clearCookie across server codebase
 - [x] Run test suite, production build, and verification checks
+
+- [x] Implement session timeout warning and re-authentication toast in client
+- [x] Implement automated 30-day audit log retention cleanup procedure and scheduled endpoint
+- [x] Expand Playwright E2E tests for multi-account sign-in workflows
+- [x] Run test suite, production build, and verification checks

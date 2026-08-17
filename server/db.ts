@@ -1,5 +1,5 @@
-import { and, or, desc, asc, eq, like, gte, lte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
+import { and, or, desc, asc, eq, like, gte, lte, lt, sql } from "drizzle-orm";
 import {
   InsertUser,
   users,
@@ -804,6 +804,14 @@ export async function listAuditLogs(limit = 100) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(auditLogs).orderBy(desc(auditLogs.createdAt)).limit(limit);
+}
+
+export async function deleteOldAuditLogs(days = 30) {
+  const db = await getDb();
+  if (!db) return { deletedCount: 0 };
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const result = await db.delete(auditLogs).where(lt(auditLogs.createdAt, cutoff));
+  return { success: true, cutoff };
 }
 
 export async function getPlatformReportsData() {
