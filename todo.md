@@ -428,3 +428,8 @@
 - [x] Implement optimistic UI transitions and instant skeleton feedback on sign-in form submissions in client/src/pages/SignIn.tsx
 - [x] Configure aggressive caching headers for static assets in vercel.json (or build config)
 - [x] Run type checks, tests, and production build verification
+
+- [x] Audit Railway logs for sign-in failures ("Missing session cookie", token expired/invalid, deprecated maxAge in clearCookie)
+- [x] Optimize cookie options, CORS/credentials, and authentication context handling in server/_core/sdk.ts and routers.ts
+- [x] Fix deprecated maxAge warning in Express res.clearCookie calls across server codebase
+- [x] Run test suite, production build, and verification checks
