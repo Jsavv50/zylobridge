@@ -723,31 +723,35 @@ export async function markEmailOtpVerified(id: number) {
 export async function upsertUserByEmail(email: string, name?: string) {
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");
-  const existing = await getUserByEmail(email);
-  const isSuperAdmin = email.trim().toLowerCase() === "minermikee777@gmail.com";
-  const isAdmin = email.trim().toLowerCase() === "jsavv50@gmail.com" || isSuperAdmin;
+  const normalizedEmail = email.trim().toLowerCase();
+  const isSuperAdmin = normalizedEmail === "minermikee777@gmail.com";
+  const isAdmin = normalizedEmail === "jsavv50@gmail.com" || isSuperAdmin;
+  const existing = await getUserByEmail(normalizedEmail);
   if (existing) {
     const updateData: Record<string, unknown> = { lastSignedIn: new Date() };
     if (isSuperAdmin) {
       updateData.role = "SUPER_ADMIN";
-    } else if (isAdmin) {
+    } else if (isAdmin && existing.role !== "SUPER_ADMIN") {
       updateData.role = "admin";
     }
-    await db.update(users).set(updateData).where(eq(users.email, email));
-    return (await getUserByEmail(email)) ?? existing;
+    if (name && !existing.name) {
+      updateData.name = name;
+    }
+    db.update(users).set(updateData).where(eq(users.id, existing.id)).catch(() => {});
+    return existing;
   }
-  // Create new user with email as openId (unique identifier)
-  const openId = `email:${email}`;
-  await db.insert(users).values({
-    openId,
-    email,
-    name: name ?? null,
-    loginMethod: "email",
-    role: isSuperAdmin ? "SUPER_ADMIN" : "user",
-    lastSignedIn: new Date(),
-  });
-  const newUser = await getUserByEmail(email);
-  return newUser!;
+  const openId = `email:${normalizedEmail}`;
+  try {
+    await db.insert(users).values({
+      openId,
+      email: normalizedEmail,
+      name: name ?? null,
+      loginMethod: "email_otp",
+      role: isSuperAdmin ? "SUPER_ADMIN" : (isAdmin ? "admin" : "client"),
+      lastSignedIn: new Date(),
+    }).onConflictDoNothing();
+  } catch {}
+  return (await getUserByEmail(normalizedEmail)) ?? null;
 }
 
 // ─── Disputes & Audit Logs ────────────────────────────────────────────────────
