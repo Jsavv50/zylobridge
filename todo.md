@@ -472,3 +472,7 @@
 - [x] Verify Supabase rate limit configuration for email OTP
 - [x] Perform staging multi-account sign-in verification
 - [x] Run test suite, production build, and verification checks
+
+- [ ] Diagnose root causes of sign-in outage and upstream error / failed to fetch
+- [ ] Implement robust cookie, CORS, and auth route handling
+- [ ] Run test suite, production build, and verification checks
