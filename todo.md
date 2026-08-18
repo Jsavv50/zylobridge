@@ -495,3 +495,9 @@
 - [x] Verify Realtime token authentication bridge and client synchronization order
 - [x] Audit wider website routes and tRPC procedures for regressions
 - [x] Run full test suite, type checks, and clean production builds
+
+## Post-OTP Sign-In Failure Investigation
+- [ ] Investigate post-OTP verification session creation and Set-Cookie emission
+- [ ] Verify cross-site cookie attribute alignment (.zylobridge.com vs api.zylobridge.com)
+- [ ] Check frontend response handling and redirect behavior after verifyOtp success
+- [ ] Run test suite and production build verification

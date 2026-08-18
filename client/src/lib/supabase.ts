@@ -44,7 +44,8 @@ export function getSupabaseBrowserClient(): SupabaseClient {
  */
 async function fetchRealtimeToken(): Promise<{ token: string; expiresIn: number } | null> {
   try {
-    const res = await fetch("/api/realtime/token", {
+    const backendUrl = ((import.meta.env.VITE_API_URL as string | undefined) ?? "").replace(/\/$/, "");
+    const res = await fetch(`${backendUrl}/api/realtime/token`, {
       method: "GET",
       credentials: "include",
       headers: {
