@@ -503,7 +503,7 @@
 - [x] Run test suite and production build verification
 
 ## Final Production Recovery Task (pasted_content_5.txt)
-- [ ] Trace complete post-verification session, upsert, token signing, and cookie delivery
-- [ ] Verify single-flight protection for Google OAuth initiation and Email OTP
-- [ ] Ensure Realtime auth token requests only occur after session authentication
-- [ ] Verify clean builds, unit tests, and production server health
+- [x] Trace complete post-verification session, upsert, token signing, and cookie delivery
+- [x] Verify single-flight protection for Google OAuth initiation and Email OTP
+- [x] Ensure Realtime auth token requests only occur after session authentication
+- [x] Verify clean builds, unit tests, and production server health
