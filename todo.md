@@ -490,8 +490,8 @@
 - [x] Add timing instrumentation and regression tests for authentication request volume and latency
 
 ## Comprehensive Website & Authentication Troubleshooting Session
-- [ ] Investigate production login failure report across Google OAuth and Email OTP
-- [ ] Audit cookie domain, SameSite, and CORS configuration between Vercel and Railway
-- [ ] Verify Realtime token authentication bridge and client synchronization order
-- [ ] Audit wider website routes and tRPC procedures for regressions
-- [ ] Run full test suite, type checks, and clean production builds
+- [x] Investigate production login failure report across Google OAuth and Email OTP
+- [x] Audit cookie domain, SameSite, and CORS configuration between Vercel and Railway
+- [x] Verify Realtime token authentication bridge and client synchronization order
+- [x] Audit wider website routes and tRPC procedures for regressions
+- [x] Run full test suite, type checks, and clean production builds
