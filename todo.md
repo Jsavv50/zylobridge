@@ -512,3 +512,15 @@
 - [x] Capture POST /api/trpc/emailAuth.verifyOtp browser and Railway network logs
 - [x] Determine HTTP status, upstreamErrors, duration, and post-verifyOtp execution path
 - [x] Report exact first divergence between verifyOtp SUCCESS and browser error
+
+## Live Production Acceptance Test (Clean Browser)
+- [ ] Clean-browser Email OTP login tested and verified against live zylobridge.com
+- [ ] Clean-browser Google login tested and verified against live zylobridge.com
+- [ ] Clean-browser Logout tested and verified
+- [ ] Correlated Railway HTTP & application logs captured for all three actions
+
+## Google OAuth Production Troubleshooting
+- [ ] Inspect server/_core/googleAuth.ts for environment variable handling and redirect_uri construction
+- [ ] Check if process.env.GOOGLE_CLIENT_ID / SECRET are correctly mapped and fallbacks work
+- [ ] Verify token exchange and userinfo error handling in googleAuth.ts
+- [ ] Run test suite and production build after fix

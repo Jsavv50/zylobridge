@@ -111,7 +111,7 @@ export default function SignIn() {
     },
   });
 
-  // ── Phone OTP mutations ────────────────────────────────────────────────    const sendPhoneOtp = trpc.phoneAuth.sendOtp.useMutation({
+  // ── Phone OTP mutations ────────────────────────────────────────────────
   const sendPhoneOtp = trpc.phoneAuth.sendOtp.useMutation({
     onSuccess: () => {
       toast.success("OTP sent! Check your SMS messages.");

@@ -62,8 +62,9 @@ function getCallbackUrl(): string {
 
 function buildGoogleAuthUrl(state: string): string {
   const callbackUrl = getCallbackUrl();
+  const clientId = ENV.googleClientId || process.env.GOOGLE_CLIENT_ID || "";
   const params = new URLSearchParams({
-    client_id: ENV.googleClientId,
+    client_id: clientId,
     redirect_uri: callbackUrl,
     response_type: "code",
     scope: "openid email profile",
@@ -86,13 +87,15 @@ async function exchangeCodeForTokens(code: string, oauthRequestId: string): Prom
   const timeout = setTimeout(() => controller.abort(), 10000);
 
   try {
+    const clientId = ENV.googleClientId || process.env.GOOGLE_CLIENT_ID || "";
+    const clientSecret = ENV.googleClientSecret || process.env.GOOGLE_CLIENT_SECRET || "";
     const res = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         code,
-        client_id: ENV.googleClientId,
-        client_secret: ENV.googleClientSecret,
+        client_id: clientId,
+        client_secret: clientSecret,
         redirect_uri: callbackUrl,
         grant_type: "authorization_code",
       }).toString(),
@@ -155,7 +158,10 @@ export function registerGoogleAuthRoutes(app: Express) {
     const oauthRequestId = crypto.randomBytes(4).toString("hex").toUpperCase();
     console.log(`[GoogleAuth] [${oauthRequestId}] OAuth initiation requested`);
 
-    if (!ENV.googleClientId || !ENV.googleClientSecret) {
+    const clientId = ENV.googleClientId || process.env.GOOGLE_CLIENT_ID || "";
+    const clientSecret = ENV.googleClientSecret || process.env.GOOGLE_CLIENT_SECRET || "";
+    if (!clientId || !clientSecret) {
+      console.error("[GoogleAuth] GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is missing");
       res.status(503).json({ error: "Google OAuth is not configured." });
       return;
     }
