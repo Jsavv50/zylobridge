@@ -524,3 +524,37 @@
 - [ ] Check if process.env.GOOGLE_CLIENT_ID / SECRET are correctly mapped and fallbacks work
 - [ ] Verify token exchange and userinfo error handling in googleAuth.ts
 - [ ] Run test suite and production build after fix
+
+## Phase 50: Attached Production Session-Handoff Remediation
+- [x] Inspect attached production session-handoff requirements against the current Zylobridge architecture
+- [x] Audit production cookie attributes, CORS, proxy trust, and frontend credentials behavior
+- [x] Centralize frontend authentication initialization and authenticated user state
+- [x] Replace hard post-login and logout reloads with SPA navigation and state transitions
+- [x] Gate Supabase Realtime initialization on confirmed authentication
+- [x] Isolate analytics initialization from authentication and dashboard loading
+- [x] Add regression coverage for session handoff, auth state lifecycle, logout, and Realtime gating
+- [ ] Run TypeScript checks, tests, client/server production builds, and live browser acceptance checks
+- [ ] Save a verified production checkpoint and report implementation results
+
+### Live acceptance requirements
+- [ ] Fresh production Email OTP login stores app_session_id and sends it on auth.me
+- [ ] Fresh production Google OAuth login stores app_session_id and reaches the dashboard
+- [ ] Fresh production logout clears the session and does not trigger an authentication retry loop
+- [ ] Railway logs for live authentication contain no upstream, invalid-session, or duplicate-dispatch regressions
+
+## Phase 51: Live Sign-In Failure Reopened
+- [ ] Capture the first failing production sign-in request and exact browser response
+- [ ] Correlate the failure with Railway HTTP/application logs and deployment state
+- [ ] Trace the failure through API URL, credentials, cookie handoff, auth.me, OTP, and Google OAuth paths
+- [ ] Apply only the evidence-based production fix; do not make speculative auth changes
+- [ ] Add or update regression coverage for the identified failure
+- [ ] Re-run TypeScript, tests, client/server builds, and live browser acceptance
+- [ ] Save a checkpoint only after live acceptance succeeds
+
+## Phase 52: Production Sign-In Fix Requested
+- [ ] Confirm the first failing authentication request and separate stale OTP rejection from production latency
+- [ ] Identify whether OTP verification is blocked by Supabase/Auth/database/session work
+- [ ] Identify whether Google OAuth fails at initiation, callback, user lookup, cookie handoff, or frontend auth bootstrap
+- [ ] Implement the smallest evidence-based fix for the confirmed production failure
+- [ ] Add regression coverage for the confirmed failure and session handoff
+- [ ] Re-run live Email OTP and Google acceptance before declaring completion

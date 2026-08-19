@@ -20,15 +20,15 @@ const LOGO_URL = "/ZYLO.png";
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user, isAuthenticated, logout } = useAuth();
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
 
-  const { mutate: doLogout, isPending: isLoggingOut } = trpc.auth.logout.useMutation({
-    onSettled: () => {
-      logout().finally(() => {
-        window.location.href = "/";
-      });
-    },
-  });
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } finally {
+      navigate("/");
+    }
+  };
 
   const isAdmin = user?.role === "admin" || user?.role === "SUPER_ADMIN";
   const isClient = user?.userType === "client";
@@ -192,7 +192,7 @@ export default function Navbar() {
                     </DropdownMenuItem>
                     <DropdownMenuSeparator className="bg-white/10" />
                     <DropdownMenuItem
-                      onClick={() => doLogout()}
+                      onClick={() => void handleLogout()}
                       className="text-red-400 hover:text-red-300 cursor-pointer"
                     >
                       Sign Out
@@ -294,7 +294,7 @@ export default function Navbar() {
                   variant="ghost"
                   size="sm"
                   className="w-full text-red-400 hover:text-red-300"
-                  onClick={() => { doLogout(); setMobileOpen(false); }}
+                  onClick={() => { void handleLogout(); setMobileOpen(false); }}
                 >
                   Sign Out
                 </Button>

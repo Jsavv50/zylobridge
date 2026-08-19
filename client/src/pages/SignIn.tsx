@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { getLoginUrl } from "@/const";
 
 // Railway backend base URL — must be set in Vercel env vars as VITE_API_URL
 const API_URL = ((import.meta.env.VITE_API_URL as string | undefined) ?? "").replace(/\/$/, "");
@@ -29,7 +28,7 @@ type NameCaptureFor = "email" | "phone";
 
 export default function SignIn() {
   const [, navigate] = useLocation();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, refresh } = useAuth();
 
   const [method, setMethod] = useState<AuthMethod>("choose");
   const [nameCaptureFor, setNameCaptureFor] = useState<NameCaptureFor>("email");
@@ -56,6 +55,22 @@ export default function SignIn() {
   useEffect(() => {
     if (isAuthenticated) navigate("/");
   }, [isAuthenticated, navigate]);
+
+  /**
+   * Complete the login handoff only after the backend accepts the new cookie.
+   * The refresh request is proof that auth.me can resolve the session;
+   * navigation stays inside the SPA and does not force a document reload.
+   */
+  const finishAuthentication = async (message: string) => {
+    const authenticatedUser = await refresh();
+    if (!authenticatedUser) {
+      toast.error("Your session could not be established. Please try again.");
+      return false;
+    }
+    toast.success(message);
+    navigate("/");
+    return true;
+  };
 
   // Countdown timer
   useEffect(() => {
@@ -89,15 +104,14 @@ export default function SignIn() {
 
   const verifyEmailOtp = trpc.emailAuth.verifyOtp.useMutation({
     retry: false,
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       if (data.success) {
         if (data.user?.id) setVerifiedUserId(data.user.id);
         if (!name && !data.user?.name) {
           setNameCaptureFor("email");
           setMethod("name_capture");
         } else {
-          toast.success("Welcome to ZYLOBRIDGE!");
-          window.location.href = "/";
+          await finishAuthentication("Welcome to ZYLOBRIDGE!");
         }
       }
     },
@@ -123,15 +137,14 @@ export default function SignIn() {
 
   const verifyPhoneOtp = trpc.phoneAuth.verifyOtp.useMutation({
     retry: false,
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       if (data.success) {
         if (data.user?.id) setVerifiedUserId(data.user.id);
         if (!name && !data.user?.name) {
           setNameCaptureFor("phone");
           setMethod("name_capture");
         } else {
-          toast.success("Welcome to ZYLOBRIDGE!");
-          window.location.href = "/";
+          await finishAuthentication("Welcome to ZYLOBRIDGE!");
         }
       }
     },
@@ -145,17 +158,15 @@ export default function SignIn() {
   });
 
   const completeEmailName = trpc.emailAuth.completeName.useMutation({
-    onSuccess: () => {
-      toast.success("Account set up successfully!");
-      window.location.href = "/";
+    onSuccess: async () => {
+      await finishAuthentication("Account set up successfully!");
     },
     onError: (err: any) => toast.error(err.message),
   });
 
   const completePhoneName = trpc.phoneAuth.completeName.useMutation({
-    onSuccess: () => {
-      toast.success("Account set up successfully!");
-      window.location.href = "/";
+    onSuccess: async () => {
+      await finishAuthentication("Account set up successfully!");
     },
     onError: (err: any) => toast.error(err.message),
   });

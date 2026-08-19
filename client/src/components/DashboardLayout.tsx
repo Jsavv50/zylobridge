@@ -19,11 +19,10 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import { LayoutDashboard, LogOut, PanelLeft, Users } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 
@@ -68,15 +67,14 @@ export default function DashboardLayout({
               Access to this dashboard requires authentication. Continue to launch the login flow.
             </p>
           </div>
-          <Button
-            onClick={() => {
-              window.location.href = getLoginUrl();
-            }}
-            size="lg"
-            className="w-full shadow-lg hover:shadow-xl transition-all"
-          >
-            Sign in
-          </Button>
+          <Link href="/sign-in" className="w-full">
+            <Button
+              size="lg"
+              className="w-full shadow-lg hover:shadow-xl transition-all"
+            >
+              Sign in
+            </Button>
+          </Link>
         </div>
       </div>
     );

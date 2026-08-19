@@ -79,6 +79,22 @@ async function fetchRealtimeToken(): Promise<{ token: string; expiresIn: number 
  * Single-flight guard prevents duplicate concurrent token requests.
  * Sets auth and schedules automatic token refresh before expiration.
  */
+/**
+ * Disconnect all browser Realtime channels during logout.
+ * This does not touch the application session cookie; the server logout
+ * procedure remains the authority for invalidating that session.
+ */
+export function disconnectSupabaseRealtime(): void {
+  if (refreshTimer) {
+    window.clearTimeout(refreshTimer);
+    refreshTimer = null;
+  }
+  if (clientInstance) {
+    void clientInstance.removeAllChannels();
+  }
+  activeAuthPromise = null;
+}
+
 export async function initSupabaseRealtimeAuth(): Promise<boolean> {
   if (activeAuthPromise) {
     return activeAuthPromise;
