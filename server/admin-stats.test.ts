@@ -2,12 +2,15 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const dbSource = readFileSync(new URL("./db.ts", import.meta.url), "utf8");
-const adminStatsSource = dbSource.slice(dbSource.indexOf("export async function getAdminStats()"), dbSource.indexOf("// ─── Conversations & Messages"));
+const adminStatsSource = dbSource.slice(dbSource.indexOf("// ─── Admin Stats"), dbSource.indexOf("// ─── Conversations & Messages"));
 
 describe("Admin Dashboard statistics query contract", () => {
   it("uses bounded PostgreSQL aggregates instead of loading entire tables", () => {
-    expect(adminStatsSource).toContain("count(*) filter");
+    expect(adminStatsSource).toContain("count(*) FILTER");
     expect(adminStatsSource).toContain("coalesce(sum");
+    expect(adminStatsSource).toContain("db.execute(sql");
+    expect(adminStatsSource).toContain("ADMIN_STATS_TIMEOUT_MS");
+    expect(adminStatsSource).toContain("adminStatsCache");
     expect(adminStatsSource).not.toContain("db.select({ role: users.role, userType: users.userType }).from(users)");
     expect(adminStatsSource).not.toContain("db.select({ status: jobs.status }).from(jobs)");
     expect(adminStatsSource).not.toContain("db.select({ status: applications.status }).from(applications)");

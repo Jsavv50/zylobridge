@@ -574,3 +574,11 @@
 - [x] Add regression coverage for admin stats query shape and response fields
 - [x] Re-run TypeScript, tests, and production builds
 - [ ] Publish and verify logout and live Email OTP after the query optimization
+
+## Phase 55: Single-Roundtrip Admin Stats and Production DB Recovery
+- [x] Consolidate admin stats into one PostgreSQL round trip because aggregate queries still exceed the live request budget on the transaction pooler
+- [x] Add a bounded query timeout/fallback so admin overview cannot hold authenticated requests indefinitely
+- [x] Re-run TypeScript, targeted tests, full tests, and production builds
+- [ ] Publish the follow-up and verify Railway network logs show a fast admin.stats response
+- [ ] Re-run clean-browser Email OTP, Google OAuth, logout, and SUPER_ADMIN acceptance
+- [ ] Verify the Railway PostgreSQL oauth_transactions migration against the actual production database or document the remaining operator-only step
