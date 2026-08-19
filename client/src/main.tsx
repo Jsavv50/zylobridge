@@ -22,7 +22,8 @@ const queryClient = new QueryClient({
  * e.g. https://zylobridge.up.railway.app
  * Falls back to empty string for same-origin requests (local development).
  */
-const API_URL = ((import.meta.env.VITE_API_URL as string | undefined) ?? "").replace(/\/$/, "");
+const configuredApiUrl = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
+const API_URL = (configuredApiUrl || (import.meta.env.PROD ? "https://api.zylobridge.com" : "")).replace(/\/$/, "");
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;

@@ -558,3 +558,12 @@
 - [x] Implement the smallest evidence-based fix for the confirmed production failure
 - [x] Add regression coverage for the confirmed failure and session handoff
 - [ ] Re-run live Email OTP and Google acceptance before declaring completion
+
+## Phase 53: Vercel API-Origin Fallback
+- [x] Confirm Vercel `/api/trpc/auth.me` was serving `index.html` instead of proxying to Railway
+- [x] Confirm direct Railway `auth.me` returned the authenticated Google user while the app remained unauthenticated
+- [x] Add production fallback to `https://api.zylobridge.com` when `VITE_API_URL` is absent
+- [x] Add regression coverage for the production API fallback and credentials mode
+- [x] Run TypeScript check, 110-test suite, and client/server production build
+- [ ] Publish the fallback to Vercel and synchronize the backend source with Railway
+- [ ] Re-run live Google login, role dashboard routing, logout, and Email OTP acceptance
