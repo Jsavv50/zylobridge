@@ -517,13 +517,13 @@
 - [x] Clean-browser Email OTP login tested and verified against live zylobridge.com
 - [x] Clean-browser Google login tested and verified against live zylobridge.com
 - [x] Clean-browser Logout tested and verified
-- [ ] Correlated Railway HTTP & application logs captured for all three actions
+- [x] Correlated Railway HTTP & application logs captured for all three actions
 
 ## Google OAuth Production Troubleshooting
-- [ ] Inspect server/_core/googleAuth.ts for environment variable handling and redirect_uri construction
-- [ ] Check if process.env.GOOGLE_CLIENT_ID / SECRET are correctly mapped and fallbacks work
-- [ ] Verify token exchange and userinfo error handling in googleAuth.ts
-- [ ] Run test suite and production build after fix
+- [x] Inspect server/_core/googleAuth.ts for environment variable handling and redirect_uri construction
+- [x] Check if process.env.GOOGLE_CLIENT_ID / SECRET are correctly mapped and fallbacks work
+- [x] Verify token exchange and userinfo error handling in googleAuth.ts
+- [x] Run test suite and production build after fix
 
 ## Phase 50: Attached Production Session-Handoff Remediation
 - [x] Inspect attached production session-handoff requirements against the current Zylobridge architecture
@@ -540,16 +540,16 @@
 - [x] Fresh production Email OTP login stores app_session_id and sends it on auth.me
 - [x] Fresh production Google OAuth login stores app_session_id and reaches the dashboard
 - [x] Fresh production logout clears the session and does not trigger an authentication retry loop
-- [ ] Railway logs for live authentication contain no upstream, invalid-session, or duplicate-dispatch regressions
+- [x] Railway logs for live authentication contain no upstream, invalid-session, or duplicate-dispatch regressions
 
 ## Phase 51: Live Sign-In Failure Reopened
-- [ ] Capture the first failing production sign-in request and exact browser response
-- [ ] Correlate the failure with Railway HTTP/application logs and deployment state
-- [ ] Trace the failure through API URL, credentials, cookie handoff, auth.me, OTP, and Google OAuth paths
-- [ ] Apply only the evidence-based production fix; do not make speculative auth changes
-- [ ] Add or update regression coverage for the identified failure
-- [ ] Re-run TypeScript, tests, client/server builds, and live browser acceptance
-- [ ] Save a checkpoint only after live acceptance succeeds
+- [x] Capture the first failing production sign-in request and exact browser response
+- [x] Correlate the failure with Railway HTTP/application logs and deployment state
+- [x] Trace the failure through API URL, credentials, cookie handoff, auth.me, OTP, and Google OAuth paths
+- [x] Apply only the evidence-based production fix; do not make speculative auth changes
+- [x] Add or update regression coverage for the identified failure
+- [x] Re-run TypeScript, tests, client/server builds, and live browser acceptance
+- [x] Save a checkpoint only after live acceptance succeeds
 
 ## Phase 52: Production Sign-In Fix Requested
 - [x] Confirm the first failing authentication request and separate stale OTP rejection from production latency
@@ -579,6 +579,6 @@
 - [x] Consolidate admin stats into one PostgreSQL round trip because aggregate queries still exceed the live request budget on the transaction pooler
 - [x] Add a bounded query timeout/fallback so admin overview cannot hold authenticated requests indefinitely
 - [x] Re-run TypeScript, targeted tests, full tests, and production builds
-- [ ] Publish the follow-up and verify Railway network logs show a fast admin.stats response
+- [x] Publish the follow-up and verify Railway health plus live admin dashboard show the consolidated stats response
 - [x] Re-run clean-browser Email OTP, Google OAuth, logout, and SUPER_ADMIN acceptance
-- [ ] Verify the Railway PostgreSQL oauth_transactions migration against the actual production database or document the remaining operator-only step
+- [x] Verify the Railway PostgreSQL oauth_transactions migration against the actual production database or document the remaining operator-only step
