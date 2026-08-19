@@ -507,3 +507,8 @@
 - [x] Verify single-flight protection for Google OAuth initiation and Email OTP
 - [x] Ensure Realtime auth token requests only occur after session authentication
 - [x] Verify clean builds, unit tests, and production server health
+
+## Exact Request Trace (verifyOtp)
+- [x] Capture POST /api/trpc/emailAuth.verifyOtp browser and Railway network logs
+- [x] Determine HTTP status, upstreamErrors, duration, and post-verifyOtp execution path
+- [x] Report exact first divergence between verifyOtp SUCCESS and browser error
