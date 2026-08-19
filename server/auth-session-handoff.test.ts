@@ -64,6 +64,15 @@ describe("production auth session handoff architecture", () => {
     expect(supabase).toContain("disconnectSupabaseRealtime");
   });
 
+  it("keeps Google OAuth initiation independent of optional database storage latency", () => {
+    const googleAuth = readProjectFile("server/_core/googleAuth.ts");
+
+    expect(googleAuth).toContain("OAUTH_STORAGE_TIMEOUT_MS");
+    expect(googleAuth).toContain("withTimeout(db.getDb()");
+    expect(googleAuth).toContain("continuing with signed stateless OAuth state");
+    expect(googleAuth).not.toContain("Database connection unavailable for oauth_transactions persistence");
+  });
+
   it("contains no unresolved analytics endpoint placeholder", () => {
     const html = readProjectFile("client/index.html");
     expect(html).not.toContain("%VITE_ANALYTICS_ENDPOINT%");
