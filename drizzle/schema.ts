@@ -81,6 +81,9 @@ export const profiles = pgTable("profiles", {
   averageRating: numeric("averageRating", { precision: 3, scale: 2 }).default("0.00"),
   totalReviews: integer("totalReviews").default(0).notNull(),
   isAvailable: boolean("isAvailable").default(true).notNull(),
+  latitude: numeric("latitude", { precision: 10, scale: 8 }),
+  longitude: numeric("longitude", { precision: 11, scale: 8 }),
+  serviceRadiusKm: integer("serviceRadiusKm").default(50),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 }, (table) => ({
@@ -105,6 +108,9 @@ export const jobs = pgTable("jobs", {
   organizationId: integer("organizationId"),
   projectId: integer("projectId"),
   isUrgent: boolean("isUrgent").default(false).notNull(),
+  latitude: numeric("latitude", { precision: 10, scale: 8 }),
+  longitude: numeric("longitude", { precision: 11, scale: 8 }),
+  serviceRadiusKm: integer("serviceRadiusKm").default(50),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 }, (table) => ({
@@ -608,3 +614,67 @@ export const engagements = pgTable("engagements", {
 }));
 export type Engagement = typeof engagements.$inferSelect;
 export type InsertEngagement = typeof engagements.$inferInsert;
+
+
+// ─── Phase 4 Marketplace Intelligence & Communication Extensions ──────────────
+export const notificationPreferences = pgTable("notification_preferences", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull().unique(),
+  emailEnabled: boolean("emailEnabled").default(true).notNull(),
+  marketingEnabled: boolean("marketingEnabled").default(false).notNull(),
+  marketplaceEvents: boolean("marketplaceEvents").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+}, (table) => ({
+  userIdx: index("notification_preferences_user_idx").on(table.userId),
+}));
+export type NotificationPreference = typeof notificationPreferences.$inferSelect;
+export type InsertNotificationPreference = typeof notificationPreferences.$inferInsert;
+
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  content: text("content").notNull(),
+  category: varchar("category", { length: 64 }).default("system").notNull(),
+  referenceType: varchar("referenceType", { length: 64 }),
+  referenceId: varchar("referenceId", { length: 64 }),
+  isRead: boolean("isRead").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  userUnreadIdx: index("notifications_user_unread_idx").on(table.userId, table.isRead, table.createdAt),
+}));
+export type NotificationItem = typeof notifications.$inferSelect;
+export type InsertNotificationItem = typeof notifications.$inferInsert;
+
+export const reminders = pgTable("reminders", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  entityType: varchar("entityType", { length: 64 }).notNull(),
+  entityId: varchar("entityId", { length: 64 }).notNull(),
+  reminderType: varchar("reminderType", { length: 64 }).notNull(),
+  scheduledFor: timestamp("scheduledFor").notNull(),
+  isSent: boolean("isSent").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  scheduledIdx: index("reminders_scheduled_idx").on(table.isSent, table.scheduledFor),
+  uniqueUserEntity: uniqueIndex("reminders_unique_user_entity_type").on(table.userId, table.entityType, table.entityId, table.reminderType),
+}));
+export type Reminder = typeof reminders.$inferSelect;
+export type InsertReminder = typeof reminders.$inferInsert;
+
+export const matchingScores = pgTable("matching_scores", {
+  id: serial("id").primaryKey(),
+  jobId: integer("jobId").notNull(),
+  professionalId: integer("professionalId").notNull(),
+  structuredScore: numeric("structuredScore", { precision: 5, scale: 2 }).notNull(),
+  semanticScore: numeric("semanticScore", { precision: 5, scale: 2 }),
+  finalScore: numeric("finalScore", { precision: 5, scale: 2 }).notNull(),
+  explanation: text("explanation"),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+}, (table) => ({
+  jobProfUnique: uniqueIndex("matching_scores_job_prof_unique").on(table.jobId, table.professionalId),
+  jobScoreIdx: index("matching_scores_job_score_idx").on(table.jobId, table.finalScore),
+}));
+export type MatchingScore = typeof matchingScores.$inferSelect;
+export type InsertMatchingScore = typeof matchingScores.$inferInsert;

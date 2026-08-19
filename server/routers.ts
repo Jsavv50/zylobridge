@@ -113,6 +113,7 @@ import {
   generatePaystackReference,
 } from "./paystack";
 import { maskPhoneNumber, normalizePhoneNumber, sendPhoneOtpSms, SmsDeliveryError } from "./sms";
+import { getUserNotificationPreference, createInAppNotification, getUnreadNotifications, markNotificationRead, generateIcsContent, executeMatchingV2 } from "./phase4";
 import {
   acceptOrganizationInvitation,
   canInviteOrganizationMembers,
@@ -1462,6 +1463,35 @@ export const appRouter = router({
     listEngagements: protectedProcedure
       .input(z.object({ role: z.enum(["employer", "professional"]) }))
       .query(async ({ ctx, input }) => getEngagementsByUserId(ctx.user.id, input.role)),
+
+    matchCandidateV2: protectedProcedure
+      .input(z.object({ jobId: z.number().int().positive(), professionalId: z.number().int().positive() }))
+      .query(async ({ input }) => executeMatchingV2(input.jobId, input.professionalId)),
+
+    generateInterviewIcs: protectedProcedure
+      .input(z.object({ title: z.string(), description: z.string(), scheduledAt: z.string().transform(v => new Date(v)), durationMinutes: z.number().optional().default(60), location: z.string().optional() }))
+      .query(async ({ input }) => {
+        const start = input.scheduledAt;
+        const end = new Date(start.getTime() + input.durationMinutes * 60000);
+        const ics = generateIcsContent({
+          title: input.title,
+          description: input.description,
+          start,
+          end,
+          location: input.location,
+          organizer: "Zylobridge Marketplace <noreply@zylobridge.com>",
+        });
+        return { icsContent: ics };
+      }),
+  }),
+  notifications: router({
+    listUnread: protectedProcedure
+      .query(async ({ ctx }) => getUnreadNotifications(ctx.user.id)),
+    markRead: protectedProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => markNotificationRead(input.id, ctx.user.id)),
+    preferences: protectedProcedure
+      .query(async ({ ctx }) => getUserNotificationPreference(ctx.user.id)),
   }),
 });
 
