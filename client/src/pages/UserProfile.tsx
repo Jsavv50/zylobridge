@@ -190,23 +190,19 @@ function QuickActionCard({
 
 export default function UserProfile() {
   const [, navigate] = useLocation();
-  const { user, loading, isAuthenticated, logout } = useAuth({
+  const { user, loading, isLoggingOut, isAuthenticated, logout } = useAuth({
     redirectOnUnauthenticated: true,
     redirectPath: "/sign-in",
   });
 
-  const logoutMutation = trpc.auth.logout.useMutation({
-    onSuccess: () => {
-      navigate("/");
+  const handleSignOut = async () => {
+    try {
+      await logout();
       toast.success("You have been signed out.");
-    },
-    onError: () => {
+      navigate("/");
+    } catch {
       toast.error("Sign out failed. Please try again.");
-    },
-  });
-
-  const handleSignOut = () => {
-    logoutMutation.mutate();
+    }
   };
 
   // ── Loading state ──────────────────────────────────────────────────────────
@@ -331,10 +327,10 @@ export default function UserProfile() {
                     size="sm"
                     className="border-red-500/20 text-red-400 hover:text-red-300 hover:border-red-500/40 bg-transparent gap-1.5"
                     onClick={handleSignOut}
-                    disabled={logoutMutation.isPending}
+                    disabled={isLoggingOut}
                   >
                     <LogOut className="h-3.5 w-3.5" />
-                    {logoutMutation.isPending ? "Signing out…" : "Sign Out"}
+                    {isLoggingOut ? "Signing out…" : "Sign Out"}
                   </Button>
                 </div>
               </div>
@@ -599,10 +595,10 @@ export default function UserProfile() {
                 variant="outline"
                 className="w-full border-red-500/20 text-red-400 hover:text-red-300 hover:border-red-500/40 bg-transparent gap-2"
                 onClick={handleSignOut}
-                disabled={logoutMutation.isPending}
+                disabled={isLoggingOut}
               >
                 <LogOut className="h-4 w-4" />
-                {logoutMutation.isPending ? "Signing out…" : "Sign Out"}
+                {isLoggingOut ? "Signing out…" : "Sign Out"}
               </Button>
             </div>
           </div>

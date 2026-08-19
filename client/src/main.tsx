@@ -5,7 +5,6 @@ import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
-import { getLoginUrl } from "./const";
 import "./index.css";
 
 // Disable automatic retries for mutations globally.
@@ -33,7 +32,12 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
 
   if (!isUnauthorized) return;
 
-  window.location.href = getLoginUrl();
+  // Do not redirect if already on sign-in or public landing/auth pages to prevent redirect loops / lag
+  const path = window.location.pathname;
+  if (path.startsWith("/sign-in") || path.startsWith("/login") || path === "/") return;
+
+  window.history.pushState({}, "", "/sign-in");
+  window.dispatchEvent(new PopStateEvent("popstate"));
 };
 
 queryClient.getQueryCache().subscribe(event => {

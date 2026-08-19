@@ -86,24 +86,31 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   const existingByEmail = normalizedEmail ? await getUserByEmail(normalizedEmail) : undefined;
 
   if (existingByEmail && existingByOpenId && existingByEmail.id !== existingByOpenId.id) {
-    // Collision case: openId belongs to one user, email belongs to another.
-    // If one of them is the canonical super admin, or to prevent unique constraint violation:
-    // We clear or transfer openId from the conflicting record or merge safely.
+    // Collision case: the Google identity is attached to one local row while
+    // the email belongs to another. This can happen after an earlier OAuth
+    // account merge or when an account was first created by Email OTP.
+    // Always detach the stale identity before attaching it to the email owner;
+    // otherwise PostgreSQL raises users_openId_key and Google sign-in fails.
+    const updateData: Record<string, unknown> = {
+      openId: user.openId,
+      lastSignedIn: user.lastSignedIn ?? new Date(),
+    };
+    if (user.name !== undefined) updateData.name = user.name ?? null;
+    if (user.loginMethod !== undefined) updateData.loginMethod = user.loginMethod ?? null;
     if (isSuperAdmin) {
-      // Force email match (canonical super admin) to take openId and role SUPER_ADMIN
-      const updateData: Record<string, unknown> = {
-        openId: user.openId,
-        lastSignedIn: user.lastSignedIn ?? new Date(),
-        role: "SUPER_ADMIN",
-      };
-      if (user.name !== undefined) updateData.name = user.name ?? null;
-      if (user.loginMethod !== undefined) updateData.loginMethod = user.loginMethod ?? null;
-      
-      // Clear conflicting openId from existingByOpenId to avoid 23505
-      await db.update(users).set({ openId: `detached_${Date.now()}_${existingByOpenId.id}` }).where(eq(users.id, existingByOpenId.id));
-      await db.update(users).set(updateData).where(eq(users.id, existingByEmail.id));
-      return;
+      updateData.role = "SUPER_ADMIN";
+    } else if (isAdmin) {
+      updateData.role = "admin";
     }
+
+    const detachedOpenId = `detached_${Date.now()}_${existingByOpenId.id}`;
+    await db.update(users)
+      .set({ openId: detachedOpenId })
+      .where(eq(users.id, existingByOpenId.id));
+    await db.update(users)
+      .set(updateData)
+      .where(eq(users.id, existingByEmail.id));
+    return;
   }
 
   if (existingByEmail) {
@@ -438,6 +445,8 @@ export async function getAdminStats() {
     pendingVerificationCount,
   };
 }
+
+
 
 // ─── Conversations & Messages ─────────────────────────────────────────────────
 export async function getOrCreateConversation(jobId: number, clientId: number, professionalId: number) {

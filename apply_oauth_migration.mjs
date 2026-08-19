@@ -1,5 +1,5 @@
-import postgres from "postgres";
 import fs from "fs";
+import postgres from "postgres";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {

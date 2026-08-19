@@ -453,3 +453,108 @@
 - [x] Configure Sentry error monitoring instrumentation in server and client
 - [x] Create weekly staging smoke test script and schedule configuration
 - [x] Run test suite, production build, and verification checks
+
+- [x] Create GitHub Actions workflow file for weekly Playwright smoke test execution
+- [x] Configure Sentry DSN environment handling in server and client
+- [x] Register audit log retention cron job via manus-heartbeat CLI
+- [x] Run test suite, production build, and verification checks
+
+- [x] Fix OAuth oauth_transactions missing table fallback and upstream errors
+- [x] Fix email OTP "Failed to fetch" and token expiration handling
+- [x] Run test suite, production build, and verification checks
+
+- [x] Verify production database connection and oauth_transactions migration status
+- [x] Review OTP rate limiting and error handling for email verification
+- [x] Perform Playwright staging smoke test verifying sign-in workflows
+- [x] Run test suite, production build, and verification checks
+
+- [x] Verify live database connection and execute oauth_transactions migration if needed
+- [x] Verify Supabase rate limit configuration for email OTP
+- [x] Perform staging multi-account sign-in verification
+- [x] Run test suite, production build, and verification checks
+
+- [x] Diagnose root causes of sign-in outage and upstream error / failed to fetch
+- [x] Implement robust cookie, CORS, and auth route handling
+- [x] Run test suite, production build, and verification checks
+
+## Recovery Sequence Tracking (August 2026)
+- [x] 1. Verify production frontend API origin and credentials mode
+- [x] 2. Trace OTP verification response cookies and subsequent auth.me request
+- [x] 3. Validate production CORS, cookie domain/SameSite/Secure settings, and Railway runtime configuration
+- [x] 4. Verify live Railway database target and oauth_transactions table, then test Google OAuth callback
+- [x] 5. Apply minimal confirmed fix, run validation, and verify live sign-in flow
+- [x] Implement frontend auth error subscription guards to eliminate sign-in lag and redirect loops on unauthenticated pages
+- [x] Implement single-flight concurrency guards for email/phone OTP dispatch and Google OAuth initiation
+- [x] Optimize frontend auth state initialization to avoid duplicate background request waterfalls
+- [x] Streamline logout transition to immediate client-state invalidation
+- [x] Add timing instrumentation and regression tests for authentication request volume and latency
+
+## Comprehensive Website & Authentication Troubleshooting Session
+- [x] Investigate production login failure report across Google OAuth and Email OTP
+- [x] Audit cookie domain, SameSite, and CORS configuration between Vercel and Railway
+- [x] Verify Realtime token authentication bridge and client synchronization order
+- [x] Audit wider website routes and tRPC procedures for regressions
+- [x] Run full test suite, type checks, and clean production builds
+
+## Post-OTP Sign-In Failure Investigation
+- [x] Investigate post-OTP verification session creation and Set-Cookie emission
+- [x] Verify cross-site cookie attribute alignment (.zylobridge.com vs api.zylobridge.com)
+- [x] Check frontend response handling and redirect behavior after verifyOtp success
+- [x] Run test suite and production build verification
+
+## Final Production Recovery Task (pasted_content_5.txt)
+- [x] Trace complete post-verification session, upsert, token signing, and cookie delivery
+- [x] Verify single-flight protection for Google OAuth initiation and Email OTP
+- [x] Ensure Realtime auth token requests only occur after session authentication
+- [x] Verify clean builds, unit tests, and production server health
+
+## Exact Request Trace (verifyOtp)
+- [x] Capture POST /api/trpc/emailAuth.verifyOtp browser and Railway network logs
+- [x] Determine HTTP status, upstreamErrors, duration, and post-verifyOtp execution path
+- [x] Report exact first divergence between verifyOtp SUCCESS and browser error
+
+## Live Production Acceptance Test (Clean Browser)
+- [ ] Clean-browser Email OTP login tested and verified against live zylobridge.com
+- [ ] Clean-browser Google login tested and verified against live zylobridge.com
+- [ ] Clean-browser Logout tested and verified
+- [ ] Correlated Railway HTTP & application logs captured for all three actions
+
+## Google OAuth Production Troubleshooting
+- [ ] Inspect server/_core/googleAuth.ts for environment variable handling and redirect_uri construction
+- [ ] Check if process.env.GOOGLE_CLIENT_ID / SECRET are correctly mapped and fallbacks work
+- [ ] Verify token exchange and userinfo error handling in googleAuth.ts
+- [ ] Run test suite and production build after fix
+
+## Phase 50: Attached Production Session-Handoff Remediation
+- [x] Inspect attached production session-handoff requirements against the current Zylobridge architecture
+- [x] Audit production cookie attributes, CORS, proxy trust, and frontend credentials behavior
+- [x] Centralize frontend authentication initialization and authenticated user state
+- [x] Replace hard post-login and logout reloads with SPA navigation and state transitions
+- [x] Gate Supabase Realtime initialization on confirmed authentication
+- [x] Isolate analytics initialization from authentication and dashboard loading
+- [x] Add regression coverage for session handoff, auth state lifecycle, logout, and Realtime gating
+- [ ] Run TypeScript checks, tests, client/server production builds, and live browser acceptance checks
+- [ ] Save a verified production checkpoint and report implementation results
+
+### Live acceptance requirements
+- [ ] Fresh production Email OTP login stores app_session_id and sends it on auth.me
+- [ ] Fresh production Google OAuth login stores app_session_id and reaches the dashboard
+- [ ] Fresh production logout clears the session and does not trigger an authentication retry loop
+- [ ] Railway logs for live authentication contain no upstream, invalid-session, or duplicate-dispatch regressions
+
+## Phase 51: Live Sign-In Failure Reopened
+- [ ] Capture the first failing production sign-in request and exact browser response
+- [ ] Correlate the failure with Railway HTTP/application logs and deployment state
+- [ ] Trace the failure through API URL, credentials, cookie handoff, auth.me, OTP, and Google OAuth paths
+- [ ] Apply only the evidence-based production fix; do not make speculative auth changes
+- [ ] Add or update regression coverage for the identified failure
+- [ ] Re-run TypeScript, tests, client/server builds, and live browser acceptance
+- [ ] Save a checkpoint only after live acceptance succeeds
+
+## Phase 52: Production Sign-In Fix Requested
+- [x] Confirm the first failing authentication request and separate stale OTP rejection from production latency
+- [x] Identify whether OTP verification is blocked by Supabase/Auth/database/session work
+- [x] Identify whether Google OAuth fails at initiation, callback, user lookup, cookie handoff, or frontend auth bootstrap
+- [x] Implement the smallest evidence-based fix for the confirmed production failure
+- [x] Add regression coverage for the confirmed failure and session handoff
+- [ ] Re-run live Email OTP and Google acceptance before declaring completion

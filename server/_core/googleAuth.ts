@@ -12,6 +12,21 @@ import { oauthTransactions } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
 
 const STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const OAUTH_STORAGE_TIMEOUT_MS = 1500;
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${operation} timed out`)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 function signState(payload: string): string {
   const secret = ENV.cookieSecret || "zylobridge-oauth-state-secret";
@@ -62,8 +77,9 @@ function getCallbackUrl(): string {
 
 function buildGoogleAuthUrl(state: string): string {
   const callbackUrl = getCallbackUrl();
+  const clientId = ENV.googleClientId || process.env.GOOGLE_CLIENT_ID || "";
   const params = new URLSearchParams({
-    client_id: ENV.googleClientId,
+    client_id: clientId,
     redirect_uri: callbackUrl,
     response_type: "code",
     scope: "openid email profile",
@@ -86,13 +102,15 @@ async function exchangeCodeForTokens(code: string, oauthRequestId: string): Prom
   const timeout = setTimeout(() => controller.abort(), 10000);
 
   try {
+    const clientId = ENV.googleClientId || process.env.GOOGLE_CLIENT_ID || "";
+    const clientSecret = ENV.googleClientSecret || process.env.GOOGLE_CLIENT_SECRET || "";
     const res = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         code,
-        client_id: ENV.googleClientId,
-        client_secret: ENV.googleClientSecret,
+        client_id: clientId,
+        client_secret: clientSecret,
         redirect_uri: callbackUrl,
         grant_type: "authorization_code",
       }).toString(),
@@ -155,7 +173,10 @@ export function registerGoogleAuthRoutes(app: Express) {
     const oauthRequestId = crypto.randomBytes(4).toString("hex").toUpperCase();
     console.log(`[GoogleAuth] [${oauthRequestId}] OAuth initiation requested`);
 
-    if (!ENV.googleClientId || !ENV.googleClientSecret) {
+    const clientId = ENV.googleClientId || process.env.GOOGLE_CLIENT_ID || "";
+    const clientSecret = ENV.googleClientSecret || process.env.GOOGLE_CLIENT_SECRET || "";
+    if (!clientId || !clientSecret) {
+      console.error("[GoogleAuth] GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is missing");
       res.status(503).json({ error: "Google OAuth is not configured." });
       return;
     }
@@ -169,22 +190,29 @@ export function registerGoogleAuthRoutes(app: Express) {
     }
 
     try {
-      const clientDb = await db.getDb();
-      if (!clientDb) {
-        throw new Error("Database connection unavailable for oauth_transactions persistence.");
-      }
-
-      // Required persistent transaction write with non-blocking fallback
+      // The signed state token is already sufficient for the callback. The
+      // oauth_transactions row is an optional replay/audit optimization and
+      // must never hold the browser at the OAuth entry point when Railway's
+      // database pool is cold, unavailable, or missing the table.
       try {
-        await clientDb.insert(oauthTransactions).values({
-          requestId: oauthRequestId,
-          stateHash: decodedState.stateHash,
-          status: "initiated",
-          expiresAt: new Date(Date.now() + STATE_TTL_MS),
-        }).onConflictDoNothing();
-        console.log(`[GoogleAuth] [${oauthRequestId}] OAuth transaction successfully persisted in PostgreSQL`);
+        const clientDb = await withTimeout(db.getDb(), OAUTH_STORAGE_TIMEOUT_MS, "OAuth database connection");
+        if (clientDb) {
+          await withTimeout(
+            clientDb.insert(oauthTransactions).values({
+              requestId: oauthRequestId,
+              stateHash: decodedState.stateHash,
+              status: "initiated",
+              expiresAt: new Date(Date.now() + STATE_TTL_MS),
+            }).onConflictDoNothing(),
+            OAUTH_STORAGE_TIMEOUT_MS,
+            "OAuth transaction persistence",
+          );
+          console.log(`[GoogleAuth] [${oauthRequestId}] OAuth transaction persisted in PostgreSQL`);
+        } else {
+          console.warn(`[GoogleAuth] [${oauthRequestId}] Database unavailable; continuing with signed stateless OAuth state`);
+        }
       } catch (dbErr) {
-        console.warn(`[GoogleAuth] [${oauthRequestId}] Warning: oauth_transactions table insert failed, proceeding with in-memory/stateless fallback:`, dbErr);
+        console.warn(`[GoogleAuth] [${oauthRequestId}] OAuth transaction persistence skipped; continuing with signed stateless OAuth state:`, dbErr);
       }
 
       const authUrl = buildGoogleAuthUrl(state);
