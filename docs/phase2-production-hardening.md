@@ -49,3 +49,16 @@ A paid monitoring account or DSN must be supplied by an operator before those in
 ## Verification checklist
 
 Run `pnpm check`, `pnpm test`, `pnpm build`, and review both SQL files before deployment. After the normal Git/CI deployment flow, verify the health endpoint and perform browser tests for Email OTP, Google OAuth, logout, refresh, role dashboards, enterprise invitation acceptance, job creation/listing, applications, messaging, Realtime, admin, and unauthorized resource access. Do not treat a passing local build as production acceptance.
+
+
+## Production Database Migration Status & Operational Safeguards
+
+The Phase 2 database migrations have been successfully finalized and applied in production. Migrations `0005_phase2_query_indexes.sql` and `0006_enterprise_organization_foundation.sql` were manually applied to the production PostgreSQL database through the Supabase SQL Editor. Migration `0005` required the creation of the missing `audit_logs` table before its indexes (`audit_logs_created_at_idx`, `audit_logs_resource_idx`) could be successfully applied. All 16 query-pattern indexes and all Enterprise organization enums (`organization_role`, `organization_member_status`, `organization_invitation_status`, `organization_project_status`), tables (`organizations`, `organization_members`, `organization_invitations`, `organization_projects`), and reference columns (`jobs.organizationId`, `jobs.projectId`) are now fully present in production.
+
+Railway does not automatically execute `drizzle-kit migrate` during build or startup. Consequently, `__drizzle_migrations` does not contain automated historical records for these two entries because they were applied manually. This has no impact on runtime execution because the production database schema is already correct and complete. Fabricated migration history records must not be inserted, and migrations must not be re-run against production.
+
+| Category | Status | Operational Detail |
+| --- | --- | --- |
+| **Schema Completeness** | Verified | All indexes, tables, enums, and foreign key columns for Phase 2 are fully active in PostgreSQL. |
+| **Migration Tooling** | Unrecorded in table | `__drizzle_migrations` omits manual entries; Railway omits automated migration execution. |
+| **Future Safeguards** | Enforced | Future changes must follow `drizzle-kit generate` and require prior verification of the production database state. |
