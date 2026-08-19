@@ -7,7 +7,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { enterpriseProcedure, adminProcedure, superAdminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { storagePut, storageGetSignedUrl } from "./storage";
 import { getDb } from "./db";
-import { conversations, users } from "../drizzle/schema";
+import { conversations, users, professionalVerifications } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import {
   upsertUser,
@@ -78,6 +78,31 @@ import {
   upsertUserByEmail,
   createEscrowPayment,
   savePushSubscription,
+  createProfessionalPortfolio,
+  getProfessionalPortfoliosByUserId,
+  deleteProfessionalPortfolio,
+  createProfessionalQualification,
+  getProfessionalQualificationsByUserId,
+  deleteProfessionalQualification,
+  createProfessionalExperience,
+  getProfessionalExperiencesByUserId,
+  deleteProfessionalExperience,
+  upsertProfessionalVerification,
+  getProfessionalVerificationsByUserId,
+  getAllProfessionalVerifications,
+  createShortlist,
+  removeShortlist,
+  getShortlistsByJobId,
+  createInterview,
+  updateInterviewStatus,
+  getInterviewsByUserId,
+  createOffer,
+  updateOfferStatus,
+  getOffersByUserId,
+  createEngagement,
+  updateEngagementStatus,
+  getEngagementsByUserId,
+  calculateCandidateMatch,
   MAX_PAGE_SIZE,
 } from "./db";
 import {
@@ -1345,6 +1370,98 @@ export const appRouter = router({
         });
         return { success: true };
       }),
+  }),
+  marketplace: router({
+    createPortfolio: protectedProcedure
+      .input(z.object({ title: z.string().min(2).max(255), description: z.string().optional(), imageUrl: z.string().optional(), imageKey: z.string().optional(), projectUrl: z.string().optional(), skills: z.string().optional() }))
+      .mutation(async ({ ctx, input }) => createProfessionalPortfolio({ userId: ctx.user.id, ...input })),
+    listPortfolios: publicProcedure
+      .input(z.object({ userId: z.number().int().positive() }))
+      .query(async ({ input }) => getProfessionalPortfoliosByUserId(input.userId)),
+    deletePortfolio: protectedProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => deleteProfessionalPortfolio(input.id, ctx.user.id)),
+
+    createQualification: protectedProcedure
+      .input(z.object({ title: z.string().min(2).max(255), issuingOrg: z.string().min(2).max(255), issueDate: z.string().optional().transform(v => v ? new Date(v) : undefined), expiryDate: z.string().optional().transform(v => v ? new Date(v) : undefined), credentialId: z.string().optional(), credentialUrl: z.string().optional() }))
+      .mutation(async ({ ctx, input }) => createProfessionalQualification({ userId: ctx.user.id, ...input })),
+    listQualifications: publicProcedure
+      .input(z.object({ userId: z.number().int().positive() }))
+      .query(async ({ input }) => getProfessionalQualificationsByUserId(input.userId)),
+    deleteQualification: protectedProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => deleteProfessionalQualification(input.id, ctx.user.id)),
+
+    createExperience: protectedProcedure
+      .input(z.object({ companyName: z.string().min(2).max(255), title: z.string().min(2).max(255), location: z.string().optional(), startDate: z.string().optional().transform(v => v ? new Date(v) : undefined), endDate: z.string().optional().transform(v => v ? new Date(v) : undefined), isCurrent: z.boolean().optional(), description: z.string().optional() }))
+      .mutation(async ({ ctx, input }) => createProfessionalExperience({ userId: ctx.user.id, ...input })),
+    listExperiences: publicProcedure
+      .input(z.object({ userId: z.number().int().positive() }))
+      .query(async ({ input }) => getProfessionalExperiencesByUserId(input.userId)),
+    deleteExperience: protectedProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => deleteProfessionalExperience(input.id, ctx.user.id)),
+
+    submitVerification: protectedProcedure
+      .input(z.object({ verificationType: z.enum(["email", "phone", "identity", "qualification", "certification", "work_history", "reference", "portfolio"]), documentUrl: z.string().optional(), documentKey: z.string().optional() }))
+      .mutation(async ({ ctx, input }) => upsertProfessionalVerification({ userId: ctx.user.id, verificationType: input.verificationType, status: "pending", documentUrl: input.documentUrl, documentKey: input.documentKey })),
+    myVerifications: protectedProcedure
+      .query(async ({ ctx }) => getProfessionalVerificationsByUserId(ctx.user.id)),
+    adminListVerifications: adminProcedure
+      .input(z.object({ limit: z.number().int().min(1).max(MAX_PAGE_SIZE).optional().default(MAX_PAGE_SIZE), offset: z.number().int().nonnegative().optional().default(0) }).optional())
+      .query(async ({ input }) => getAllProfessionalVerifications(input?.limit, input?.offset)),
+    adminUpdateVerification: adminProcedure
+      .input(z.object({ id: z.number().int().positive(), status: z.enum(["pending", "under_review", "verified", "rejected", "expired", "resubmission_required"]), adminNote: z.string().optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new Error("DB not connected");
+        const res = await db.update(professionalVerifications).set({ status: input.status, adminNote: input.adminNote, reviewedBy: ctx.user.id, reviewedAt: new Date(), updatedAt: new Date() }).where(eq(professionalVerifications.id, input.id)).returning();
+        return res[0];
+      }),
+
+    matchCandidate: protectedProcedure
+      .input(z.object({ jobId: z.number().int().positive(), professionalId: z.number().int().positive() }))
+      .query(async ({ input }) => calculateCandidateMatch(input.jobId, input.professionalId)),
+
+    addToShortlist: protectedProcedure
+      .input(z.object({ jobId: z.number().int().positive(), professionalId: z.number().int().positive(), notes: z.string().optional() }))
+      .mutation(async ({ ctx, input }) => createShortlist({ jobId: input.jobId, employerId: ctx.user.id, professionalId: input.professionalId, notes: input.notes })),
+    removeFromShortlist: protectedProcedure
+      .input(z.object({ jobId: z.number().int().positive(), professionalId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => removeShortlist(input.jobId, input.professionalId, ctx.user.id)),
+    listShortlists: protectedProcedure
+      .input(z.object({ jobId: z.number().int().positive() }))
+      .query(async ({ input }) => getShortlistsByJobId(input.jobId)),
+
+    scheduleInterview: protectedProcedure
+      .input(z.object({ jobId: z.number().int().positive(), applicationId: z.number().int().positive().optional(), professionalId: z.number().int().positive(), scheduledAt: z.string().transform(v => new Date(v)), locationOrLink: z.string().optional(), notes: z.string().optional() }))
+      .mutation(async ({ ctx, input }) => createInterview({ ...input, employerId: ctx.user.id })),
+    updateInterview: protectedProcedure
+      .input(z.object({ id: z.number().int().positive(), status: z.enum(["proposed", "confirmed", "cancelled", "completed"]) }))
+      .mutation(async ({ input }) => updateInterviewStatus(input.id, input.status)),
+    listInterviews: protectedProcedure
+      .input(z.object({ role: z.enum(["employer", "professional"]) }))
+      .query(async ({ ctx, input }) => getInterviewsByUserId(ctx.user.id, input.role)),
+
+    createOffer: protectedProcedure
+      .input(z.object({ jobId: z.number().int().positive(), applicationId: z.number().int().positive().optional(), professionalId: z.number().int().positive(), compensation: z.string(), roleDescription: z.string(), startDate: z.string().transform(v => new Date(v)), duration: z.string().optional() }))
+      .mutation(async ({ ctx, input }) => createOffer({ ...input, employerId: ctx.user.id })),
+    updateOffer: protectedProcedure
+      .input(z.object({ id: z.number().int().positive(), status: z.enum(["pending", "accepted", "declined"]) }))
+      .mutation(async ({ input }) => updateOfferStatus(input.id, input.status)),
+    listOffers: protectedProcedure
+      .input(z.object({ role: z.enum(["employer", "professional"]) }))
+      .query(async ({ ctx, input }) => getOffersByUserId(ctx.user.id, input.role)),
+
+    createEngagement: protectedProcedure
+      .input(z.object({ jobId: z.number().int().positive(), offerId: z.number().int().positive().optional(), professionalId: z.number().int().positive(), compensation: z.string(), startDate: z.string().transform(v => new Date(v)), endDate: z.string().optional().transform(v => v ? new Date(v) : undefined) }))
+      .mutation(async ({ ctx, input }) => createEngagement({ ...input, employerId: ctx.user.id })),
+    updateEngagement: protectedProcedure
+      .input(z.object({ id: z.number().int().positive(), status: z.enum(["active", "completed", "cancelled", "disputed"]) }))
+      .mutation(async ({ input }) => updateEngagementStatus(input.id, input.status)),
+    listEngagements: protectedProcedure
+      .input(z.object({ role: z.enum(["employer", "professional"]) }))
+      .query(async ({ ctx, input }) => getEngagementsByUserId(ctx.user.id, input.role)),
   }),
 });
 

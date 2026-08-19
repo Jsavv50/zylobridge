@@ -438,3 +438,173 @@ export const oauthTransactions = pgTable("oauth_transactions", {
 });
 export type OAuthTransaction = typeof oauthTransactions.$inferSelect;
 export type InsertOAuthTransaction = typeof oauthTransactions.$inferInsert;
+
+
+// ─── Phase 3 Hiring Marketplace & Verification Extensions ─────────────────────
+export const verificationCategoryEnum = pgEnum("verification_category", [
+  "email",
+  "phone",
+  "identity",
+  "qualification",
+  "certification",
+  "work_history",
+  "reference",
+  "portfolio",
+]);
+
+export const verificationItemStatusEnum = pgEnum("verification_item_status", [
+  "pending",
+  "under_review",
+  "verified",
+  "rejected",
+  "expired",
+  "resubmission_required",
+]);
+
+export const interviewStatusEnum = pgEnum("interview_status", ["proposed", "confirmed", "cancelled", "completed"]);
+export const offerStatusEnum = pgEnum("offer_status", ["pending", "accepted", "declined"]);
+export const engagementStatusEnum = pgEnum("engagement_status", ["active", "completed", "cancelled", "disputed"]);
+
+export const professionalPortfolios = pgTable("professional_portfolios", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  imageUrl: text("imageUrl"),
+  imageKey: text("imageKey"),
+  projectUrl: text("projectUrl"),
+  skills: text("skills"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+}, (table) => ({
+  userIdx: index("professional_portfolios_user_idx").on(table.userId),
+}));
+export type ProfessionalPortfolio = typeof professionalPortfolios.$inferSelect;
+export type InsertProfessionalPortfolio = typeof professionalPortfolios.$inferInsert;
+
+export const professionalQualifications = pgTable("professional_qualifications", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  issuingOrg: varchar("issuingOrg", { length: 255 }).notNull(),
+  issueDate: timestamp("issueDate"),
+  expiryDate: timestamp("expiryDate"),
+  credentialId: varchar("credentialId", { length: 128 }),
+  credentialUrl: text("credentialUrl"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+}, (table) => ({
+  userIdx: index("professional_qualifications_user_idx").on(table.userId),
+}));
+export type ProfessionalQualification = typeof professionalQualifications.$inferSelect;
+export type InsertProfessionalQualification = typeof professionalQualifications.$inferInsert;
+
+export const professionalExperiences = pgTable("professional_experiences", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  companyName: varchar("companyName", { length: 255 }).notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  location: varchar("location", { length: 255 }),
+  startDate: timestamp("startDate"),
+  endDate: timestamp("endDate"),
+  isCurrent: boolean("isCurrent").default(false).notNull(),
+  description: text("description"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+}, (table) => ({
+  userIdx: index("professional_experiences_user_idx").on(table.userId),
+}));
+export type ProfessionalExperience = typeof professionalExperiences.$inferSelect;
+export type InsertProfessionalExperience = typeof professionalExperiences.$inferInsert;
+
+export const professionalVerifications = pgTable("professional_verifications", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  verificationType: verificationCategoryEnum("verificationType").notNull(),
+  status: verificationItemStatusEnum("status").default("pending").notNull(),
+  documentUrl: text("documentUrl"),
+  documentKey: text("documentKey"),
+  adminNote: text("adminNote"),
+  reviewedBy: integer("reviewedBy"),
+  reviewedAt: timestamp("reviewedAt"),
+  expiresAt: timestamp("expiresAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+}, (table) => ({
+  userTypeUnique: uniqueIndex("professional_verifications_user_type_unique").on(table.userId, table.verificationType),
+  statusIdx: index("professional_verifications_status_idx").on(table.status, table.createdAt),
+}));
+export type ProfessionalVerification = typeof professionalVerifications.$inferSelect;
+export type InsertProfessionalVerification = typeof professionalVerifications.$inferInsert;
+
+export const shortlists = pgTable("shortlists", {
+  id: serial("id").primaryKey(),
+  jobId: integer("jobId").notNull(),
+  employerId: integer("employerId").notNull(),
+  professionalId: integer("professionalId").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  jobProfessionalUnique: uniqueIndex("shortlists_job_professional_unique").on(table.jobId, table.professionalId),
+  employerIdx: index("shortlists_employer_idx").on(table.employerId, table.createdAt),
+}));
+export type Shortlist = typeof shortlists.$inferSelect;
+export type InsertShortlist = typeof shortlists.$inferInsert;
+
+export const interviews = pgTable("interviews", {
+  id: serial("id").primaryKey(),
+  jobId: integer("jobId").notNull(),
+  applicationId: integer("applicationId"),
+  employerId: integer("employerId").notNull(),
+  professionalId: integer("professionalId").notNull(),
+  scheduledAt: timestamp("scheduledAt").notNull(),
+  status: interviewStatusEnum("status").default("proposed").notNull(),
+  locationOrLink: text("locationOrLink"),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+}, (table) => ({
+  professionalIdx: index("interviews_professional_idx").on(table.professionalId, table.scheduledAt),
+  employerIdx: index("interviews_employer_idx").on(table.employerId, table.scheduledAt),
+}));
+export type Interview = typeof interviews.$inferSelect;
+export type InsertInterview = typeof interviews.$inferInsert;
+
+export const offers = pgTable("offers", {
+  id: serial("id").primaryKey(),
+  jobId: integer("jobId").notNull(),
+  applicationId: integer("applicationId"),
+  employerId: integer("employerId").notNull(),
+  professionalId: integer("professionalId").notNull(),
+  compensation: numeric("compensation", { precision: 12, scale: 2 }).notNull(),
+  roleDescription: text("roleDescription").notNull(),
+  startDate: timestamp("startDate").notNull(),
+  duration: varchar("duration", { length: 128 }),
+  status: offerStatusEnum("status").default("pending").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+}, (table) => ({
+  professionalIdx: index("offers_professional_idx").on(table.professionalId, table.status),
+  employerIdx: index("offers_employer_idx").on(table.employerId, table.status),
+}));
+export type Offer = typeof offers.$inferSelect;
+export type InsertOffer = typeof offers.$inferInsert;
+
+export const engagements = pgTable("engagements", {
+  id: serial("id").primaryKey(),
+  jobId: integer("jobId").notNull(),
+  offerId: integer("offerId"),
+  employerId: integer("employerId").notNull(),
+  professionalId: integer("professionalId").notNull(),
+  compensation: numeric("compensation", { precision: 12, scale: 2 }).notNull(),
+  status: engagementStatusEnum("status").default("active").notNull(),
+  startDate: timestamp("startDate").notNull(),
+  endDate: timestamp("endDate"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+}, (table) => ({
+  professionalIdx: index("engagements_professional_idx").on(table.professionalId, table.status),
+  employerIdx: index("engagements_employer_idx").on(table.employerId, table.status),
+}));
+export type Engagement = typeof engagements.$inferSelect;
+export type InsertEngagement = typeof engagements.$inferInsert;

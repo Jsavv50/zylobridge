@@ -34,6 +34,14 @@ import {
   InsertAuditLog,
   pushSubscriptions,
   InsertPushSubscription,
+  professionalPortfolios,
+  professionalQualifications,
+  professionalExperiences,
+  professionalVerifications,
+  shortlists,
+  interviews,
+  offers,
+  engagements,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -1029,5 +1037,259 @@ export async function getPlatformReportsData() {
     revenue: {
       totalOrdersAmount: numberOf(row?.paidOrdersAmount),
     },
+  };
+}
+
+
+// ─── Phase 3 Marketplace Database Helpers ─────────────────────────────────────
+
+export async function createProfessionalPortfolio(data: { userId: number; title: string; description?: string; imageUrl?: string; imageKey?: string; projectUrl?: string; skills?: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not connected");
+  const result = await db.insert(professionalPortfolios).values(data).returning();
+  return result[0];
+}
+
+export async function getProfessionalPortfoliosByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(professionalPortfolios).where(eq(professionalPortfolios.userId, userId));
+}
+
+export async function deleteProfessionalPortfolio(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return false;
+  await db.delete(professionalPortfolios).where(and(eq(professionalPortfolios.id, id), eq(professionalPortfolios.userId, userId)));
+  return true;
+}
+
+export async function createProfessionalQualification(data: { userId: number; title: string; issuingOrg: string; issueDate?: Date; expiryDate?: Date; credentialId?: string; credentialUrl?: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not connected");
+  const result = await db.insert(professionalQualifications).values(data).returning();
+  return result[0];
+}
+
+export async function getProfessionalQualificationsByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(professionalQualifications).where(eq(professionalQualifications.userId, userId));
+}
+
+export async function deleteProfessionalQualification(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return false;
+  await db.delete(professionalQualifications).where(and(eq(professionalQualifications.id, id), eq(professionalQualifications.userId, userId)));
+  return true;
+}
+
+export async function createProfessionalExperience(data: { userId: number; companyName: string; title: string; location?: string; startDate?: Date; endDate?: Date; isCurrent?: boolean; description?: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not connected");
+  const result = await db.insert(professionalExperiences).values(data).returning();
+  return result[0];
+}
+
+export async function getProfessionalExperiencesByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(professionalExperiences).where(eq(professionalExperiences.userId, userId));
+}
+
+export async function deleteProfessionalExperience(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return false;
+  await db.delete(professionalExperiences).where(and(eq(professionalExperiences.id, id), eq(professionalExperiences.userId, userId)));
+  return true;
+}
+
+export async function upsertProfessionalVerification(data: { userId: number; verificationType: any; status?: any; documentUrl?: string; documentKey?: string; adminNote?: string; reviewedBy?: number; reviewedAt?: Date }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not connected");
+  const existing = await db.select().from(professionalVerifications).where(and(eq(professionalVerifications.userId, data.userId), eq(professionalVerifications.verificationType, data.verificationType))).limit(1);
+  if (existing.length > 0) {
+    const res = await db.update(professionalVerifications).set({
+      ...data,
+      updatedAt: new Date(),
+    }).where(eq(professionalVerifications.id, existing[0].id)).returning();
+    return res[0];
+  } else {
+    const res = await db.insert(professionalVerifications).values(data).returning();
+    return res[0];
+  }
+}
+
+export async function getProfessionalVerificationsByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(professionalVerifications).where(eq(professionalVerifications.userId, userId));
+}
+
+export async function getAllProfessionalVerifications(limit = 50, offset = 0) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(professionalVerifications).limit(clampPageSize(limit)).offset(clampOffset(offset)).orderBy(desc(professionalVerifications.createdAt));
+}
+
+export async function createShortlist(data: { jobId: number; employerId: number; professionalId: number; notes?: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not connected");
+  const res = await db.insert(shortlists).values(data).onConflictDoNothing().returning();
+  return res[0];
+}
+
+export async function removeShortlist(jobId: number, professionalId: number, employerId: number) {
+  const db = await getDb();
+  if (!db) return false;
+  await db.delete(shortlists).where(and(eq(shortlists.jobId, jobId), eq(shortlists.professionalId, professionalId), eq(shortlists.employerId, employerId)));
+  return true;
+}
+
+export async function getShortlistsByJobId(jobId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(shortlists).where(eq(shortlists.jobId, jobId));
+}
+
+export async function getShortlistsByEmployerId(employerId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(shortlists).where(eq(shortlists.employerId, employerId));
+}
+
+export async function createInterview(data: { jobId: number; applicationId?: number; employerId: number; professionalId: number; scheduledAt: Date; locationOrLink?: string; notes?: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not connected");
+  const res = await db.insert(interviews).values(data).returning();
+  return res[0];
+}
+
+export async function updateInterviewStatus(id: number, status: any) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not connected");
+  const res = await db.update(interviews).set({ status, updatedAt: new Date() }).where(eq(interviews.id, id)).returning();
+  return res[0];
+}
+
+export async function getInterviewsByUserId(userId: number, role: 'employer' | 'professional') {
+  const db = await getDb();
+  if (!db) return [];
+  const col = role === 'employer' ? interviews.employerId : interviews.professionalId;
+  return db.select().from(interviews).where(eq(col, userId)).orderBy(desc(interviews.scheduledAt));
+}
+
+export async function createOffer(data: { jobId: number; applicationId?: number; employerId: number; professionalId: number; compensation: string; roleDescription: string; startDate: Date; duration?: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not connected");
+  const res = await db.insert(offers).values(data).returning();
+  return res[0];
+}
+
+export async function updateOfferStatus(id: number, status: any) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not connected");
+  const res = await db.update(offers).set({ status, updatedAt: new Date() }).where(eq(offers.id, id)).returning();
+  return res[0];
+}
+
+export async function getOffersByUserId(userId: number, role: 'employer' | 'professional') {
+  const db = await getDb();
+  if (!db) return [];
+  const col = role === 'employer' ? offers.employerId : offers.professionalId;
+  return db.select().from(offers).where(eq(col, userId)).orderBy(desc(offers.createdAt));
+}
+
+export async function createEngagement(data: { jobId: number; offerId?: number; employerId: number; professionalId: number; compensation: string; startDate: Date; endDate?: Date }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not connected");
+  const res = await db.insert(engagements).values(data).returning();
+  return res[0];
+}
+
+export async function updateEngagementStatus(id: number, status: any) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not connected");
+  const res = await db.update(engagements).set({ status, updatedAt: new Date() }).where(eq(engagements.id, id)).returning();
+  return res[0];
+}
+
+export async function getEngagementsByUserId(userId: number, role: 'employer' | 'professional') {
+  const db = await getDb();
+  if (!db) return [];
+  const col = role === 'employer' ? engagements.employerId : engagements.professionalId;
+  return db.select().from(engagements).where(eq(col, userId)).orderBy(desc(engagements.createdAt));
+}
+
+export async function calculateCandidateMatch(jobId: number, professionalId: number) {
+  const db = await getDb();
+  if (!db) return { score: 0, breakdown: {}, reasons: ["Database unavailable"] };
+
+  const jobRes = await db.select().from(jobs).where(eq(jobs.id, jobId)).limit(1);
+  if (jobRes.length === 0) return { score: 0, breakdown: {}, reasons: ["Job not found"] };
+  const job = jobRes[0];
+
+  const profRes = await db.select().from(profiles).where(eq(profiles.userId, professionalId)).limit(1);
+  if (profRes.length === 0) return { score: 0, breakdown: {}, reasons: ["Profile not found"] };
+  const profile = profRes[0];
+
+  const userRes = await db.select().from(users).where(eq(users.id, professionalId)).limit(1);
+  const user = userRes[0];
+
+  let score = 0;
+  const breakdown: Record<string, number> = {};
+  const reasons: string[] = [];
+
+  // Vocation match (35%)
+  if (profile.vocation === job.vocation) {
+    score += 35;
+    breakdown.vocation = 35;
+    reasons.push(`Exact vocation match: ${job.vocation}`);
+  } else {
+    breakdown.vocation = 0;
+    reasons.push(`Vocation mismatch (Job: ${job.vocation}, Professional: ${profile.vocation})`);
+  }
+
+  // Location match (20%)
+  if (profile.location && job.location && profile.location.toLowerCase().includes(job.location.toLowerCase())) {
+    score += 20;
+    breakdown.location = 20;
+    reasons.push(`Location alignment: ${job.location}`);
+  } else {
+    score += 10;
+    breakdown.location = 10;
+    reasons.push(`Partial location fit`);
+  }
+
+  // Availability match (15%)
+  if (profile.isAvailable) {
+    score += 15;
+    breakdown.availability = 15;
+    reasons.push("Professional is currently available for work");
+  } else {
+    breakdown.availability = 0;
+    reasons.push("Professional is currently marked unavailable");
+  }
+
+  // Verification status (15%)
+  if (user?.isVerified) {
+    score += 15;
+    breakdown.verification = 15;
+    reasons.push("Zylobridge verified account status");
+  } else {
+    breakdown.verification = 5;
+    reasons.push("Account verification pending");
+  }
+
+  // Rating and reviews (15%)
+  const rating = Number(profile.averageRating ?? 0);
+  const ratingScore = Math.min(15, Math.round((rating / 5) * 15));
+  score += ratingScore;
+  breakdown.rating = ratingScore;
+  reasons.push(`Platform rating score: ${rating.toFixed(1)} / 5.0`);
+
+  return {
+    score: Math.min(100, score),
+    breakdown,
+    reasons,
   };
 }
