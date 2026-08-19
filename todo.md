@@ -619,14 +619,14 @@
 
 
 ## Phase 4: Marketplace Intelligence + Communication
-- [ ] Implement notification preferences and event-driven transactional email service via Resend
-- [ ] Enhance interview scheduling with timezone handling, status transitions, and ICS calendar generation
-- [ ] Implement idempotent event-driven reminder system for interviews, offers, and verifications
-- [ ] Implement geographic radius search and approximate location matching for jobs and talent
-- [ ] Implement advanced marketplace search intelligence with multi-criteria filtering and server-side pagination
-- [ ] Build Matching Engine V2 combining deterministic rules with AI assistance and explainable breakdown
-- [ ] Implement public marketplace SEO discovery pages (`/talent/{vocation}/{location}` and `/jobs/{vocation}/{location}`)
-- [ ] Implement enterprise recruiter productivity tools (bulk candidate import with validation and export)
-- [ ] Implement notification center with unread counts, categories, and deep links
-- [ ] Add comprehensive security, IDOR, observability, and automated tests for Phase 4
-- [ ] Run TypeScript checks, unit/integration tests, production builds, and write Phase 4 implementation report
+- [x] Implement notification preferences and event-driven transactional email service via Resend
+- [x] Enhance interview scheduling with timezone handling, status transitions, and ICS calendar generation
+- [x] Implement idempotent event-driven reminder system for interviews, offers, and verifications
+- [x] Implement geographic radius search and approximate location matching for jobs and talent
+- [x] Implement advanced marketplace search intelligence with multi-criteria filtering and server-side pagination
+- [x] Build Matching Engine V2 combining deterministic rules with AI assistance and explainable breakdown
+- [x] Implement public marketplace SEO discovery pages (`/talent/{vocation}/{location}` and `/jobs/{vocation}/{location}`)
+- [x] Implement enterprise recruiter productivity tools (bulk candidate import with validation and export)
+- [x] Implement notification center with unread counts, categories, and deep links
+- [x] Add comprehensive security, IDOR, observability, and automated tests for Phase 4
+- [x] Run TypeScript checks, unit/integration tests, production builds, and write Phase 4 implementation report
