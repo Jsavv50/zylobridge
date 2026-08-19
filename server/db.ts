@@ -387,62 +387,70 @@ export async function getAdminStats() {
       totalJobs: 0, openJobs: 0, inProgressJobs: 0, completedJobs: 0, cancelledJobs: 0,
       totalApplications: 0, pendingApplications: 0,
       verifiedUsers: 0, totalReviews: 0,
+      totalEscrowAmount: 0, fundedEscrowAmount: 0, pendingVerificationCount: 0,
     };
   }
-  const [
-    userRows,
-    jobRows,
-    appRows,
-    reviewRows,
-    verifiedRows,
-    escrowRows,
-    verifRows,
-  ] = await Promise.all([
-    db.select({ role: users.role, userType: users.userType }).from(users),
-    db.select({ status: jobs.status }).from(jobs),
-    db.select({ status: applications.status }).from(applications),
-    db.select({ count: sql<number>`count(*)` }).from(reviews),
-    db.select({ count: sql<number>`count(*)` }).from(users).where(eq(users.isVerified, true)),
-    db.select({ amount: escrowPayments.amount, status: escrowPayments.status }).from(escrowPayments),
-    db.select({ status: verificationRequests.status }).from(verificationRequests),
+
+  // Keep this endpoint bounded: Railway uses a single transaction-pooler
+  // connection, so loading every row and filtering in JavaScript can queue
+  // behind a large table scan and block unrelated auth requests.
+  const [userAgg, jobAgg, applicationAgg, reviewAgg, escrowAgg, verificationAgg] = await Promise.all([
+    db.select({
+      totalUsers: sql<number>`count(*)`,
+      clientCount: sql<number>`count(*) filter (where ${users.userType} = 'client')`,
+      professionalCount: sql<number>`count(*) filter (where ${users.userType} = 'professional')`,
+      enterpriseCount: sql<number>`count(*) filter (where ${users.userType} = 'enterprise')`,
+      adminCount: sql<number>`count(*) filter (where ${users.role} in ('admin', 'SUPER_ADMIN'))`,
+      unsetCount: sql<number>`count(*) filter (where ${users.userType} = 'unset')`,
+      verifiedUsers: sql<number>`count(*) filter (where ${users.isVerified} = true)`,
+    }).from(users),
+    db.select({
+      totalJobs: sql<number>`count(*)`,
+      openJobs: sql<number>`count(*) filter (where ${jobs.status} = 'open')`,
+      inProgressJobs: sql<number>`count(*) filter (where ${jobs.status} = 'in_progress')`,
+      completedJobs: sql<number>`count(*) filter (where ${jobs.status} = 'completed')`,
+      cancelledJobs: sql<number>`count(*) filter (where ${jobs.status} = 'cancelled')`,
+    }).from(jobs),
+    db.select({
+      totalApplications: sql<number>`count(*)`,
+      pendingApplications: sql<number>`count(*) filter (where ${applications.status} = 'pending')`,
+    }).from(applications),
+    db.select({ totalReviews: sql<number>`count(*)` }).from(reviews),
+    db.select({
+      totalEscrowAmount: sql<number>`coalesce(sum(${escrowPayments.amount}), 0)`,
+      fundedEscrowAmount: sql<number>`coalesce(sum(${escrowPayments.amount}) filter (where ${escrowPayments.status} in ('funded', 'released')), 0)`,
+    }).from(escrowPayments),
+    db.select({
+      pendingVerificationCount: sql<number>`count(*) filter (where ${verificationRequests.status} = 'pending')`,
+    }).from(verificationRequests),
   ]);
 
-  const clientCount = userRows.filter((u) => u.userType === "client").length;
-  const professionalCount = userRows.filter((u) => u.userType === "professional").length;
-  const enterpriseCount = userRows.filter((u) => u.userType === "enterprise").length;
-  const adminCount = userRows.filter((u) => u.role === "admin" || u.role === "SUPER_ADMIN").length;
-  const unsetCount = userRows.filter((u) => u.userType === "unset").length;
-
-  const openJobs = jobRows.filter((j) => j.status === "open").length;
-  const inProgressJobs = jobRows.filter((j) => j.status === "in_progress").length;
-  const completedJobs = jobRows.filter((j) => j.status === "completed").length;
-  const cancelledJobs = jobRows.filter((j) => j.status === "cancelled").length;
-
-  const pendingApplications = appRows.filter((a) => a.status === "pending").length;
-
-  const totalEscrowAmount = escrowRows.reduce((sum, e) => sum + Number(e.amount ?? 0), 0);
-  const fundedEscrowAmount = escrowRows.filter(e => e.status === "funded" || e.status === "released").reduce((sum, e) => sum + Number(e.amount ?? 0), 0);
-  const pendingVerificationCount = verifRows.filter(v => v.status === "pending").length;
+  const usersStats = userAgg[0];
+  const jobsStats = jobAgg[0];
+  const applicationsStats = applicationAgg[0];
+  const reviewsStats = reviewAgg[0];
+  const escrowStats = escrowAgg[0];
+  const verificationStats = verificationAgg[0];
 
   return {
-    totalUsers: userRows.length,
-    clientCount,
-    professionalCount,
-    enterpriseCount,
-    adminCount,
-    unsetCount,
-    totalJobs: jobRows.length,
-    openJobs,
-    inProgressJobs,
-    completedJobs,
-    cancelledJobs,
-    totalApplications: appRows.length,
-    pendingApplications,
-    verifiedUsers: Number(verifiedRows[0]?.count ?? 0),
-    totalReviews: Number(reviewRows[0]?.count ?? 0),
-    totalEscrowAmount,
-    fundedEscrowAmount,
-    pendingVerificationCount,
+    totalUsers: Number(usersStats?.totalUsers ?? 0),
+    clientCount: Number(usersStats?.clientCount ?? 0),
+    professionalCount: Number(usersStats?.professionalCount ?? 0),
+    enterpriseCount: Number(usersStats?.enterpriseCount ?? 0),
+    adminCount: Number(usersStats?.adminCount ?? 0),
+    unsetCount: Number(usersStats?.unsetCount ?? 0),
+    totalJobs: Number(jobsStats?.totalJobs ?? 0),
+    openJobs: Number(jobsStats?.openJobs ?? 0),
+    inProgressJobs: Number(jobsStats?.inProgressJobs ?? 0),
+    completedJobs: Number(jobsStats?.completedJobs ?? 0),
+    cancelledJobs: Number(jobsStats?.cancelledJobs ?? 0),
+    totalApplications: Number(applicationsStats?.totalApplications ?? 0),
+    pendingApplications: Number(applicationsStats?.pendingApplications ?? 0),
+    verifiedUsers: Number(usersStats?.verifiedUsers ?? 0),
+    totalReviews: Number(reviewsStats?.totalReviews ?? 0),
+    totalEscrowAmount: Number(escrowStats?.totalEscrowAmount ?? 0),
+    fundedEscrowAmount: Number(escrowStats?.fundedEscrowAmount ?? 0),
+    pendingVerificationCount: Number(verificationStats?.pendingVerificationCount ?? 0),
   };
 }
 

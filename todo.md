@@ -567,3 +567,10 @@
 - [x] Run TypeScript check, 110-test suite, and client/server production build
 - [ ] Publish the fallback to Vercel and synchronize the backend source with Railway
 - [ ] Re-run live Google login, role dashboard routing, logout, and Email OTP acceptance
+
+## Phase 54: Admin Query Connection Contention
+- [x] Confirm the live admin.stats request is blocking authenticated requests on the single-connection pool
+- [x] Replace full-table admin stats reads with bounded aggregate queries
+- [x] Add regression coverage for admin stats query shape and response fields
+- [x] Re-run TypeScript, tests, and production builds
+- [ ] Publish and verify logout and live Email OTP after the query optimization
