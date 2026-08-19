@@ -87,4 +87,12 @@ describe("production auth session handoff architecture", () => {
     expect(db).toContain(".set({ openId: detachedOpenId })");
     expect(db).toContain('updateData.role = "admin"');
   });
+
+  it("uses Railway as the production API fallback when VITE_API_URL is absent", () => {
+    const main = readProjectFile("client/src/main.tsx");
+
+    expect(main).toContain("import.meta.env.PROD ? \"https://api.zylobridge.com\" : \"\"");
+    expect(main).toContain("url: `${API_URL}/api/trpc`");
+    expect(main).toContain('credentials: "include"');
+  });
 });
