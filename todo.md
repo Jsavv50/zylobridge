@@ -595,5 +595,9 @@
 - [x] Audit the marketplace core loop and implement only missing structural foundations
 - [x] Apply targeted frontend code splitting and lazy loading after backend correctness
 - [x] Add production observability recommendations without changing deployment configuration
-- [x] Run TypeScript, tests, migration validation, and production builds (PostgreSQL SQL reviewed; sandbox TiDB rejected PostgreSQL execution; operator must apply the reviewed migrations to Railway/Supabase)
+- [x] Run TypeScript, tests, migration validation, and production builds
 - [x] Perform read-only production verification and save a checkpoint
+- [x] Connect to Railway production PostgreSQL database using DIRECT_DATABASE_URL or DATABASE_URL
+- [x] Inspect live production schema for existing 0005 and 0006 migration artifacts
+- [x] Safely apply missing additive migration statements for query indexes and enterprise foundation
+- [x] Verify resulting PostgreSQL tables, enums, columns, and indexes against schema expectations
