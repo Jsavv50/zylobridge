@@ -8,6 +8,8 @@ import {
   numeric,
   boolean,
   serial,
+  index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
@@ -40,6 +42,10 @@ export const documentTypeEnum = pgEnum("document_type", [
 ]);
 export const verificationStatusEnum = pgEnum("verification_status", ["pending", "approved", "rejected"]);
 export const orderStatusEnum = pgEnum("order_status", ["pending", "paid", "failed", "refunded"]);
+export const organizationRoleEnum = pgEnum("organization_role", ["OWNER", "ADMIN", "HIRING_MANAGER", "RECRUITER", "MEMBER"]);
+export const organizationMemberStatusEnum = pgEnum("organization_member_status", ["active", "suspended", "removed"]);
+export const organizationInvitationStatusEnum = pgEnum("organization_invitation_status", ["pending", "accepted", "rejected", "cancelled", "expired"]);
+export const organizationProjectStatusEnum = pgEnum("organization_project_status", ["active", "archived"]);
 
 // ─── Users ───────────────────────────────────────────────────────────────────
 export const users = pgTable("users", {
@@ -77,7 +83,10 @@ export const profiles = pgTable("profiles", {
   isAvailable: boolean("isAvailable").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  userIdx: index("profiles_user_idx").on(table.userId),
+  vocationAvailableIdx: index("profiles_vocation_available_idx").on(table.vocation, table.isAvailable),
+}));
 export type Profile = typeof profiles.$inferSelect;
 export type InsertProfile = typeof profiles.$inferInsert;
 
@@ -93,10 +102,15 @@ export const jobs = pgTable("jobs", {
   deadline: timestamp("deadline"),
   status: jobStatusEnum("status").default("open").notNull(),
   assignedProfessionalId: integer("assignedProfessionalId"),
+  organizationId: integer("organizationId"),
+  projectId: integer("projectId"),
   isUrgent: boolean("isUrgent").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  vocationStatusCreatedAtIdx: index("jobs_vocation_status_created_at_idx").on(table.vocation, table.status, table.createdAt),
+  clientCreatedAtIdx: index("jobs_client_created_at_idx").on(table.clientId, table.createdAt),
+}));
 export type Job = typeof jobs.$inferSelect;
 export type InsertJob = typeof jobs.$inferInsert;
 
@@ -110,7 +124,10 @@ export const applications = pgTable("applications", {
   status: applicationStatusEnum("status").default("pending").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  jobStatusIdx: index("applications_job_status_idx").on(table.jobId, table.status),
+  professionalCreatedAtIdx: index("applications_professional_created_at_idx").on(table.professionalId, table.createdAt),
+}));
 export type Application = typeof applications.$inferSelect;
 export type InsertApplication = typeof applications.$inferInsert;
 
@@ -135,7 +152,10 @@ export const conversations = pgTable("conversations", {
   professionalId: integer("professionalId").notNull(),
   lastMessageAt: timestamp("lastMessageAt").defaultNow().notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  clientLastMessageIdx: index("conversations_client_last_message_idx").on(table.clientId, table.lastMessageAt),
+  professionalLastMessageIdx: index("conversations_professional_last_message_idx").on(table.professionalId, table.lastMessageAt),
+}));
 export type Conversation = typeof conversations.$inferSelect;
 export type InsertConversation = typeof conversations.$inferInsert;
 
@@ -147,7 +167,10 @@ export const messages = pgTable("messages", {
   content: text("content").notNull(),
   isRead: boolean("isRead").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  conversationCreatedAtIdx: index("messages_conversation_created_at_idx").on(table.conversationId, table.createdAt),
+  unreadByConversationIdx: index("messages_conversation_read_sender_idx").on(table.conversationId, table.isRead, table.senderId),
+}));
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = typeof messages.$inferInsert;
 
@@ -192,7 +215,10 @@ export const verificationRequests = pgTable("verification_requests", {
   reviewedBy: integer("reviewedBy"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  userCreatedAtIdx: index("verification_requests_user_created_at_idx").on(table.userId, table.createdAt),
+  statusCreatedAtIdx: index("verification_requests_status_created_at_idx").on(table.status, table.createdAt),
+}));
 export type VerificationRequest = typeof verificationRequests.$inferSelect;
 export type InsertVerificationRequest = typeof verificationRequests.$inferInsert;
 
@@ -229,9 +255,82 @@ export const orders = pgTable("orders", {
   paidAt: timestamp("paidAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  userCreatedAtIdx: index("orders_user_created_at_idx").on(table.userId, table.createdAt),
+  paystackReferenceIdx: index("orders_paystack_reference_idx").on(table.paystackReference),
+}));
 export type Order = typeof orders.$inferSelect;
 export type InsertOrder = typeof orders.$inferInsert;
+
+// ─── Enterprise organization foundation ─────────────────────────────────────
+export const organizations = pgTable("organizations", {
+  id: serial("id").primaryKey(),
+  ownerId: integer("ownerId").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 120 }).notNull(),
+  description: text("description"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+}, (table) => ({
+  slugUnique: uniqueIndex("organizations_slug_unique").on(table.slug),
+  ownerCreatedAtIdx: index("organizations_owner_created_at_idx").on(table.ownerId, table.createdAt),
+}));
+export type Organization = typeof organizations.$inferSelect;
+export type InsertOrganization = typeof organizations.$inferInsert;
+
+export const organizationMembers = pgTable("organization_members", {
+  id: serial("id").primaryKey(),
+  organizationId: integer("organizationId").notNull(),
+  userId: integer("userId").notNull(),
+  role: organizationRoleEnum("role").default("MEMBER").notNull(),
+  status: organizationMemberStatusEnum("status").default("active").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+}, (table) => ({
+  organizationUserUnique: uniqueIndex("organization_members_organization_user_unique").on(table.organizationId, table.userId),
+  organizationStatusIdx: index("organization_members_organization_status_idx").on(table.organizationId, table.status),
+  userStatusIdx: index("organization_members_user_status_idx").on(table.userId, table.status),
+}));
+export type OrganizationMember = typeof organizationMembers.$inferSelect;
+export type InsertOrganizationMember = typeof organizationMembers.$inferInsert;
+
+export const organizationInvitations = pgTable("organization_invitations", {
+  id: serial("id").primaryKey(),
+  organizationId: integer("organizationId").notNull(),
+  inviterUserId: integer("inviterUserId").notNull(),
+  email: varchar("email", { length: 320 }).notNull(),
+  role: organizationRoleEnum("role").default("MEMBER").notNull(),
+  tokenHash: varchar("tokenHash", { length: 64 }).notNull(),
+  status: organizationInvitationStatusEnum("status").default("pending").notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  acceptedByUserId: integer("acceptedByUserId"),
+  acceptedAt: timestamp("acceptedAt"),
+  rejectedAt: timestamp("rejectedAt"),
+  cancelledAt: timestamp("cancelledAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+}, (table) => ({
+  tokenHashUnique: uniqueIndex("organization_invitations_token_hash_unique").on(table.tokenHash),
+  organizationStatusIdx: index("organization_invitations_organization_status_idx").on(table.organizationId, table.status, table.createdAt),
+  emailStatusIdx: index("organization_invitations_email_status_idx").on(table.email, table.status),
+}));
+export type OrganizationInvitation = typeof organizationInvitations.$inferSelect;
+export type InsertOrganizationInvitation = typeof organizationInvitations.$inferInsert;
+
+export const organizationProjects = pgTable("organization_projects", {
+  id: serial("id").primaryKey(),
+  organizationId: integer("organizationId").notNull(),
+  createdById: integer("createdById").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  status: organizationProjectStatusEnum("status").default("active").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+}, (table) => ({
+  organizationStatusIdx: index("organization_projects_organization_status_idx").on(table.organizationId, table.status, table.createdAt),
+}));
+export type OrganizationProject = typeof organizationProjects.$inferSelect;
+export type InsertOrganizationProject = typeof organizationProjects.$inferInsert;
 
 // ─── Email OTPs ──────────────────────────────────────────────────────────────
 export const emailOtps = pgTable("email_otps", {
@@ -318,7 +417,10 @@ export const auditLogs = pgTable("audit_logs", {
   ipAddress: varchar("ipAddress", { length: 64 }),
   userAgent: text("userAgent"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  createdAtIdx: index("audit_logs_created_at_idx").on(table.createdAt),
+  resourceIdx: index("audit_logs_resource_idx").on(table.resourceType, table.resourceId, table.createdAt),
+}));
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertAuditLog = typeof auditLogs.$inferInsert;
 

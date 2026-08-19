@@ -7,6 +7,7 @@ import { vi } from "vitest";
 
 // Mock database to avoid live DB connections in tests
 vi.mock("./db", () => ({
+  MAX_PAGE_SIZE: 100,
   getDb: vi.fn().mockResolvedValue(null),
   upsertUser: vi.fn().mockResolvedValue(undefined),
   getUserByOpenId: vi.fn().mockResolvedValue(null),

@@ -582,3 +582,18 @@
 - [x] Publish the follow-up and verify Railway health plus live admin dashboard show the consolidated stats response
 - [x] Re-run clean-browser Email OTP, Google OAuth, logout, and SUPER_ADMIN acceptance
 - [x] Verify the Railway PostgreSQL oauth_transactions migration against the actual production database or document the remaining operator-only step
+
+## Phase 2: Production Hardening and Enterprise Marketplace Foundation
+- [x] Audit existing schema and query patterns before adding supported indexes
+- [x] Add documented composite indexes through a non-destructive Drizzle migration
+- [x] Enforce server-side pagination limits of 100 or less across list/query procedures
+- [x] Audit and harden backend ownership and IDOR authorization checks
+- [x] Design the smallest non-duplicative enterprise organization schema
+- [x] Add organization membership, role, invitation, and auditability foundations
+- [x] Add secure enterprise invitation lifecycle procedures
+- [x] Add server-protected enterprise team management procedures
+- [x] Audit the marketplace core loop and implement only missing structural foundations
+- [x] Apply targeted frontend code splitting and lazy loading after backend correctness
+- [x] Add production observability recommendations without changing deployment configuration
+- [x] Run TypeScript, tests, migration validation, and production builds (PostgreSQL SQL reviewed; sandbox TiDB rejected PostgreSQL execution; operator must apply the reviewed migrations to Railway/Supabase)
+- [x] Perform read-only production verification and save a checkpoint

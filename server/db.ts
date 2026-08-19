@@ -37,6 +37,19 @@ import {
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
+export const MAX_PAGE_SIZE = 100;
+export const DEFAULT_PAGE_SIZE = 20;
+
+export function clampPageSize(limit: number | undefined, fallback = DEFAULT_PAGE_SIZE) {
+  const normalized = Number.isFinite(limit) ? Math.floor(limit as number) : fallback;
+  return Math.min(MAX_PAGE_SIZE, Math.max(1, normalized));
+}
+
+export function clampOffset(offset: number | undefined) {
+  const normalized = Number.isFinite(offset) ? Math.floor(offset as number) : 0;
+  return Math.max(0, normalized);
+}
+
 export async function getUserByEmail(email: string) {
   const db = await getDb();
   if (!db) return undefined;
@@ -272,16 +285,16 @@ export async function listJobs(filters: {
     .from(jobs)
     .where(conditions.length > 0 ? and(...conditions) : undefined)
     .orderBy(desc(jobs.createdAt))
-    .limit(filters.limit ?? 20)
-    .offset(filters.offset ?? 0);
+    .limit(clampPageSize(filters.limit))
+    .offset(clampOffset(filters.offset));
 
   return query;
 }
 
-export async function getJobsByClientId(clientId: number) {
+export async function getJobsByClientId(clientId: number, limit = MAX_PAGE_SIZE, offset = 0) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(jobs).where(eq(jobs.clientId, clientId)).orderBy(desc(jobs.createdAt));
+  return db.select().from(jobs).where(eq(jobs.clientId, clientId)).orderBy(desc(jobs.createdAt)).limit(clampPageSize(limit, MAX_PAGE_SIZE)).offset(clampOffset(offset));
 }
 
 export async function updateJob(id: number, data: Partial<InsertJob>) {
@@ -317,16 +330,16 @@ export async function getApplicationById(id: number) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function getApplicationsByJobId(jobId: number) {
+export async function getApplicationsByJobId(jobId: number, limit = MAX_PAGE_SIZE, offset = 0) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(applications).where(eq(applications.jobId, jobId)).orderBy(desc(applications.createdAt));
+  return db.select().from(applications).where(eq(applications.jobId, jobId)).orderBy(desc(applications.createdAt)).limit(clampPageSize(limit, MAX_PAGE_SIZE)).offset(clampOffset(offset));
 }
 
-export async function getApplicationsByProfessionalId(professionalId: number) {
+export async function getApplicationsByProfessionalId(professionalId: number, limit = MAX_PAGE_SIZE, offset = 0) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(applications).where(eq(applications.professionalId, professionalId)).orderBy(desc(applications.createdAt));
+  return db.select().from(applications).where(eq(applications.professionalId, professionalId)).orderBy(desc(applications.createdAt)).limit(clampPageSize(limit, MAX_PAGE_SIZE)).offset(clampOffset(offset));
 }
 
 export async function updateApplicationStatus(
@@ -372,10 +385,10 @@ export async function createReview(data: InsertReview) {
   return db.insert(reviews).values(data);
 }
 
-export async function getReviewsByRevieweeId(revieweeId: number) {
+export async function getReviewsByRevieweeId(revieweeId: number, limit?: number, offset?: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(reviews).where(eq(reviews.revieweeId, revieweeId)).orderBy(desc(reviews.createdAt));
+  return db.select().from(reviews).where(eq(reviews.revieweeId, revieweeId)).orderBy(desc(reviews.createdAt)).limit(clampPageSize(limit, MAX_PAGE_SIZE)).offset(clampOffset(offset));
 }
 
 // ─── Admin Stats ──────────────────────────────────────────────────────────────
@@ -533,18 +546,25 @@ export async function getOrCreateConversation(jobId: number, clientId: number, p
   return inserted;
 }
 
-export async function getConversationsByUserId(userId: number) {
+export async function getConversationById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [conversation] = await db.select().from(conversations).where(eq(conversations.id, id)).limit(1);
+  return conversation;
+}
+
+export async function getConversationsByUserId(userId: number, limit = MAX_PAGE_SIZE, offset = 0) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(conversations).where(
     or(eq(conversations.clientId, userId), eq(conversations.professionalId, userId))
-  ).orderBy(desc(conversations.lastMessageAt));
+  ).orderBy(desc(conversations.lastMessageAt)).limit(clampPageSize(limit, MAX_PAGE_SIZE)).offset(clampOffset(offset));
 }
 
-export async function getMessagesByConversationId(conversationId: number, limit = 50) {
+export async function getMessagesByConversationId(conversationId: number, limit = 50, offset = 0) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(messages).where(eq(messages.conversationId, conversationId)).orderBy(asc(messages.createdAt)).limit(limit);
+  return db.select().from(messages).where(eq(messages.conversationId, conversationId)).orderBy(asc(messages.createdAt)).limit(clampPageSize(limit, 50)).offset(clampOffset(offset));
 }
 
 export async function createMessage(conversationId: number, senderId: number, content: string) {
@@ -595,16 +615,23 @@ export async function getEscrowByJobId(jobId: number) {
   return result[0] ?? null;
 }
 
+export async function getEscrowByReference(reference: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const [escrow] = await db.select().from(escrowPayments).where(eq(escrowPayments.paystackReference, reference)).limit(1);
+  return escrow ?? null;
+}
+
 export async function updateEscrowStatus(id: number, status: EscrowPayment["status"], extra?: Partial<EscrowPayment>) {
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");
   await db.update(escrowPayments).set({ status, ...extra }).where(eq(escrowPayments.id, id));
 }
 
-export async function getAllEscrowPayments() {
+export async function getAllEscrowPayments(limit = MAX_PAGE_SIZE, offset = 0) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(escrowPayments).orderBy(desc(escrowPayments.createdAt));
+  return db.select().from(escrowPayments).orderBy(desc(escrowPayments.createdAt)).limit(clampPageSize(limit, MAX_PAGE_SIZE)).offset(clampOffset(offset));
 }
 
 // ─── Verification Requests ────────────────────────────────────────────────────
@@ -615,16 +642,23 @@ export async function createVerificationRequest(data: InsertVerificationRequest)
   return inserted;
 }
 
-export async function getVerificationRequestsByUserId(userId: number) {
+export async function getVerificationRequestById(id: number) {
   const db = await getDb();
-  if (!db) return [];
-  return db.select().from(verificationRequests).where(eq(verificationRequests.userId, userId)).orderBy(desc(verificationRequests.createdAt));
+  if (!db) return undefined;
+  const [request] = await db.select().from(verificationRequests).where(eq(verificationRequests.id, id)).limit(1);
+  return request;
 }
 
-export async function getAllVerificationRequests() {
+export async function getVerificationRequestsByUserId(userId: number, limit = MAX_PAGE_SIZE, offset = 0) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(verificationRequests).orderBy(desc(verificationRequests.createdAt));
+  return db.select().from(verificationRequests).where(eq(verificationRequests.userId, userId)).orderBy(desc(verificationRequests.createdAt)).limit(clampPageSize(limit, MAX_PAGE_SIZE)).offset(clampOffset(offset));
+}
+
+export async function getAllVerificationRequests(limit = MAX_PAGE_SIZE, offset = 0) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(verificationRequests).orderBy(desc(verificationRequests.createdAt)).limit(clampPageSize(limit, MAX_PAGE_SIZE)).offset(clampOffset(offset));
 }
 
 export async function updateVerificationRequest(id: number, data: Partial<VerificationRequest>) {
@@ -634,12 +668,13 @@ export async function updateVerificationRequest(id: number, data: Partial<Verifi
 }
 
 // ─── Products ─────────────────────────────────────────────────────────────────
-export async function listProducts(activeOnly = true) {
+export async function listProducts(activeOnly = true, limit?: number, offset?: number) {
   const db = await getDb();
   if (!db) return [];
-  const q = db.select().from(products).orderBy(desc(products.createdAt));
-  if (activeOnly) return db.select().from(products).where(eq(products.isActive, true)).orderBy(desc(products.createdAt));
-  return q;
+  const boundedLimit = clampPageSize(limit, MAX_PAGE_SIZE);
+  const boundedOffset = clampOffset(offset);
+  if (activeOnly) return db.select().from(products).where(eq(products.isActive, true)).orderBy(desc(products.createdAt)).limit(boundedLimit).offset(boundedOffset);
+  return db.select().from(products).orderBy(desc(products.createdAt)).limit(boundedLimit).offset(boundedOffset);
 }
 
 export async function getProductById(id: number) {
@@ -690,10 +725,10 @@ export async function getOrderByReference(ref: string) {
   return result[0];
 }
 
-export async function getOrdersByUserId(userId: number) {
+export async function getOrdersByUserId(userId: number, limit = MAX_PAGE_SIZE, offset = 0) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(orders).where(eq(orders.userId, userId)).orderBy(desc(orders.createdAt));
+  return db.select().from(orders).where(eq(orders.userId, userId)).orderBy(desc(orders.createdAt)).limit(clampPageSize(limit, MAX_PAGE_SIZE)).offset(clampOffset(offset));
 }
 
 export async function updateOrder(id: number, data: Partial<Order>) {
@@ -702,10 +737,10 @@ export async function updateOrder(id: number, data: Partial<Order>) {
   await db.update(orders).set(data).where(eq(orders.id, id));
 }
 
-export async function getAllOrders() {
+export async function getAllOrders(limit = MAX_PAGE_SIZE, offset = 0) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(orders).orderBy(desc(orders.createdAt));
+  return db.select().from(orders).orderBy(desc(orders.createdAt)).limit(clampPageSize(limit, MAX_PAGE_SIZE)).offset(clampOffset(offset));
 }
 
 // ─── Phone OTPs ───────────────────────────────────────────────────────────────
@@ -836,10 +871,10 @@ export async function upsertUserByEmail(email: string, name?: string) {
 }
 
 // ─── Disputes & Audit Logs ────────────────────────────────────────────────────
-export async function listDisputes() {
+export async function listDisputes(limit = MAX_PAGE_SIZE, offset = 0) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(disputes).orderBy(desc(disputes.createdAt));
+  return db.select().from(disputes).orderBy(desc(disputes.createdAt)).limit(clampPageSize(limit, MAX_PAGE_SIZE)).offset(clampOffset(offset));
 }
 
 export async function getDisputeById(id: number) {
@@ -879,10 +914,10 @@ export async function createAuditLog(data: InsertAuditLog) {
   }
 }
 
-export async function listAuditLogs(limit = 100) {
+export async function listAuditLogs(limit = MAX_PAGE_SIZE, offset = 0) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(auditLogs).orderBy(desc(auditLogs.createdAt)).limit(limit);
+  return db.select().from(auditLogs).orderBy(desc(auditLogs.createdAt)).limit(clampPageSize(limit, MAX_PAGE_SIZE)).offset(clampOffset(offset));
 }
 
 export async function deleteOldAuditLogs(days = 30) {
@@ -893,52 +928,106 @@ export async function deleteOldAuditLogs(days = 30) {
   return { success: true, cutoff };
 }
 
+type PlatformReportsRow = {
+  totalUsers: string | number;
+  clients: string | number;
+  professionals: string | number;
+  enterprise: string | number;
+  admins: string | number;
+  verified: string | number;
+  totalJobs: string | number;
+  openJobs: string | number;
+  inProgressJobs: string | number;
+  completedJobs: string | number;
+  cancelledJobs: string | number;
+  totalVerification: string | number;
+  pendingVerification: string | number;
+  approvedVerification: string | number;
+  rejectedVerification: string | number;
+  totalDisputes: string | number;
+  openDisputes: string | number;
+  resolvedDisputes: string | number;
+  rejectedDisputes: string | number;
+  totalEscrowVolume: string | number;
+  fundedEscrowCount: string | number;
+  releasedEscrowCount: string | number;
+  refundedEscrowCount: string | number;
+  paidOrdersAmount: string | number;
+};
+
 export async function getPlatformReportsData() {
   const db = await getDb();
   if (!db) return null;
-  const allU = await db.select().from(users);
-  const allJ = await db.select().from(jobs);
-  const allV = await db.select().from(verificationRequests);
-  const allD = await db.select().from(disputes);
-  const allE = await db.select().from(escrowPayments);
-  const allO = await db.select().from(orders);
 
+  // Keep this report bounded to one aggregate statement. The backend uses a
+  // single transaction-pooler connection, so loading entire tables into Node
+  // can block authentication and dashboard requests.
+  const result = await db.execute(sql<PlatformReportsRow>`
+    SELECT
+      (SELECT count(*) FROM ${users}) AS "totalUsers",
+      (SELECT count(*) FILTER (WHERE ${users.userType} = 'client') FROM ${users}) AS "clients",
+      (SELECT count(*) FILTER (WHERE ${users.userType} = 'professional') FROM ${users}) AS "professionals",
+      (SELECT count(*) FILTER (WHERE ${users.userType} = 'enterprise') FROM ${users}) AS "enterprise",
+      (SELECT count(*) FILTER (WHERE ${users.role} IN ('admin', 'SUPER_ADMIN')) FROM ${users}) AS "admins",
+      (SELECT count(*) FILTER (WHERE ${users.isVerified} = true) FROM ${users}) AS "verified",
+      (SELECT count(*) FROM ${jobs}) AS "totalJobs",
+      (SELECT count(*) FILTER (WHERE ${jobs.status} = 'open') FROM ${jobs}) AS "openJobs",
+      (SELECT count(*) FILTER (WHERE ${jobs.status} = 'in_progress') FROM ${jobs}) AS "inProgressJobs",
+      (SELECT count(*) FILTER (WHERE ${jobs.status} = 'completed') FROM ${jobs}) AS "completedJobs",
+      (SELECT count(*) FILTER (WHERE ${jobs.status} = 'cancelled') FROM ${jobs}) AS "cancelledJobs",
+      (SELECT count(*) FROM ${verificationRequests}) AS "totalVerification",
+      (SELECT count(*) FILTER (WHERE ${verificationRequests.status} = 'pending') FROM ${verificationRequests}) AS "pendingVerification",
+      (SELECT count(*) FILTER (WHERE ${verificationRequests.status} = 'approved') FROM ${verificationRequests}) AS "approvedVerification",
+      (SELECT count(*) FILTER (WHERE ${verificationRequests.status} = 'rejected') FROM ${verificationRequests}) AS "rejectedVerification",
+      (SELECT count(*) FROM ${disputes}) AS "totalDisputes",
+      (SELECT count(*) FILTER (WHERE ${disputes.status} IN ('open', 'under_review', 'escalated')) FROM ${disputes}) AS "openDisputes",
+      (SELECT count(*) FILTER (WHERE ${disputes.status} = 'resolved') FROM ${disputes}) AS "resolvedDisputes",
+      (SELECT count(*) FILTER (WHERE ${disputes.status} IN ('rejected', 'closed')) FROM ${disputes}) AS "rejectedDisputes",
+      (SELECT coalesce(sum(${escrowPayments.amount}), 0) FROM ${escrowPayments}) AS "totalEscrowVolume",
+      (SELECT count(*) FILTER (WHERE ${escrowPayments.status} = 'funded') FROM ${escrowPayments}) AS "fundedEscrowCount",
+      (SELECT count(*) FILTER (WHERE ${escrowPayments.status} = 'released') FROM ${escrowPayments}) AS "releasedEscrowCount",
+      (SELECT count(*) FILTER (WHERE ${escrowPayments.status} = 'refunded') FROM ${escrowPayments}) AS "refundedEscrowCount",
+      (SELECT coalesce(sum(${orders.amount}) FILTER (WHERE ${orders.status} = 'paid'), 0) FROM ${orders}) AS "paidOrdersAmount"
+  `);
+
+  const row = result[0] as PlatformReportsRow | undefined;
+  const numberOf = (value: string | number | undefined) => Number(value ?? 0);
   return {
     users: {
-      total: allU.length,
-      clients: allU.filter(u => u.userType === "client").length,
-      professionals: allU.filter(u => u.userType === "professional").length,
-      enterprise: allU.filter(u => u.userType === "enterprise").length,
-      admins: allU.filter(u => u.role === "admin" || u.role === "SUPER_ADMIN").length,
-      verified: allU.filter(u => u.isVerified).length,
+      total: numberOf(row?.totalUsers),
+      clients: numberOf(row?.clients),
+      professionals: numberOf(row?.professionals),
+      enterprise: numberOf(row?.enterprise),
+      admins: numberOf(row?.admins),
+      verified: numberOf(row?.verified),
     },
     jobs: {
-      total: allJ.length,
-      open: allJ.filter(j => j.status === "open").length,
-      inProgress: allJ.filter(j => j.status === "in_progress").length,
-      completed: allJ.filter(j => j.status === "completed").length,
-      cancelled: allJ.filter(j => j.status === "cancelled").length,
+      total: numberOf(row?.totalJobs),
+      open: numberOf(row?.openJobs),
+      inProgress: numberOf(row?.inProgressJobs),
+      completed: numberOf(row?.completedJobs),
+      cancelled: numberOf(row?.cancelledJobs),
     },
     verification: {
-      total: allV.length,
-      pending: allV.filter(v => v.status === "pending").length,
-      approved: allV.filter(v => v.status === "approved").length,
-      rejected: allV.filter(v => v.status === "rejected").length,
+      total: numberOf(row?.totalVerification),
+      pending: numberOf(row?.pendingVerification),
+      approved: numberOf(row?.approvedVerification),
+      rejected: numberOf(row?.rejectedVerification),
     },
     disputes: {
-      total: allD.length,
-      open: allD.filter(d => d.status === "open" || d.status === "under_review" || d.status === "escalated").length,
-      resolved: allD.filter(d => d.status === "resolved").length,
-      rejected: allD.filter(d => d.status === "rejected" || d.status === "closed").length,
+      total: numberOf(row?.totalDisputes),
+      open: numberOf(row?.openDisputes),
+      resolved: numberOf(row?.resolvedDisputes),
+      rejected: numberOf(row?.rejectedDisputes),
     },
     escrow: {
-      totalVolume: allE.reduce((acc, e) => acc + Number(e.amount || 0), 0),
-      fundedCount: allE.filter(e => e.status === "funded").length,
-      releasedCount: allE.filter(e => e.status === "released").length,
-      refundedCount: allE.filter(e => e.status === "refunded").length,
+      totalVolume: numberOf(row?.totalEscrowVolume),
+      fundedCount: numberOf(row?.fundedEscrowCount),
+      releasedCount: numberOf(row?.releasedEscrowCount),
+      refundedCount: numberOf(row?.refundedEscrowCount),
     },
     revenue: {
-      totalOrdersAmount: allO.filter(o => o.status === "paid").reduce((acc, o) => acc + Number(o.amount || 0), 0),
-    }
+      totalOrdersAmount: numberOf(row?.paidOrdersAmount),
+    },
   };
 }
