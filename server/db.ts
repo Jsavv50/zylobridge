@@ -379,79 +379,141 @@ export async function getReviewsByRevieweeId(revieweeId: number) {
 }
 
 // ─── Admin Stats ──────────────────────────────────────────────────────────────
-export async function getAdminStats() {
-  const db = await getDb();
-  if (!db) {
-    return {
-      totalUsers: 0, clientCount: 0, professionalCount: 0, enterpriseCount: 0, adminCount: 0, unsetCount: 0,
-      totalJobs: 0, openJobs: 0, inProgressJobs: 0, completedJobs: 0, cancelledJobs: 0,
-      totalApplications: 0, pendingApplications: 0,
-      verifiedUsers: 0, totalReviews: 0,
-      totalEscrowAmount: 0, fundedEscrowAmount: 0, pendingVerificationCount: 0,
-    };
+type AdminStats = {
+  totalUsers: number;
+  clientCount: number;
+  professionalCount: number;
+  enterpriseCount: number;
+  adminCount: number;
+  unsetCount: number;
+  totalJobs: number;
+  openJobs: number;
+  inProgressJobs: number;
+  completedJobs: number;
+  cancelledJobs: number;
+  totalApplications: number;
+  pendingApplications: number;
+  verifiedUsers: number;
+  totalReviews: number;
+  totalEscrowAmount: number;
+  fundedEscrowAmount: number;
+  pendingVerificationCount: number;
+};
+
+type AdminStatsRow = Record<keyof AdminStats, string | number | null>;
+
+const EMPTY_ADMIN_STATS: AdminStats = {
+  totalUsers: 0,
+  clientCount: 0,
+  professionalCount: 0,
+  enterpriseCount: 0,
+  adminCount: 0,
+  unsetCount: 0,
+  totalJobs: 0,
+  openJobs: 0,
+  inProgressJobs: 0,
+  completedJobs: 0,
+  cancelledJobs: 0,
+  totalApplications: 0,
+  pendingApplications: 0,
+  verifiedUsers: 0,
+  totalReviews: 0,
+  totalEscrowAmount: 0,
+  fundedEscrowAmount: 0,
+  pendingVerificationCount: 0,
+};
+
+const ADMIN_STATS_TIMEOUT_MS = 3_000;
+let adminStatsCache: AdminStats = { ...EMPTY_ADMIN_STATS };
+let adminStatsInFlight: Promise<AdminStats> | null = null;
+
+function adminStatsFromRow(row: AdminStatsRow | undefined): AdminStats {
+  return {
+    totalUsers: Number(row?.totalUsers ?? 0),
+    clientCount: Number(row?.clientCount ?? 0),
+    professionalCount: Number(row?.professionalCount ?? 0),
+    enterpriseCount: Number(row?.enterpriseCount ?? 0),
+    adminCount: Number(row?.adminCount ?? 0),
+    unsetCount: Number(row?.unsetCount ?? 0),
+    totalJobs: Number(row?.totalJobs ?? 0),
+    openJobs: Number(row?.openJobs ?? 0),
+    inProgressJobs: Number(row?.inProgressJobs ?? 0),
+    completedJobs: Number(row?.completedJobs ?? 0),
+    cancelledJobs: Number(row?.cancelledJobs ?? 0),
+    totalApplications: Number(row?.totalApplications ?? 0),
+    pendingApplications: Number(row?.pendingApplications ?? 0),
+    verifiedUsers: Number(row?.verifiedUsers ?? 0),
+    totalReviews: Number(row?.totalReviews ?? 0),
+    totalEscrowAmount: Number(row?.totalEscrowAmount ?? 0),
+    fundedEscrowAmount: Number(row?.fundedEscrowAmount ?? 0),
+    pendingVerificationCount: Number(row?.pendingVerificationCount ?? 0),
+  };
+}
+
+async function queryAdminStats(db: Awaited<ReturnType<typeof getDb>>): Promise<AdminStats> {
+  if (!db) return adminStatsCache;
+
+  // One statement is important here: Railway uses a single transaction-pooler
+  // connection, so six concurrent Drizzle queries are still serialized by the
+  // pooler and can exceed the request budget even when each query is bounded.
+  const result = await db.execute(sql<AdminStatsRow>`
+    SELECT
+      (SELECT count(*) FROM ${users}) AS "totalUsers",
+      (SELECT count(*) FILTER (WHERE ${users.userType} = 'client') FROM ${users}) AS "clientCount",
+      (SELECT count(*) FILTER (WHERE ${users.userType} = 'professional') FROM ${users}) AS "professionalCount",
+      (SELECT count(*) FILTER (WHERE ${users.userType} = 'enterprise') FROM ${users}) AS "enterpriseCount",
+      (SELECT count(*) FILTER (WHERE ${users.role} IN ('admin', 'SUPER_ADMIN')) FROM ${users}) AS "adminCount",
+      (SELECT count(*) FILTER (WHERE ${users.userType} = 'unset') FROM ${users}) AS "unsetCount",
+      (SELECT count(*) FILTER (WHERE ${users.isVerified} = true) FROM ${users}) AS "verifiedUsers",
+      (SELECT count(*) FROM ${jobs}) AS "totalJobs",
+      (SELECT count(*) FILTER (WHERE ${jobs.status} = 'open') FROM ${jobs}) AS "openJobs",
+      (SELECT count(*) FILTER (WHERE ${jobs.status} = 'in_progress') FROM ${jobs}) AS "inProgressJobs",
+      (SELECT count(*) FILTER (WHERE ${jobs.status} = 'completed') FROM ${jobs}) AS "completedJobs",
+      (SELECT count(*) FILTER (WHERE ${jobs.status} = 'cancelled') FROM ${jobs}) AS "cancelledJobs",
+      (SELECT count(*) FROM ${applications}) AS "totalApplications",
+      (SELECT count(*) FILTER (WHERE ${applications.status} = 'pending') FROM ${applications}) AS "pendingApplications",
+      (SELECT count(*) FROM ${reviews}) AS "totalReviews",
+      (SELECT coalesce(sum(${escrowPayments.amount}), 0) FROM ${escrowPayments}) AS "totalEscrowAmount",
+      (SELECT coalesce(sum(${escrowPayments.amount}) FILTER (WHERE ${escrowPayments.status} IN ('funded', 'released')), 0) FROM ${escrowPayments}) AS "fundedEscrowAmount",
+      (SELECT count(*) FILTER (WHERE ${verificationRequests.status} = 'pending') FROM ${verificationRequests}) AS "pendingVerificationCount"
+  `);
+
+  return adminStatsFromRow(result[0] as AdminStatsRow | undefined);
+}
+
+function getAdminStatsWithTimeout(query: Promise<AdminStats>): Promise<AdminStats> {
+  return new Promise(resolve => {
+    const timer = setTimeout(() => resolve(adminStatsCache), ADMIN_STATS_TIMEOUT_MS);
+    query.then(
+      value => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      error => {
+        clearTimeout(timer);
+        console.warn("[AdminStats] Query failed; serving cached snapshot:", error);
+        resolve(adminStatsCache);
+      },
+    );
+  });
+}
+
+export async function getAdminStats(): Promise<AdminStats> {
+  if (!adminStatsInFlight) {
+    adminStatsInFlight = (async () => {
+      const db = await getDb();
+      const nextStats = await queryAdminStats(db);
+      adminStatsCache = nextStats;
+      return nextStats;
+    })().catch(error => {
+      console.warn("[AdminStats] Database unavailable; serving cached snapshot:", error);
+      return adminStatsCache;
+    }).finally(() => {
+      adminStatsInFlight = null;
+    });
   }
 
-  // Keep this endpoint bounded: Railway uses a single transaction-pooler
-  // connection, so loading every row and filtering in JavaScript can queue
-  // behind a large table scan and block unrelated auth requests.
-  const [userAgg, jobAgg, applicationAgg, reviewAgg, escrowAgg, verificationAgg] = await Promise.all([
-    db.select({
-      totalUsers: sql<number>`count(*)`,
-      clientCount: sql<number>`count(*) filter (where ${users.userType} = 'client')`,
-      professionalCount: sql<number>`count(*) filter (where ${users.userType} = 'professional')`,
-      enterpriseCount: sql<number>`count(*) filter (where ${users.userType} = 'enterprise')`,
-      adminCount: sql<number>`count(*) filter (where ${users.role} in ('admin', 'SUPER_ADMIN'))`,
-      unsetCount: sql<number>`count(*) filter (where ${users.userType} = 'unset')`,
-      verifiedUsers: sql<number>`count(*) filter (where ${users.isVerified} = true)`,
-    }).from(users),
-    db.select({
-      totalJobs: sql<number>`count(*)`,
-      openJobs: sql<number>`count(*) filter (where ${jobs.status} = 'open')`,
-      inProgressJobs: sql<number>`count(*) filter (where ${jobs.status} = 'in_progress')`,
-      completedJobs: sql<number>`count(*) filter (where ${jobs.status} = 'completed')`,
-      cancelledJobs: sql<number>`count(*) filter (where ${jobs.status} = 'cancelled')`,
-    }).from(jobs),
-    db.select({
-      totalApplications: sql<number>`count(*)`,
-      pendingApplications: sql<number>`count(*) filter (where ${applications.status} = 'pending')`,
-    }).from(applications),
-    db.select({ totalReviews: sql<number>`count(*)` }).from(reviews),
-    db.select({
-      totalEscrowAmount: sql<number>`coalesce(sum(${escrowPayments.amount}), 0)`,
-      fundedEscrowAmount: sql<number>`coalesce(sum(${escrowPayments.amount}) filter (where ${escrowPayments.status} in ('funded', 'released')), 0)`,
-    }).from(escrowPayments),
-    db.select({
-      pendingVerificationCount: sql<number>`count(*) filter (where ${verificationRequests.status} = 'pending')`,
-    }).from(verificationRequests),
-  ]);
-
-  const usersStats = userAgg[0];
-  const jobsStats = jobAgg[0];
-  const applicationsStats = applicationAgg[0];
-  const reviewsStats = reviewAgg[0];
-  const escrowStats = escrowAgg[0];
-  const verificationStats = verificationAgg[0];
-
-  return {
-    totalUsers: Number(usersStats?.totalUsers ?? 0),
-    clientCount: Number(usersStats?.clientCount ?? 0),
-    professionalCount: Number(usersStats?.professionalCount ?? 0),
-    enterpriseCount: Number(usersStats?.enterpriseCount ?? 0),
-    adminCount: Number(usersStats?.adminCount ?? 0),
-    unsetCount: Number(usersStats?.unsetCount ?? 0),
-    totalJobs: Number(jobsStats?.totalJobs ?? 0),
-    openJobs: Number(jobsStats?.openJobs ?? 0),
-    inProgressJobs: Number(jobsStats?.inProgressJobs ?? 0),
-    completedJobs: Number(jobsStats?.completedJobs ?? 0),
-    cancelledJobs: Number(jobsStats?.cancelledJobs ?? 0),
-    totalApplications: Number(applicationsStats?.totalApplications ?? 0),
-    pendingApplications: Number(applicationsStats?.pendingApplications ?? 0),
-    verifiedUsers: Number(usersStats?.verifiedUsers ?? 0),
-    totalReviews: Number(reviewsStats?.totalReviews ?? 0),
-    totalEscrowAmount: Number(escrowStats?.totalEscrowAmount ?? 0),
-    fundedEscrowAmount: Number(escrowStats?.fundedEscrowAmount ?? 0),
-    pendingVerificationCount: Number(verificationStats?.pendingVerificationCount ?? 0),
-  };
+  return getAdminStatsWithTimeout(adminStatsInFlight);
 }
 
 
