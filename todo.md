@@ -552,9 +552,9 @@
 - [ ] Save a checkpoint only after live acceptance succeeds
 
 ## Phase 52: Production Sign-In Fix Requested
-- [ ] Confirm the first failing authentication request and separate stale OTP rejection from production latency
-- [ ] Identify whether OTP verification is blocked by Supabase/Auth/database/session work
-- [ ] Identify whether Google OAuth fails at initiation, callback, user lookup, cookie handoff, or frontend auth bootstrap
-- [ ] Implement the smallest evidence-based fix for the confirmed production failure
-- [ ] Add regression coverage for the confirmed failure and session handoff
+- [x] Confirm the first failing authentication request and separate stale OTP rejection from production latency
+- [x] Identify whether OTP verification is blocked by Supabase/Auth/database/session work
+- [x] Identify whether Google OAuth fails at initiation, callback, user lookup, cookie handoff, or frontend auth bootstrap
+- [x] Implement the smallest evidence-based fix for the confirmed production failure
+- [x] Add regression coverage for the confirmed failure and session handoff
 - [ ] Re-run live Email OTP and Google acceptance before declaring completion

@@ -78,4 +78,13 @@ describe("production auth session handoff architecture", () => {
     expect(html).not.toContain("%VITE_ANALYTICS_ENDPOINT%");
     expect(html).not.toContain("VITE_ANALYTICS_ENDPOINT");
   });
+
+  it("detaches a colliding Google openId before attaching it to the email owner", () => {
+    const db = readProjectFile("server/db.ts");
+
+    expect(db).toContain("if (existingByEmail && existingByOpenId && existingByEmail.id !== existingByOpenId.id)");
+    expect(db).toContain("const detachedOpenId = `detached_${Date.now()}_${existingByOpenId.id}`");
+    expect(db).toContain(".set({ openId: detachedOpenId })");
+    expect(db).toContain('updateData.role = "admin"');
+  });
 });
