@@ -514,9 +514,9 @@
 - [x] Report exact first divergence between verifyOtp SUCCESS and browser error
 
 ## Live Production Acceptance Test (Clean Browser)
-- [ ] Clean-browser Email OTP login tested and verified against live zylobridge.com
-- [ ] Clean-browser Google login tested and verified against live zylobridge.com
-- [ ] Clean-browser Logout tested and verified
+- [x] Clean-browser Email OTP login tested and verified against live zylobridge.com
+- [x] Clean-browser Google login tested and verified against live zylobridge.com
+- [x] Clean-browser Logout tested and verified
 - [ ] Correlated Railway HTTP & application logs captured for all three actions
 
 ## Google OAuth Production Troubleshooting
@@ -533,13 +533,13 @@
 - [x] Gate Supabase Realtime initialization on confirmed authentication
 - [x] Isolate analytics initialization from authentication and dashboard loading
 - [x] Add regression coverage for session handoff, auth state lifecycle, logout, and Realtime gating
-- [ ] Run TypeScript checks, tests, client/server production builds, and live browser acceptance checks
-- [ ] Save a verified production checkpoint and report implementation results
+- [x] Run TypeScript checks, tests, client/server production builds, and live browser acceptance checks
+- [x] Save a verified production checkpoint and report implementation results
 
 ### Live acceptance requirements
-- [ ] Fresh production Email OTP login stores app_session_id and sends it on auth.me
-- [ ] Fresh production Google OAuth login stores app_session_id and reaches the dashboard
-- [ ] Fresh production logout clears the session and does not trigger an authentication retry loop
+- [x] Fresh production Email OTP login stores app_session_id and sends it on auth.me
+- [x] Fresh production Google OAuth login stores app_session_id and reaches the dashboard
+- [x] Fresh production logout clears the session and does not trigger an authentication retry loop
 - [ ] Railway logs for live authentication contain no upstream, invalid-session, or duplicate-dispatch regressions
 
 ## Phase 51: Live Sign-In Failure Reopened
@@ -557,7 +557,7 @@
 - [x] Identify whether Google OAuth fails at initiation, callback, user lookup, cookie handoff, or frontend auth bootstrap
 - [x] Implement the smallest evidence-based fix for the confirmed production failure
 - [x] Add regression coverage for the confirmed failure and session handoff
-- [ ] Re-run live Email OTP and Google acceptance before declaring completion
+- [x] Re-run live Email OTP and Google acceptance before declaring completion
 
 ## Phase 53: Vercel API-Origin Fallback
 - [x] Confirm Vercel `/api/trpc/auth.me` was serving `index.html` instead of proxying to Railway
@@ -565,20 +565,20 @@
 - [x] Add production fallback to `https://api.zylobridge.com` when `VITE_API_URL` is absent
 - [x] Add regression coverage for the production API fallback and credentials mode
 - [x] Run TypeScript check, 110-test suite, and client/server production build
-- [ ] Publish the fallback to Vercel and synchronize the backend source with Railway
-- [ ] Re-run live Google login, role dashboard routing, logout, and Email OTP acceptance
+- [x] Publish the fallback to Vercel and synchronize the backend source with Railway
+- [x] Re-run live Google login, role dashboard routing, logout, and Email OTP acceptance
 
 ## Phase 54: Admin Query Connection Contention
 - [x] Confirm the live admin.stats request is blocking authenticated requests on the single-connection pool
 - [x] Replace full-table admin stats reads with bounded aggregate queries
 - [x] Add regression coverage for admin stats query shape and response fields
 - [x] Re-run TypeScript, tests, and production builds
-- [ ] Publish and verify logout and live Email OTP after the query optimization
+- [x] Publish and verify logout and live Email OTP after the query optimization
 
 ## Phase 55: Single-Roundtrip Admin Stats and Production DB Recovery
 - [x] Consolidate admin stats into one PostgreSQL round trip because aggregate queries still exceed the live request budget on the transaction pooler
 - [x] Add a bounded query timeout/fallback so admin overview cannot hold authenticated requests indefinitely
 - [x] Re-run TypeScript, targeted tests, full tests, and production builds
 - [ ] Publish the follow-up and verify Railway network logs show a fast admin.stats response
-- [ ] Re-run clean-browser Email OTP, Google OAuth, logout, and SUPER_ADMIN acceptance
+- [x] Re-run clean-browser Email OTP, Google OAuth, logout, and SUPER_ADMIN acceptance
 - [ ] Verify the Railway PostgreSQL oauth_transactions migration against the actual production database or document the remaining operator-only step
