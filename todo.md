@@ -633,12 +633,12 @@
 
 
 ## Phase 5B-1: Financial Core + Paystack Milestone Funding
-- [ ] Audit Phase 5A architecture and current engagement, organization, auth, and payment tables
-- [ ] Create additive Drizzle schema and migration for Phase 5B-1 financial core (milestones, payment transactions, payment events, ledger accounts, ledger entries, reconciliation records)
-- [ ] Implement double-entry ledger balancing engine (SUM(debits) = SUM(credits) validation with immutable entries)
-- [ ] Implement Paystack payment initialization procedure with server-side minor-unit calculations and authorization guards
-- [ ] Implement authoritative server-side payment verification and webhook endpoint with HMAC signature validation and idempotency
-- [ ] Implement milestone funding lifecycle and engagement state integration
-- [ ] Implement automated financial audit logging and reconciliation tracking foundation
-- [ ] Add comprehensive automated security, IDOR, ledger-balance, webhook, and payment tests (100%+ pass rate)
-- [ ] Run TypeScript checks, unit/integration tests, production builds, and write Phase 5B-1 implementation report
+- [x] Audit Phase 5A architecture and current engagement, organization, auth, and payment tables
+- [x] Create additive Drizzle schema and migration for Phase 5B-1 financial core (milestones, payment transactions, payment events, ledger accounts, ledger entries, reconciliation records)
+- [x] Implement double-entry ledger balancing engine (SUM(debits) = SUM(credits) validation with immutable entries)
+- [x] Implement Paystack payment initialization procedure with server-side minor-unit calculations and authorization guards
+- [x] Implement authoritative server-side payment verification and webhook endpoint with HMAC signature validation and idempotency
+- [x] Implement milestone funding lifecycle and engagement state integration
+- [x] Implement automated financial audit logging and reconciliation tracking foundation
+- [x] Add comprehensive automated security, IDOR, ledger-balance, webhook, and payment tests (100%+ pass rate)
+- [x] Run TypeScript checks, unit/integration tests, production builds, and write Phase 5B-1 implementation report

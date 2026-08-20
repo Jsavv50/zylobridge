@@ -48,7 +48,7 @@ import {
   createMessage,
   listDisputes,
   getDisputeById,
-  createDispute,
+  // createDispute,
   updateDispute,
   createAuditLog,
   listAuditLogs,
@@ -115,6 +115,7 @@ import {
 import { maskPhoneNumber, normalizePhoneNumber, sendPhoneOtpSms, SmsDeliveryError } from "./sms";
 import { getUserNotificationPreference, createInAppNotification, getUnreadNotifications, markNotificationRead, generateIcsContent, executeMatchingV2 } from "./phase4";
 import { initializeMilestonePayment, processVerifiedPayment, verifyPaystackWebhookSignature } from "./finance";
+import { addOrVerifyProfessionalBank, initiateMilestonePayout, authorizeRefund, createDispute, resolveDispute } from "./financeProtection";
 import {
   acceptOrganizationInvitation,
   canInviteOrganizationMembers,
@@ -1501,6 +1502,36 @@ export const appRouter = router({
     verifyPayment: protectedProcedure
       .input(z.object({ reference: z.string() }))
       .mutation(async ({ input }) => processVerifiedPayment(input.reference)),
+    addBankAccount: protectedProcedure
+      .input(z.object({ bankName: z.string(), bankCode: z.string(), accountNumber: z.string(), accountName: z.string() }))
+      .mutation(async ({ ctx, input }) => addOrVerifyProfessionalBank({ userId: ctx.user.id, ...input })),
+    initiatePayout: protectedProcedure
+      .input(z.object({ engagementId: z.number().int().positive(), milestoneId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "SUPER_ADMIN" && ctx.user.role !== "admin") {
+          throw new Error("Unauthorized: only administrators can trigger milestone payouts");
+        }
+        return initiateMilestonePayout({ ...input, adminUserId: ctx.user.id });
+      }),
+    authorizeRefund: protectedProcedure
+      .input(z.object({ transactionId: z.number().int().positive(), amountMinor: z.number().int().positive().optional(), reason: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "SUPER_ADMIN" && ctx.user.role !== "admin") {
+          throw new Error("Unauthorized: only administrators can authorize refunds");
+        }
+        return authorizeRefund({ ...input, adminUserId: ctx.user.id });
+      }),
+    createDispute: protectedProcedure
+      .input(z.object({ engagementId: z.number().int().positive(), milestoneId: z.number().int().positive().optional(), transactionId: z.number().int().positive().optional(), respondentId: z.number().int().positive(), reason: z.string() }))
+      .mutation(async ({ ctx, input }) => createDispute({ ...input, initiatorId: ctx.user.id })),
+    resolveDispute: protectedProcedure
+      .input(z.object({ disputeId: z.number().int().positive(), resolution: z.string(), action: z.enum(["release_to_professional", "refund_to_employer", "split"]) }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "SUPER_ADMIN" && ctx.user.role !== "admin") {
+          throw new Error("Unauthorized: only administrators can resolve disputes");
+        }
+        return resolveDispute({ ...input, adminUserId: ctx.user.id });
+      }),
   }),
 });
 

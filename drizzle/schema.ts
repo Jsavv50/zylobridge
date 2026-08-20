@@ -781,3 +781,100 @@ export const reconciliationRecords = pgTable("reconciliation_records", {
 });
 export type ReconciliationRecord = typeof reconciliationRecords.$inferSelect;
 export type InsertReconciliationRecord = typeof reconciliationRecords.$inferInsert;
+
+
+// ─── Phase 5B-2 Financial Protection Extensions ───────────────────────────────
+export const payoutStatusEnum = pgEnum("payout_status", ["payout_pending", "payout_eligible", "payout_initiated", "payout_processing", "payout_completed", "payout_failed", "payout_retry_pending", "payout_reversed"]);
+export const refundStatusEnum = pgEnum("refund_status", ["refund_pending", "refund_processing", "refund_completed", "refund_failed"]);
+export const professionalBankAccounts = pgTable("professional_bank_accounts", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  bankName: varchar("bankName", { length: 128 }).notNull(),
+  bankCode: varchar("bankCode", { length: 32 }).notNull(),
+  accountNumber: varchar("accountNumber", { length: 32 }).notNull(),
+  accountName: varchar("accountName", { length: 255 }).notNull(),
+  recipientCode: varchar("recipientCode", { length: 128 }),
+  isVerified: boolean("isVerified").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+}, (table) => ({
+  userIdx: index("professional_bank_accounts_user_idx").on(table.userId),
+}));
+export type ProfessionalBankAccount = typeof professionalBankAccounts.$inferSelect;
+export type InsertProfessionalBankAccount = typeof professionalBankAccounts.$inferInsert;
+
+export const payouts = pgTable("payouts", {
+  id: serial("id").primaryKey(),
+  reference: varchar("reference", { length: 120 }).notNull().unique(),
+  engagementId: integer("engagementId").notNull(),
+  milestoneId: integer("milestoneId").notNull(),
+  professionalId: integer("professionalId").notNull(),
+  amountMinor: bigint("amountMinor", { mode: "number" }).notNull(),
+  platformFeeMinor: bigint("platformFeeMinor", { mode: "number" }).default(0).notNull(),
+  netAmountMinor: bigint("netAmountMinor", { mode: "number" }).notNull(),
+  currency: varchar("currency", { length: 3 }).default("NGN").notNull(),
+  status: payoutStatusEnum("status").default("payout_pending").notNull(),
+  transferCode: varchar("transferCode", { length: 128 }),
+  transferReference: varchar("transferReference", { length: 120 }),
+  failureReason: text("failureReason"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+}, (table) => ({
+  refIdx: index("payouts_reference_idx").on(table.reference),
+  engagementIdx: index("payouts_engagement_idx").on(table.engagementId),
+}));
+export type Payout = typeof payouts.$inferSelect;
+export type InsertPayout = typeof payouts.$inferInsert;
+
+export const refunds = pgTable("refunds", {
+  id: serial("id").primaryKey(),
+  reference: varchar("reference", { length: 120 }).notNull().unique(),
+  transactionId: integer("transactionId").notNull(),
+  engagementId: integer("engagementId").notNull(),
+  amountMinor: bigint("amountMinor", { mode: "number" }).notNull(),
+  currency: varchar("currency", { length: 3 }).default("NGN").notNull(),
+  status: refundStatusEnum("status").default("refund_pending").notNull(),
+  providerRefundId: varchar("providerRefundId", { length: 128 }),
+  reason: text("reason"),
+  authorizedBy: integer("authorizedBy").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+}, (table) => ({
+  refIdx: index("refunds_reference_idx").on(table.reference),
+}));
+export type Refund = typeof refunds.$inferSelect;
+export type InsertRefund = typeof refunds.$inferInsert;
+
+export const engagementDisputes = pgTable("engagement_disputes", {
+  id: serial("id").primaryKey(),
+  engagementId: integer("engagementId").notNull(),
+  milestoneId: integer("milestoneId"),
+  transactionId: integer("transactionId"),
+  initiatorId: integer("initiatorId").notNull(),
+  respondentId: integer("respondentId").notNull(),
+  reason: text("reason").notNull(),
+  status: pgEnum("engagement_dispute_status", ["opened", "under_review", "evidence_requested", "mediation", "resolution_pending", "resolved", "escalated", "closed"])("status").default("opened").notNull(),
+  resolution: text("resolution"),
+  resolvedBy: integer("resolvedBy"),
+  resolvedAt: timestamp("resolvedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+}, (table) => ({
+  engagementIdx: index("engagement_disputes_engagement_idx").on(table.engagementId),
+}));
+export type EngagementDispute = typeof engagementDisputes.$inferSelect;
+export type InsertEngagementDispute = typeof engagementDisputes.$inferInsert;
+
+export const disputeEvidence = pgTable("dispute_evidence", {
+  id: serial("id").primaryKey(),
+  disputeId: integer("disputeId").notNull(),
+  uploaderId: integer("uploaderId").notNull(),
+  fileUrl: text("fileUrl").notNull(),
+  fileKey: text("fileKey"),
+  description: text("description"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  disputeIdx: index("dispute_evidence_dispute_idx").on(table.disputeId),
+}));
+export type DisputeEvidence = typeof disputeEvidence.$inferSelect;
+export type InsertDisputeEvidence = typeof disputeEvidence.$inferInsert;
