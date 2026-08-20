@@ -8,6 +8,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { registerGoogleAuthRoutes } from "./googleAuth";
 import { registerRealtimeAuthRoutes } from "./realtimeAuth";
 import { registerStorageProxy } from "./storageProxy";
+import { registerPaystackWebhook } from "../webhook";
 import { appRouter } from "../routers";
 import { sdk } from "./sdk";
 import { createContext } from "./context";
@@ -102,6 +103,7 @@ async function startServer() {
   registerOAuthRoutes(app);
   registerGoogleAuthRoutes(app);
   registerRealtimeAuthRoutes(app);
+  registerPaystackWebhook(app);
 
   // ── Root endpoint (API diagnostics) ──────────────────────────────────────
   app.get("/", (_req, res) => {

@@ -114,6 +114,7 @@ import {
 } from "./paystack";
 import { maskPhoneNumber, normalizePhoneNumber, sendPhoneOtpSms, SmsDeliveryError } from "./sms";
 import { getUserNotificationPreference, createInAppNotification, getUnreadNotifications, markNotificationRead, generateIcsContent, executeMatchingV2 } from "./phase4";
+import { initializeMilestonePayment, processVerifiedPayment, verifyPaystackWebhookSignature } from "./finance";
 import {
   acceptOrganizationInvitation,
   canInviteOrganizationMembers,
@@ -1492,6 +1493,14 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => markNotificationRead(input.id, ctx.user.id)),
     preferences: protectedProcedure
       .query(async ({ ctx }) => getUserNotificationPreference(ctx.user.id)),
+  }),
+  finance: router({
+    initializeMilestonePayment: protectedProcedure
+      .input(z.object({ engagementId: z.number().int().positive(), milestoneId: z.number().int().positive(), callbackUrl: z.string().optional() }))
+      .mutation(async ({ ctx, input }) => initializeMilestonePayment({ ...input, payerId: ctx.user.id, email: ctx.user.email || "employer@zylobridge.com" })),
+    verifyPayment: protectedProcedure
+      .input(z.object({ reference: z.string() }))
+      .mutation(async ({ input }) => processVerifiedPayment(input.reference)),
   }),
 });
 

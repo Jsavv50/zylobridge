@@ -10,6 +10,7 @@ import {
   serial,
   index,
   uniqueIndex,
+  bigint,
 } from "drizzle-orm/pg-core";
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
@@ -678,3 +679,105 @@ export const matchingScores = pgTable("matching_scores", {
 }));
 export type MatchingScore = typeof matchingScores.$inferSelect;
 export type InsertMatchingScore = typeof matchingScores.$inferInsert;
+
+
+// ─── Phase 5B-1 Financial Core Extensions ─────────────────────────────────────
+export const milestoneStatusEnum = pgEnum("milestone_status", ["draft", "funded", "in_progress", "submitted", "approved", "release_pending", "released", "disputed", "cancelled"]);
+export const transactionStatusEnum = pgEnum("transaction_status", ["created", "payment_required", "payment_initiated", "payment_pending", "payment_confirmed", "funded", "failed", "expired", "refund_pending", "refunded", "disputed", "cancelled"]);
+export const ledgerAccountTypeEnum = pgEnum("ledger_account_type", ["asset", "liability", "equity", "revenue", "expense"]);
+
+export const milestones = pgTable("milestones", {
+  id: serial("id").primaryKey(),
+  engagementId: integer("engagementId").notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  amountMinor: bigint("amountMinor", { mode: "number" }).notNull(),
+  currency: varchar("currency", { length: 3 }).default("NGN").notNull(),
+  status: milestoneStatusEnum("status").default("draft").notNull(),
+  dueDate: timestamp("dueDate"),
+  fundedAt: timestamp("fundedAt"),
+  releasedAt: timestamp("releasedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+}, (table) => ({
+  engagementIdx: index("milestones_engagement_idx").on(table.engagementId),
+}));
+export type Milestone = typeof milestones.$inferSelect;
+export type InsertMilestone = typeof milestones.$inferInsert;
+
+export const paymentTransactions = pgTable("payment_transactions", {
+  id: serial("id").primaryKey(),
+  reference: varchar("reference", { length: 120 }).notNull().unique(),
+  engagementId: integer("engagementId").notNull(),
+  milestoneId: integer("milestoneId").notNull(),
+  payerId: integer("payerId").notNull(),
+  payeeId: integer("payeeId"),
+  amountMinor: bigint("amountMinor", { mode: "number" }).notNull(),
+  currency: varchar("currency", { length: 3 }).default("NGN").notNull(),
+  status: transactionStatusEnum("status").default("created").notNull(),
+  provider: varchar("provider", { length: 32 }).default("paystack").notNull(),
+  providerReference: varchar("providerReference", { length: 120 }),
+  platformFeeMinor: bigint("platformFeeMinor", { mode: "number" }).default(0).notNull(),
+  metadata: text("metadata"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+}, (table) => ({
+  refIdx: index("payment_transactions_ref_idx").on(table.reference),
+  engagementIdx: index("payment_transactions_engagement_idx").on(table.engagementId),
+}));
+export type PaymentTransaction = typeof paymentTransactions.$inferSelect;
+export type InsertPaymentTransaction = typeof paymentTransactions.$inferInsert;
+
+export const paymentEvents = pgTable("payment_events", {
+  id: serial("id").primaryKey(),
+  transactionId: integer("transactionId"),
+  provider: varchar("provider", { length: 32 }).default("paystack").notNull(),
+  eventType: varchar("eventType", { length: 120 }).notNull(),
+  providerEventId: varchar("providerEventId", { length: 120 }).unique(),
+  rawPayload: text("rawPayload").notNull(),
+  signatureValid: boolean("signatureValid").default(false).notNull(),
+  processed: boolean("processed").default(false).notNull(),
+  error: text("error"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  providerEventIdx: index("payment_events_provider_event_idx").on(table.providerEventId),
+}));
+export type PaymentEvent = typeof paymentEvents.$inferSelect;
+export type InsertPaymentEvent = typeof paymentEvents.$inferInsert;
+
+export const ledgerAccounts = pgTable("ledger_accounts", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 128 }).notNull().unique(),
+  type: ledgerAccountTypeEnum("type").notNull(),
+  currency: varchar("currency", { length: 3 }).default("NGN").notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type LedgerAccount = typeof ledgerAccounts.$inferSelect;
+export type InsertLedgerAccount = typeof ledgerAccounts.$inferInsert;
+
+export const ledgerEntries = pgTable("ledger_entries", {
+  id: serial("id").primaryKey(),
+  transactionId: integer("transactionId").notNull(),
+  accountId: integer("accountId").notNull(),
+  debitMinor: bigint("debitMinor", { mode: "number" }).default(0).notNull(),
+  creditMinor: bigint("creditMinor", { mode: "number" }).default(0).notNull(),
+  currency: varchar("currency", { length: 3 }).default("NGN").notNull(),
+  description: text("description"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  transactionIdx: index("ledger_entries_transaction_idx").on(table.transactionId),
+  accountIdx: index("ledger_entries_account_idx").on(table.accountId),
+}));
+export type LedgerEntry = typeof ledgerEntries.$inferSelect;
+export type InsertLedgerEntry = typeof ledgerEntries.$inferInsert;
+
+export const reconciliationRecords = pgTable("reconciliation_records", {
+  id: serial("id").primaryKey(),
+  transactionId: integer("transactionId").notNull(),
+  status: varchar("status", { length: 32 }).default("matched").notNull(),
+  discrepancyDetails: text("discrepancyDetails"),
+  reconciledAt: timestamp("reconciledAt").defaultNow().notNull(),
+});
+export type ReconciliationRecord = typeof reconciliationRecords.$inferSelect;
+export type InsertReconciliationRecord = typeof reconciliationRecords.$inferInsert;
