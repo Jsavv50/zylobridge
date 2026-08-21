@@ -676,3 +676,11 @@
 - [ ] Run type checking, complete tests, client production build, server production build, and production-safe read-only verification
 - [ ] Inspect diff, migrations, environment usage, endpoints, workers, payment handlers, notification handlers, and realtime handlers for safety
 - [ ] Create Zylobridge_Phase_6_Production_Operations_and_Scale.md and stop before Phase 7
+
+## Phase 16: Phase 6 Production Operations & Background Infrastructure
+- [x] Durable PostgreSQL background job queue with exponential backoff and jitter
+- [x] Crash recovery and dead-letter classification for background workers
+- [x] Automated daily financial reconciliation scheduling
+- [x] Unified notification dispatcher with preference gating and idempotency
+- [x] Rate limiting and security header hardening
+- [x] Comprehensive test coverage and clean production builds
