@@ -721,3 +721,10 @@
 - [x] Evaluated Vercel environment variable requirements for `VITE_SENTRY_DSN`
 - [x] Verified build output and integration structure
 - [x] Documented Sentry verification status and operator action required in `Zylobridge_Phase_8_6_Frontend_Sentry_Integration.md`
+
+## Phase 22: Phase 8.7 Backend Sentry Integration
+- [x] Inspected backend entrypoint, Express middleware, and error handling
+- [x] Installed `@sentry/node` via pnpm
+- [x] Configured `server/sentry.ts` with `SENTRY_DSN` support and privacy scrubbing
+- [x] Verified automated tests (140/140 passed) and clean backend production build
+- [x] Produced `Zylobridge_Phase_8_7_Backend_Sentry_Integration.md`
