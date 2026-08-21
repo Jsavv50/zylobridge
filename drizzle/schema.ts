@@ -878,3 +878,23 @@ export const disputeEvidence = pgTable("dispute_evidence", {
 }));
 export type DisputeEvidence = typeof disputeEvidence.$inferSelect;
 export type InsertDisputeEvidence = typeof disputeEvidence.$inferInsert;
+
+// ─── Phase 6A delivery log compatibility ──────────────────────────────────────
+// Kept as a simple operational log table so the existing notification dispatcher
+// can remain aligned with the Phase 6A migration contract.
+export const notificationDeliveryLogs = pgTable("notification_delivery_logs", {
+  id: serial("id").primaryKey(),
+  notificationId: integer("notificationId"),
+  userId: integer("userId").notNull(),
+  channel: varchar("channel", { length: 32 }).notNull(),
+  status: varchar("status", { length: 32 }).default("pending").notNull(),
+  payload: text("payload"),
+  errorMessage: text("errorMessage"),
+  retryCount: integer("retryCount").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  userIdx: index("notification_delivery_logs_user_idx").on(table.userId),
+  statusIdx: index("notification_delivery_logs_status_idx").on(table.status),
+}));
+export type NotificationDeliveryLog = typeof notificationDeliveryLogs.$inferSelect;
+export type InsertNotificationDeliveryLog = typeof notificationDeliveryLogs.$inferInsert;

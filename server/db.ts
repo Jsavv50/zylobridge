@@ -1,5 +1,5 @@
 import { drizzle } from "drizzle-orm/postgres-js";
-import { and, or, desc, asc, eq, like, gte, lte, lt, sql } from "drizzle-orm";
+import { and, or, inArray, desc, asc, eq, like, gte, lte, lt, sql } from "drizzle-orm";
 import {
   InsertUser,
   users,
@@ -42,6 +42,8 @@ import {
   interviews,
   offers,
   engagements,
+  organizations,
+  organizationMembers,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -258,15 +260,28 @@ export async function getUserCount() {
 export async function createJob(data: InsertJob) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  const result = await db.insert(jobs).values(data);
-  return result;
+  const [created] = await db.insert(jobs).values(data).returning();
+  return created;
 }
 
 export async function getJobById(id: number) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(jobs).where(eq(jobs.id, id)).limit(1);
-  return result.length > 0 ? result[0] : undefined;
+  const [row] = await db.select({
+    job: jobs,
+    organizationName: organizations.name,
+    organizationSlug: organizations.slug,
+  })
+    .from(jobs)
+    .leftJoin(organizations, eq(jobs.organizationId, organizations.id))
+    .where(eq(jobs.id, id))
+    .limit(1);
+  if (!row) return undefined;
+  return {
+    ...row.job,
+    organizationName: row.organizationName ?? undefined,
+    organizationSlug: row.organizationSlug ?? undefined,
+  };
 }
 
 export async function listJobs(filters: {
@@ -299,10 +314,217 @@ export async function listJobs(filters: {
   return query;
 }
 
+export type JobSearchFilters = {
+  q?: string;
+  vocation?: string;
+  location?: string;
+  status?: "open" | "in_progress" | "completed" | "cancelled";
+  minBudget?: number;
+  maxBudget?: number;
+  sort?: "newest" | "budget_desc" | "deadline";
+  limit?: number;
+  offset?: number;
+};
+
+export async function searchJobs(filters: JobSearchFilters) {
+  const db = await getDb();
+  if (!db) return { items: [], nextOffset: 0, hasMore: false };
+
+  const conditions = [eq(jobs.status, filters.status ?? "open")];
+  const queryText = filters.q?.trim();
+  if (queryText) {
+    const pattern = `%${queryText}%`;
+    conditions.push(sql`(${jobs.title} ILIKE ${pattern} OR ${jobs.description} ILIKE ${pattern} OR ${jobs.vocation}::text ILIKE ${pattern})` as any);
+  }
+  if (filters.vocation) conditions.push(eq(jobs.vocation, filters.vocation as any));
+  if (filters.location) conditions.push(sql`${jobs.location} ILIKE ${`%${filters.location.trim()}%`}` as any);
+  if (filters.minBudget !== undefined) conditions.push(gte(jobs.budget, String(filters.minBudget)));
+  if (filters.maxBudget !== undefined) conditions.push(lte(jobs.budget, String(filters.maxBudget)));
+
+  const limit = clampPageSize(filters.limit);
+  const offset = clampOffset(filters.offset);
+  const orderBy = filters.sort === "budget_desc"
+    ? desc(jobs.budget)
+    : filters.sort === "deadline"
+      ? asc(jobs.deadline)
+      : desc(jobs.createdAt);
+
+  const rows = await db.select({
+    job: jobs,
+    clientName: users.name,
+    clientVerified: users.isVerified,
+    organizationName: organizations.name,
+    organizationSlug: organizations.slug,
+  })
+    .from(jobs)
+    .leftJoin(users, eq(jobs.clientId, users.id))
+    .leftJoin(organizations, eq(jobs.organizationId, organizations.id))
+    .where(and(...conditions))
+    .orderBy(orderBy)
+    .limit(limit + 1)
+    .offset(offset);
+
+  const hasMore = rows.length > limit;
+  const items = (hasMore ? rows.slice(0, limit) : rows).map(row => ({
+    ...row.job,
+    clientName: row.clientName ?? undefined,
+    clientVerified: Boolean(row.clientVerified),
+    organizationName: row.organizationName ?? undefined,
+    organizationSlug: row.organizationSlug ?? undefined,
+  }));
+  return { items, nextOffset: hasMore ? offset + limit : null, hasMore };
+}
+
+export type TalentSearchFilters = {
+  q?: string;
+  vocation?: string;
+  location?: string;
+  availableOnly?: boolean;
+  verifiedOnly?: boolean;
+  minRate?: number;
+  maxRate?: number;
+  minExperience?: number;
+  sort?: "relevance" | "rating" | "experience" | "newest";
+  limit?: number;
+  offset?: number;
+};
+
+export async function searchProfessionals(filters: TalentSearchFilters) {
+  const db = await getDb();
+  if (!db) return { items: [], nextOffset: 0, hasMore: false };
+  const conditions = [eq(users.userType, "professional")];
+  const queryText = filters.q?.trim();
+  if (queryText) {
+    const pattern = `%${queryText}%`;
+    conditions.push(sql`(${users.name} ILIKE ${pattern} OR ${profiles.bio} ILIKE ${pattern} OR ${profiles.skills} ILIKE ${pattern} OR ${profiles.vocation}::text ILIKE ${pattern})` as any);
+  }
+  if (filters.vocation) conditions.push(eq(profiles.vocation, filters.vocation as any));
+  if (filters.location) conditions.push(sql`${profiles.location} ILIKE ${`%${filters.location.trim()}%`}` as any);
+  if (filters.availableOnly) conditions.push(eq(profiles.isAvailable, true));
+  if (filters.verifiedOnly) conditions.push(eq(users.isVerified, true));
+  if (filters.minRate !== undefined) conditions.push(gte(profiles.hourlyRate, String(filters.minRate)));
+  if (filters.maxRate !== undefined) conditions.push(lte(profiles.hourlyRate, String(filters.maxRate)));
+  if (filters.minExperience !== undefined) conditions.push(gte(profiles.yearsExperience, filters.minExperience));
+
+  const limit = clampPageSize(filters.limit);
+  const offset = clampOffset(filters.offset);
+  const orderBy = filters.sort === "rating"
+    ? desc(profiles.averageRating)
+    : filters.sort === "experience"
+      ? desc(profiles.yearsExperience)
+      : desc(profiles.updatedAt);
+  const rows = await db.select({
+    profile: profiles,
+    user: {
+      id: users.id,
+      name: users.name,
+      avatarUrl: users.avatarUrl,
+      isVerified: users.isVerified,
+    },
+  })
+    .from(profiles)
+    .innerJoin(users, eq(profiles.userId, users.id))
+    .where(and(...conditions))
+    .orderBy(orderBy)
+    .limit(limit + 1)
+    .offset(offset);
+  const hasMore = rows.length > limit;
+  return {
+    items: hasMore ? rows.slice(0, limit) : rows,
+    nextOffset: hasMore ? offset + limit : null,
+    hasMore,
+  };
+}
+
+export async function getPublicProfessionalProfile(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [row] = await db.select({
+    profile: profiles,
+    user: {
+      id: users.id,
+      name: users.name,
+      avatarUrl: users.avatarUrl,
+      isVerified: users.isVerified,
+      userType: users.userType,
+    },
+  })
+    .from(profiles)
+    .innerJoin(users, eq(profiles.userId, users.id))
+    .where(and(eq(profiles.userId, userId), eq(users.userType, "professional")))
+    .limit(1);
+  if (!row) return undefined;
+
+  const [portfolioRows, qualificationRows, experienceRows, verificationRows, reviewRows, completedRows] = await Promise.all([
+    db.select({ id: professionalPortfolios.id, title: professionalPortfolios.title, description: professionalPortfolios.description, imageUrl: professionalPortfolios.imageUrl, projectUrl: professionalPortfolios.projectUrl, skills: professionalPortfolios.skills, createdAt: professionalPortfolios.createdAt }).from(professionalPortfolios).where(eq(professionalPortfolios.userId, userId)).orderBy(desc(professionalPortfolios.createdAt)).limit(20),
+    db.select({ id: professionalQualifications.id, title: professionalQualifications.title, issuingOrg: professionalQualifications.issuingOrg, issueDate: professionalQualifications.issueDate, expiryDate: professionalQualifications.expiryDate, credentialId: professionalQualifications.credentialId, createdAt: professionalQualifications.createdAt }).from(professionalQualifications).where(eq(professionalQualifications.userId, userId)).orderBy(desc(professionalQualifications.createdAt)).limit(20),
+    db.select({ id: professionalExperiences.id, companyName: professionalExperiences.companyName, title: professionalExperiences.title, location: professionalExperiences.location, startDate: professionalExperiences.startDate, endDate: professionalExperiences.endDate, isCurrent: professionalExperiences.isCurrent, description: professionalExperiences.description }).from(professionalExperiences).where(eq(professionalExperiences.userId, userId)).orderBy(desc(professionalExperiences.startDate)).limit(20),
+    db.select({ verificationType: professionalVerifications.verificationType, status: professionalVerifications.status, expiresAt: professionalVerifications.expiresAt }).from(professionalVerifications).where(eq(professionalVerifications.userId, userId)).limit(20),
+    db.select({ rating: reviews.rating, comment: reviews.comment, createdAt: reviews.createdAt }).from(reviews).where(eq(reviews.revieweeId, userId)).orderBy(desc(reviews.createdAt)).limit(20),
+    db.select({ count: sql<number>`count(*)` }).from(jobs).where(and(eq(jobs.assignedProfessionalId, userId), eq(jobs.status, "completed"))),
+  ]);
+
+  return {
+    ...row,
+    portfolio: portfolioRows,
+    qualifications: qualificationRows,
+    experience: experienceRows,
+    verifications: verificationRows,
+    reviews: reviewRows,
+    completedJobs: Number(completedRows[0]?.count ?? 0),
+  };
+}
+
+export async function getPublicOrganizationBySlug(slug: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [organization] = await db.select().from(organizations).where(sql`LOWER(${organizations.slug}) = LOWER(${slug.trim()})`).limit(1);
+  if (!organization) return undefined;
+  const activeJobs = await db.select({
+    job: jobs,
+    clientName: users.name,
+    clientVerified: users.isVerified,
+  })
+    .from(jobs)
+    .leftJoin(users, eq(jobs.clientId, users.id))
+    .where(and(eq(jobs.organizationId, organization.id), eq(jobs.status, "open")))
+    .orderBy(desc(jobs.createdAt))
+    .limit(20);
+  const [memberCountRow, activeJobCountRow] = await Promise.all([
+    db.select({ count: sql<number>`count(*)` }).from(organizationMembers).where(and(eq(organizationMembers.organizationId, organization.id), eq(organizationMembers.status, "active"))),
+    db.select({ count: sql<number>`count(*)` }).from(jobs).where(and(eq(jobs.organizationId, organization.id), eq(jobs.status, "open"))),
+  ]);
+  return {
+    organization: { ...organization, ownerId: undefined },
+    activeJobs: activeJobs.map(row => ({ ...row.job, clientName: row.clientName ?? undefined, clientVerified: Boolean(row.clientVerified) })),
+    stats: { activeJobs: Number(activeJobCountRow[0]?.count ?? 0), activeMembers: Number(memberCountRow[0]?.count ?? 0) },
+  };
+}
+
+export async function updateOrganizationProfile(organizationId: number, data: { name?: string; description?: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const [updated] = await db.update(organizations).set({ ...data, updatedAt: new Date() }).where(eq(organizations.id, organizationId)).returning();
+  return updated;
+}
+
 export async function getJobsByClientId(clientId: number, limit = MAX_PAGE_SIZE, offset = 0) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(jobs).where(eq(jobs.clientId, clientId)).orderBy(desc(jobs.createdAt)).limit(clampPageSize(limit, MAX_PAGE_SIZE)).offset(clampOffset(offset));
+}
+
+export async function getManagedJobsByUserId(userId: number, limit = MAX_PAGE_SIZE, offset = 0) {
+  const db = await getDb();
+  if (!db) return [];
+  const memberships = await db.select({ organizationId: organizationMembers.organizationId })
+    .from(organizationMembers)
+    .where(and(eq(organizationMembers.userId, userId), eq(organizationMembers.status, "active")));
+  const organizationIds = memberships.map((membership) => membership.organizationId);
+  const scope = organizationIds.length > 0
+    ? or(eq(jobs.clientId, userId), inArray(jobs.organizationId, organizationIds))
+    : eq(jobs.clientId, userId);
+  return db.select().from(jobs).where(scope).orderBy(desc(jobs.createdAt)).limit(clampPageSize(limit, MAX_PAGE_SIZE)).offset(clampOffset(offset));
 }
 
 export async function updateJob(id: number, data: Partial<InsertJob>) {

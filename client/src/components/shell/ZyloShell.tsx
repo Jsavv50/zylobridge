@@ -5,7 +5,7 @@ import {
   LogOut, Menu, X, Bell, ChevronRight, CheckCircle2, AlertTriangle, 
   Search, Building2, BarChart3, DollarSign 
 } from "lucide-react";
-import { useAuth } from "../../hooks/useAuth";
+import { useAuth } from "../../_core/hooks/useAuth";
 
 export interface PageHeaderProps {
   title: string;
@@ -58,8 +58,20 @@ export function ApplicationShell({ children, role = "user" }: { children: React.
   const [location] = useLocation();
   const { user, logout } = useAuth();
 
+  const resolvedRole = role !== "user"
+    ? role
+    : user?.role === "SUPER_ADMIN" || user?.role === "admin"
+      ? "admin"
+      : user?.userType === "professional"
+        ? "professional"
+        : user?.userType === "client"
+          ? "employer"
+          : user?.userType === "enterprise"
+            ? "enterprise"
+            : "user";
+
   const getNavItems = () => {
-    if (role === "admin" || user?.role === "admin" || user?.role === "SUPER_ADMIN") {
+    if (resolvedRole === "admin" || user?.role === "admin" || user?.role === "SUPER_ADMIN") {
       return [
         { href: "/admin", label: "Admin Overview", icon: BarChart3 },
         { href: "/admin/users", label: "User Management", icon: Users },
@@ -68,7 +80,7 @@ export function ApplicationShell({ children, role = "user" }: { children: React.
         { href: "/admin/audit", label: "Audit Logs", icon: Settings },
       ];
     }
-    if (role === "professional") {
+    if (resolvedRole === "professional") {
       return [
         { href: "/dashboard", label: "Dashboard", icon: Home },
         { href: "/jobs", label: "Find Jobs", icon: Search },
@@ -79,7 +91,7 @@ export function ApplicationShell({ children, role = "user" }: { children: React.
         { href: "/profile", label: "Professional Profile", icon: Users },
       ];
     }
-    if (role === "employer" || role === "enterprise") {
+    if (resolvedRole === "employer" || resolvedRole === "enterprise") {
       return [
         { href: "/employer", label: "Employer Dashboard", icon: Home },
         { href: "/employer/jobs", label: "My Job Postings", icon: Briefcase },
@@ -124,7 +136,7 @@ export function ApplicationShell({ children, role = "user" }: { children: React.
             <div className="flex items-center gap-3">
               <div className="hidden md:flex flex-col text-right">
                 <span className="text-sm font-semibold text-foreground">{user.name || "User"}</span>
-                <span className="text-xs text-muted-foreground capitalize">{user.role || role}</span>
+                <span className="text-xs text-muted-foreground capitalize">{user.role || user.userType || resolvedRole}</span>
               </div>
               <button 
                 onClick={() => logout()}

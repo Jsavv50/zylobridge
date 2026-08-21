@@ -1,14 +1,14 @@
 import { getDb } from "./db";
-import { users, profiles, jobs, applications, interviews, offers, engagements, escrowPayments, payouts, refunds, disputes, organizationMembers, organizationProjects } from "../drizzle/schema";
-import { eq, and, sql, gte, count, sum } from "drizzle-orm";
+import { users, profiles, jobs, applications, engagements, escrowPayments, payouts, organizationMembers, organizationProjects, shortlists } from "../drizzle/schema";
+import { eq, and, or, sql, gte, lte, desc } from "drizzle-orm";
 
 export type TimeRange = "today" | "7d" | "30d" | "90d" | "ytd" | "custom";
 
-export function parseDateRange(range: TimeRange, customStart?: string, customEnd?: string): { startDate: Date; endDate: Date } {
+export function parseDateRange(range: TimeRange, customStart?: string, customEnd?: string) {
   const now = new Date();
   const endDate = customEnd ? new Date(customEnd) : now;
-  let startDate = new Date();
-
+  const safeEnd = Number.isNaN(endDate.getTime()) ? now : endDate;
+  let startDate: Date;
   switch (range) {
     case "today":
       startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -25,201 +25,115 @@ export function parseDateRange(range: TimeRange, customStart?: string, customEnd
     case "ytd":
       startDate = new Date(now.getFullYear(), 0, 1);
       break;
-    case "custom":
-      startDate = customStart ? new Date(customStart) : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    case "custom": {
+      const candidate = customStart ? new Date(customStart) : new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      startDate = Number.isNaN(candidate.getTime()) ? new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) : candidate;
       break;
+    }
     default:
       startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   }
-  return { startDate, endDate };
+  return { startDate, endDate: safeEnd };
 }
 
-/**
- * Professional Analytics Service
- */
+const amount = (value: string | number | null | undefined) => Number(value ?? 0);
+
 export async function getProfessionalAnalytics(userId: number, range: TimeRange = "30d") {
   const db = await getDb();
   if (!db) return null;
-
-  const { startDate } = parseDateRange(range);
-
-  // Profile data
-  const profileRes = await db.select().from(profiles).where(eq(profiles.userId, userId)).limit(1);
-  const profile = profileRes[0];
-
-  // Applications count & status breakdown
-  const apps = await db.select().from(applications).where(eq(applications.professionalId, userId));
-  const totalApplications = apps.length;
-  const inReview = apps.filter(a => a.status === "submitted" || a.status === "reviewing").length;
-  const shortlisted = apps.filter(a => a.status === "shortlisted").length;
-  const accepted = apps.filter(a => a.status === "accepted" || a.status === "hired").length;
-  const rejected = apps.filter(a => a.status === "rejected").length;
-
-  // Interventions & Engagements
-  const userEngagements = await db.select().from(engagements).where(eq(engagements.professionalId, userId));
-  const activeEngagements = userEngagements.filter(e => e.status === "active").length;
-  const completedEngagements = userEngagements.filter(e => e.status === "completed").length;
-
-  // Earnings from payouts
-  const userPayouts = await db.select().from(payouts).where(eq(payouts.professionalId, userId));
-  const totalEarningsMinor = userPayouts
-    .filter(p => p.status === "payout_completed")
-    .reduce((sum, p) => sum + p.netAmountMinor, 0);
-
+  const { startDate, endDate } = parseDateRange(range);
+  const [profile] = await db.select().from(profiles).where(eq(profiles.userId, userId)).limit(1);
+  const apps = await db.select().from(applications).where(and(eq(applications.professionalId, userId), gte(applications.createdAt, startDate), lte(applications.createdAt, endDate)));
+  const userEngagements = await db.select().from(engagements).where(and(eq(engagements.professionalId, userId), gte(engagements.createdAt, startDate), lte(engagements.createdAt, endDate)));
+  const userPayouts = await db.select().from(payouts).where(and(eq(payouts.professionalId, userId), gte(payouts.createdAt, startDate), lte(payouts.createdAt, endDate)));
+  const [completedRow] = await db.select({ count: sql<number>`count(*)` }).from(jobs).where(and(eq(jobs.assignedProfessionalId, userId), eq(jobs.status, "completed"), gte(jobs.updatedAt, startDate), lte(jobs.updatedAt, endDate)));
   return {
     profileCompleteness: profile ? 85 : 40,
-    verificationStatus: profile ? "verified" : "pending",
+    verificationStatus: profile ? "profile_present" : "pending",
     applications: {
-      total: totalApplications,
-      inReview,
-      shortlisted,
-      accepted,
-      rejected,
+      total: apps.length,
+      inReview: apps.filter(a => a.status === "pending").length,
+      shortlisted: 0,
+      accepted: apps.filter(a => a.status === "accepted").length,
+      rejected: apps.filter(a => a.status === "rejected").length,
     },
     engagements: {
-      active: activeEngagements,
-      completed: completedEngagements,
+      active: userEngagements.filter(e => e.status === "active").length,
+      completed: userEngagements.filter(e => e.status === "completed").length,
     },
+    completedJobs: Number(completedRow?.count ?? 0),
     earnings: {
-      totalMinor: totalEarningsMinor,
+      totalMinor: userPayouts.filter(p => p.status === "payout_completed").reduce((total, payout) => total + Number(payout.netAmountMinor), 0),
       currency: "NGN",
     },
   };
 }
 
-/**
- * Employer Analytics Service
- */
 export async function getEmployerAnalytics(clientId: number, range: TimeRange = "30d") {
   const db = await getDb();
   if (!db) return null;
-
-  const clientJobs = await db.select().from(jobs).where(eq(jobs.clientId, clientId));
-  const totalJobs = clientJobs.length;
-  const activeJobs = clientJobs.filter(j => j.status === "open" || j.status === "in_progress").length;
-  const completedJobs = clientJobs.filter(j => j.status === "completed").length;
-
-  // Applications & Funnel
-  const jobIds = clientJobs.map(j => j.id);
-  let totalApplications = 0;
-  let shortlistedCount = 0;
-  let hiredCount = 0;
-
-  if (jobIds.length > 0) {
-    for (const jId of jobIds) {
-      const jobApps = await db.select().from(applications).where(eq(applications.jobId, jId));
-      totalApplications += jobApps.length;
-      shortlistedCount += jobApps.filter(a => a.status === "shortlisted").length;
-      hiredCount += jobApps.filter(a => a.status === "hired" || a.status === "accepted").length;
-    }
-  }
-
-  // Financial spending
-  const clientEscrows = await db.select().from(escrowPayments).where(eq(escrowPayments.clientId, clientId));
-  const totalFundedMinor = clientEscrows
-    .filter(e => e.status === "funded" || e.status === "released")
-    .reduce((sum, e) => sum + e.amountMinor, 0);
-
+  const { startDate, endDate } = parseDateRange(range);
+  const clientJobs = await db.select().from(jobs).where(and(eq(jobs.clientId, clientId), gte(jobs.createdAt, startDate), lte(jobs.createdAt, endDate)));
+  const jobIds = clientJobs.map(job => job.id);
+  const jobApplications = jobIds.length ? await db.select().from(applications).where(sql`${applications.jobId} IN (${sql.join(jobIds.map(id => sql`${id}`), sql`, `)})`) : [];
+  const clientEscrows = await db.select().from(escrowPayments).where(and(eq(escrowPayments.clientId, clientId), gte(escrowPayments.createdAt, startDate), lte(escrowPayments.createdAt, endDate)));
+  const shortlistedIds = jobIds.length ? await db.select({ jobId: shortlists.jobId, professionalId: shortlists.professionalId }).from(shortlists).where(sql`${shortlists.jobId} IN (${sql.join(jobIds.map(id => sql`${id}`), sql`, `)})`) : [];
   return {
-    jobs: {
-      total: totalJobs,
-      active: activeJobs,
-      completed: completedJobs,
-    },
+    jobs: { total: clientJobs.length, active: clientJobs.filter(job => job.status === "open" || job.status === "in_progress").length, completed: clientJobs.filter(job => job.status === "completed").length },
     funnel: {
-      applicationsReceived: totalApplications,
-      shortlisted: shortlistedCount,
-      hired: hiredCount,
+      applicationsReceived: jobApplications.length,
+      shortlisted: shortlistedIds.length,
+      hired: jobApplications.filter(application => application.status === "accepted").length,
     },
     financial: {
-      totalFundedMinor,
+      totalFundedMinor: clientEscrows.filter(escrow => escrow.status === "funded" || escrow.status === "released").reduce((total, escrow) => total + amount(escrow.amount), 0),
       currency: "NGN",
     },
   };
 }
 
-/**
- * Enterprise Analytics Service
- */
 export async function getEnterpriseAnalytics(userId: number, organizationId: number, range: TimeRange = "30d") {
   const db = await getDb();
   if (!db) return null;
-
-  // Verify membership
-  const member = await db.select().from(organizationMembers).where(
-    and(
-      eq(organizationMembers.organizationId, organizationId),
-      eq(organizationMembers.userId, userId)
-    )
-  ).limit(1);
-
-  if (member.length === 0) {
-    throw new Error("Forbidden: Not a member of this organization");
-  }
-
-  // Fetch organization projects and jobs
-  const orgProjects = await db.select().from(organizationProjects).where(eq(organizationProjects.organizationId, organizationId));
-  const projectIds = orgProjects.map(p => p.projectId);
-
-  let orgJobsCount = 0;
-  let orgSpendMinor = 0;
-
-  // Query jobs linked to org projects or created by org members
-  const orgJobs = await db.select().from(jobs).where(eq(jobs.clientId, userId));
-  orgJobsCount = orgJobs.length;
-
-  const orgEscrows = await db.select().from(escrowPayments).where(eq(escrowPayments.clientId, userId));
-  orgSpendMinor = orgEscrows.reduce((sum, e) => sum + e.amountMinor, 0);
-
+  const { startDate, endDate } = parseDateRange(range);
+  const [member] = await db.select().from(organizationMembers).where(and(eq(organizationMembers.organizationId, organizationId), eq(organizationMembers.userId, userId), eq(organizationMembers.status, "active"))).limit(1);
+  if (!member) throw new Error("Forbidden: Not an active member of this organization");
+  const orgProjects = await db.select().from(organizationProjects).where(and(eq(organizationProjects.organizationId, organizationId), gte(organizationProjects.createdAt, startDate), lte(organizationProjects.createdAt, endDate)));
+  const orgJobs = await db.select().from(jobs).where(and(eq(jobs.organizationId, organizationId), gte(jobs.createdAt, startDate), lte(jobs.createdAt, endDate)));
+  const orgEscrows = await db.select().from(escrowPayments).where(and(eq(escrowPayments.clientId, userId), gte(escrowPayments.createdAt, startDate), lte(escrowPayments.createdAt, endDate)));
+  const [recruiterRow] = await db.select({ count: sql<number>`count(*)` }).from(organizationMembers).where(and(eq(organizationMembers.organizationId, organizationId), eq(organizationMembers.status, "active"), sql`${organizationMembers.role} IN ('OWNER', 'ADMIN', 'HIRING_MANAGER', 'RECRUITER')`));
   return {
     organizationId,
     projectsCount: orgProjects.length,
-    jobsCount: orgJobsCount,
-    totalSpendMinor: orgSpendMinor,
+    jobsCount: orgJobs.length,
+    activeJobs: orgJobs.filter(job => job.status === "open" || job.status === "in_progress").length,
+    totalSpendMinor: orgEscrows.reduce((total, escrow) => total + amount(escrow.amount), 0),
     currency: "NGN",
-    activeRecruiters: member.length,
+    activeRecruiters: Number(recruiterRow?.count ?? 0),
   };
 }
 
-/**
- * Super Admin Platform Analytics
- */
 export async function getSuperAdminAnalytics(range: TimeRange = "30d") {
   const db = await getDb();
   if (!db) return null;
-
-  const allUsers = await db.select().from(users);
-  const totalUsers = allUsers.length;
-  const professionals = allUsers.filter(u => u.role === "professional").length;
-  const employers = allUsers.filter(u => u.role === "client" || u.role === "employer").length;
-
-  const allJobs = await db.select().from(jobs);
-  const allApps = await db.select().from(applications);
-  const allEngagements = await db.select().from(engagements);
-  const allPayouts = await db.select().from(payouts);
-
-  const totalVolumeMinor = allPayouts
-    .filter(p => p.status === "payout_completed")
-    .reduce((sum, p) => sum + p.amountMinor, 0);
-
+  const { startDate, endDate } = parseDateRange(range);
+  const [userCounts] = await db.select({
+    total: sql<number>`count(*)`,
+    professionals: sql<number>`count(*) filter (where ${users.userType} = 'professional')`,
+    employers: sql<number>`count(*) filter (where ${users.userType} in ('client', 'enterprise'))`,
+  }).from(users).where(and(gte(users.createdAt, startDate), lte(users.createdAt, endDate)));
+  const [jobCounts] = await db.select({
+    total: sql<number>`count(*)`,
+    open: sql<number>`count(*) filter (where ${jobs.status} = 'open')`,
+    completed: sql<number>`count(*) filter (where ${jobs.status} = 'completed')`,
+  }).from(jobs).where(and(gte(jobs.createdAt, startDate), lte(jobs.createdAt, endDate)));
+  const [applicationCounts] = await db.select({ total: sql<number>`count(*)` }).from(applications).where(and(gte(applications.createdAt, startDate), lte(applications.createdAt, endDate)));
+  const completedPayouts = await db.select().from(payouts).where(and(eq(payouts.status, "payout_completed"), gte(payouts.createdAt, startDate), lte(payouts.createdAt, endDate)));
+  const [engagementCounts] = await db.select({ total: sql<number>`count(*)` }).from(engagements).where(and(gte(engagements.createdAt, startDate), lte(engagements.createdAt, endDate)));
   return {
-    users: {
-      total: totalUsers,
-      professionals,
-      employers,
-    },
-    marketplace: {
-      jobs: allJobs.length,
-      applications: allApps.length,
-      engagements: allEngagements.length,
-    },
-    financial: {
-      totalVolumeMinor,
-      currency: "NGN",
-    },
-    operations: {
-      backgroundJobsStatus: "healthy",
-      reconciliationStatus: "synchronized",
-    },
+    users: { total: Number(userCounts?.total ?? 0), professionals: Number(userCounts?.professionals ?? 0), employers: Number(userCounts?.employers ?? 0) },
+    marketplace: { jobs: Number(jobCounts?.total ?? 0), openJobs: Number(jobCounts?.open ?? 0), completedJobs: Number(jobCounts?.completed ?? 0), applications: Number(applicationCounts?.total ?? 0), engagements: Number(engagementCounts?.total ?? 0) },
+    financial: { totalVolumeMinor: completedPayouts.reduce((total, payout) => total + Number(payout.amountMinor), 0), currency: "NGN" },
+    operations: { backgroundJobsStatus: "reported by Phase 6A worker", reconciliationStatus: "reported by Phase 6A reconciliation service" },
   };
 }

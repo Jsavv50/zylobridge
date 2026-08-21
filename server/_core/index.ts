@@ -70,10 +70,12 @@ async function startServer() {
       origin: (origin, callback) => {
         // Allow same-origin requests (no Origin header) and local development
         if (!origin) return callback(null, true);
+        const isManagedPreviewOrigin = process.env.NODE_ENV !== "production" && /^https:\/\/3000-[a-z0-9-]+\.us\d+\.manus\.computer$/.test(origin);
         if (
           allowedOrigins.length === 0 ||
           allowedOrigins.includes(origin) ||
-          origin.startsWith("http://localhost")
+          origin.startsWith("http://localhost") ||
+          isManagedPreviewOrigin
         ) {
           return callback(null, true);
         }

@@ -7,8 +7,13 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AuthProvider } from "@/_core/hooks/useAuth";
 import Home from "./pages/Home";
-const Marketplace = lazy(() => import("./pages/Marketplace"));
+const JobsMarketplace = lazy(() => import("./pages/JobsMarketplace"));
 const JobDetail = lazy(() => import("./pages/JobDetail"));
+const JobPosting = lazy(() => import("./pages/JobPosting"));
+const TalentDirectory = lazy(() => import("./pages/TalentDirectory"));
+const ProfessionalProfilePage = lazy(() => import("./pages/ProfessionalProfilePage"));
+const CompanyProfile = lazy(() => import("./pages/CompanyProfile"));
+const EmployerJobs = lazy(() => import("./pages/EmployerJobs"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const ClientDashboard = lazy(() => import("./pages/ClientDashboard"));
 const ProfessionalDashboard = lazy(() => import("./pages/ProfessionalDashboard"));
@@ -36,9 +41,18 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
-      <Route path="/marketplace" component={Marketplace} />
+      <Route path="/marketplace" component={JobsMarketplace} />
+      <Route path="/jobs" component={JobsMarketplace} />
+      <Route path="/jobs/new" component={JobPosting} />
       <Route path="/jobs/:id" component={JobDetail} />
+      <Route path="/talent" component={TalentDirectory} />
+      <Route path="/professionals/:id" component={ProfessionalProfilePage} />
+      <Route path="/companies/:slug" component={CompanyProfile} />
+      <Route path="/employer/jobs" component={EmployerJobs} />
       <Route path="/onboarding" component={Onboarding} />
+      <Route path="/dashboard" component={ProfessionalDashboard} />
+      <Route path="/employer" component={ClientDashboard} />
+      <Route path="/admin" component={AdminDashboard} />
       <Route path="/dashboard/contractor" component={ClientDashboard} />
       <Route path="/dashboard/client" component={ClientDashboard} />
       <Route path="/dashboard/professional" component={ProfessionalDashboard} />

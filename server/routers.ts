@@ -26,6 +26,7 @@ import {
   getVerificationRequestById,
   listJobs,
   getJobsByClientId,
+  getManagedJobsByUserId,
   updateJob,
   deleteJob,
   getJobCount,
@@ -103,6 +104,11 @@ import {
   updateEngagementStatus,
   getEngagementsByUserId,
   calculateCandidateMatch,
+  searchJobs,
+  searchProfessionals,
+  getPublicProfessionalProfile,
+  getPublicOrganizationBySlug,
+  updateOrganizationProfile,
   MAX_PAGE_SIZE,
 } from "./db";
 import {
@@ -126,6 +132,7 @@ import {
   createOrganizationProject,
   getOrganizationById,
   getOrganizationMember,
+  requireOrganizationMember,
   getOrganizationProjectById,
   listOrganizationInvitations,
   listOrganizationMembers,
@@ -388,18 +395,34 @@ export const appRouter = router({
       return listJobs(input);
     }),
 
+    search: publicProcedure
+      .input(z.object({
+        q: z.string().max(120).optional(),
+        vocation: z.string().max(64).optional(),
+        location: z.string().max(128).optional(),
+        status: z.enum(["open", "in_progress", "completed", "cancelled"]).optional().default("open"),
+        minBudget: z.number().nonnegative().optional(),
+        maxBudget: z.number().nonnegative().optional(),
+        sort: z.enum(["newest", "budget_desc", "deadline"]).optional().default("newest"),
+        limit: z.number().int().min(1).max(MAX_PAGE_SIZE).optional().default(20),
+        offset: z.number().int().nonnegative().optional().default(0),
+      }))
+      .query(async ({ input }) => searchJobs(input)),
+
     getById: publicProcedure
       .input(z.object({ id: z.number().int().positive() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         const job = await getJobById(input.id);
         if (!job) throw new TRPCError({ code: "NOT_FOUND" });
+        const viewerCanSeeUnpublished = Boolean(ctx.user && (ctx.user.id === job.clientId || ctx.user.role === "admin" || ctx.user.role === "SUPER_ADMIN"));
+        if (job.status !== "open" && !viewerCanSeeUnpublished) throw new TRPCError({ code: "NOT_FOUND" });
         return job;
       }),
 
     myJobs: protectedProcedure
       .input(z.object({ limit: z.number().int().min(1).max(MAX_PAGE_SIZE).optional().default(MAX_PAGE_SIZE), offset: z.number().int().nonnegative().optional().default(0) }).optional())
       .query(async ({ ctx, input }) => {
-        return getJobsByClientId(ctx.user.id, input?.limit, input?.offset);
+        return getManagedJobsByUserId(ctx.user.id, input?.limit, input?.offset);
       }),
 
     create: protectedProcedure.input(jobCreateSchema).mutation(async ({ ctx, input }) => {
@@ -414,7 +437,7 @@ export const appRouter = router({
         if (!["OWNER", "ADMIN", "HIRING_MANAGER"].includes(member.role)) throw new TRPCError({ code: "FORBIDDEN", message: "Organization job-posting permission required." });
         if (input.projectId && !(await getOrganizationProjectById(input.projectId, input.organizationId))) throw new TRPCError({ code: "BAD_REQUEST", message: "Project is not active in this organization." });
       }
-      await createJob({
+      const job = await createJob({
         clientId: ctx.user.id,
         title: input.title,
         description: input.description,
@@ -427,7 +450,7 @@ export const appRouter = router({
         projectId: input.projectId,
         status: "open",
       });
-      return { success: true };
+      return { success: true, job };
     }),
 
     updateStatus: protectedProcedure
@@ -435,9 +458,12 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const job = await getJobById(input.id);
         if (!job) throw new TRPCError({ code: "NOT_FOUND" });
-        if (job.clientId !== ctx.user.id && ctx.user.role !== "admin") {
-          throw new TRPCError({ code: "FORBIDDEN" });
+        let canManage = job.clientId === ctx.user.id || ctx.user.role === "admin" || ctx.user.role === "SUPER_ADMIN";
+        if (!canManage && job.organizationId) {
+          const member = await requireOrganizationAccess(ctx.user.id, job.organizationId);
+          canManage = ["OWNER", "ADMIN", "HIRING_MANAGER"].includes(member.role);
         }
+        if (!canManage) throw new TRPCError({ code: "FORBIDDEN" });
         await updateJob(input.id, { status: input.status });
         return { success: true };
       }),
@@ -447,9 +473,12 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const job = await getJobById(input.id);
         if (!job) throw new TRPCError({ code: "NOT_FOUND" });
-        if (job.clientId !== ctx.user.id && ctx.user.role !== "admin") {
-          throw new TRPCError({ code: "FORBIDDEN" });
+        let canManage = job.clientId === ctx.user.id || ctx.user.role === "admin" || ctx.user.role === "SUPER_ADMIN";
+        if (!canManage && job.organizationId) {
+          const member = await requireOrganizationAccess(ctx.user.id, job.organizationId);
+          canManage = ["OWNER", "ADMIN", "HIRING_MANAGER"].includes(member.role);
         }
+        if (!canManage) throw new TRPCError({ code: "FORBIDDEN" });
         await deleteJob(input.id);
         return { success: true };
       }),
@@ -1372,6 +1401,47 @@ export const appRouter = router({
           auth: input.keys.auth,
         });
         return { success: true };
+      }),
+  }),
+  talent: router({
+    search: publicProcedure
+      .input(z.object({
+        q: z.string().max(120).optional(),
+        vocation: z.string().max(64).optional(),
+        location: z.string().max(128).optional(),
+        availableOnly: z.boolean().optional().default(false),
+        verifiedOnly: z.boolean().optional().default(false),
+        minRate: z.number().nonnegative().optional(),
+        maxRate: z.number().nonnegative().optional(),
+        minExperience: z.number().int().nonnegative().optional(),
+        sort: z.enum(["relevance", "rating", "experience", "newest"]).optional().default("relevance"),
+        limit: z.number().int().min(1).max(MAX_PAGE_SIZE).optional().default(20),
+        offset: z.number().int().nonnegative().optional().default(0),
+      }))
+      .query(async ({ input }) => searchProfessionals(input)),
+    getProfile: publicProcedure
+      .input(z.object({ userId: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const profile = await getPublicProfessionalProfile(input.userId);
+        if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Professional profile not found." });
+        return profile;
+      }),
+  }),
+  companies: router({
+    getBySlug: publicProcedure
+      .input(z.object({ slug: z.string().min(2).max(120) }))
+      .query(async ({ input }) => {
+        const company = await getPublicOrganizationBySlug(input.slug);
+        if (!company) throw new TRPCError({ code: "NOT_FOUND", message: "Company profile not found." });
+        return company;
+      }),
+    update: protectedProcedure
+      .input(z.object({ slug: z.string().min(2).max(120), name: z.string().min(2).max(255).optional(), description: z.string().max(5000).optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const company = await getPublicOrganizationBySlug(input.slug);
+        if (!company) throw new TRPCError({ code: "NOT_FOUND", message: "Company profile not found." });
+        await requireOrganizationManager(ctx.user.id, company.organization.id);
+        return updateOrganizationProfile(company.organization.id, { name: input.name?.trim(), description: input.description?.trim() });
       }),
   }),
   marketplace: router({
