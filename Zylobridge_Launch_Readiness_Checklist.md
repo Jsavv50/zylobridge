@@ -30,5 +30,5 @@
 - [x] Frontend Vercel deployment configured with SPA rewrites and production envs.
 - [x] Backend Railway deployment configured with CORS and API routing.
 - [x] PostgreSQL database migrations (`0001` - `0010`) and query indexes applied.
-- [ ] Live production DNS records (`zylobridge.com`, `api.zylobridge.com`) verified.
-- [ ] Production Sentry error tracking DSN injected.
+- [ ] Live production DNS records (`zylobridge.com`, `api.zylobridge.com`) verified (Pending operator DNS propagation confirmation).
+- [ ] Production Sentry error tracking DSN injected (Pending operator `SENTRY_DSN` injection).
