@@ -660,3 +660,19 @@
 - [x] Implement employer and enterprise candidate pipeline views with detailed candidate profiles and cover notes
 - [x] Implement secure candidate transition APIs for acceptance and rejection, automatically assigning jobs on acceptance
 - [x] Add automated test coverage and verify 133/133 tests passed with clean production builds
+
+# Phase 6 — Production Operations and Scale Hardening
+
+- [ ] Audit existing PostgreSQL background queue, retries, idempotency, dead-letter handling, reconciliation, notifications, push, geo, observability, health, security, rate limiting, search, and admin operations
+- [ ] Explain and reconcile the Phase 4 135-test versus Phase 5 117-test discrepancy; restore removed coverage where applicable
+- [ ] Harden the canonical background job lifecycle, crash recovery, retry classification, backoff, jitter, and dead-letter inspection without adding a duplicate queue
+- [ ] Harden financial reconciliation scheduling, Paystack webhooks, payment verification, refunds, payouts, and provider event idempotency without changing canonical financial models
+- [ ] Harden unified notification, email, web push, preference, delivery logging, cleanup, and deduplication flows
+- [ ] Add structured observability, safe error handling, liveness/readiness health checks, operational metrics, and optional existing error-monitoring preparation without leaking secrets
+- [ ] Audit and improve rate limiting, abuse prevention, authentication, authorization, IDOR, organization isolation, request validation, CORS, CSRF, SQL injection, and XSS controls
+- [ ] Audit PostgreSQL-backed search, geo privacy, spatial filtering, performance, N+1 queries, oversized payloads, realtime subscriptions, caching, and index coverage
+- [ ] Extend SUPER_ADMIN operational visibility and controlled actions with audit events, without unrestricted financial mutation
+- [ ] Add Phase 6 regression, reliability, security, geo, performance, background-job, notification, payment, reconciliation, and admin tests
+- [ ] Run type checking, complete tests, client production build, server production build, and production-safe read-only verification
+- [ ] Inspect diff, migrations, environment usage, endpoints, workers, payment handlers, notification handlers, and realtime handlers for safety
+- [ ] Create Zylobridge_Phase_6_Production_Operations_and_Scale.md and stop before Phase 7

@@ -7,7 +7,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { enterpriseProcedure, adminProcedure, superAdminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { storagePut, storageGetSignedUrl } from "./storage";
 import { getDb } from "./db";
-import { conversations, users, professionalVerifications } from "../drizzle/schema";
+import { conversations, users, professionalVerifications, interviews, offers } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import {
   upsertUser,
