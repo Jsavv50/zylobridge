@@ -1,18 +1,14 @@
-# ZYLOBRIDGE — Phase 8.6: Frontend Sentry Integration Report
+# ZYLOBRIDGE — Phase 8.6: Frontend Sentry Integration & Production Verification Report
 
 ## 1. Executive Summary
-This report documents the integration of privacy-safe frontend error monitoring using `@sentry/react` into the Zylobridge React/Vite/Vercel application architecture. Sentry is initialized cleanly via `VITE_SENTRY_DSN`, incorporating environment detection, session replay masking, request header/cookie scrubbing, and an authentication-aware user context lifecycle.
+This report provides an independent verification of the frontend Sentry integration for Zylobridge. While `@sentry/react` and `client/src/lib/sentry.tsx` are correctly implemented in code and included in production client bundles, live event transmission to the Sentry project dashboard ("Waiting for this project's first error") requires the operator to ensure that `VITE_SENTRY_DSN` is explicitly injected into the Vercel production environment variables and that a fresh production deployment is triggered.
 
-## 2. Files Inspected & Modified
-- **Inspected**: `client/src/main.tsx`, `client/src/App.tsx`, `package.json`, `vite.config.ts`.
-- **Modified**: `client/src/lib/sentry.tsx` (created), `client/src/App.tsx` (integrated error boundary).
+## 2. Implementation Inspection
+- **Initialization**: Configured in `client/src/lib/sentry.tsx` using `import.meta.env.VITE_SENTRY_DSN`.
+- **Privacy Protections**: `beforeSend` strips authorization headers and cookies. Session replay masks all text and blocks media.
+- **Error Boundary**: `ZylobridgeErrorBoundary` safely catches React rendering faults.
 
-## 3. Configuration & Privacy Protections
-- **SDK**: `@sentry/react` installed via pnpm.
-- **Environment Variable**: `VITE_SENTRY_DSN`.
-- **Scrubbing**: `beforeSend` callback deletes sensitive headers (`Authorization`, `Cookie`) and tokens before payload transmission.
-- **User Context**: Minimal, non-sensitive identifier and role association attached via `setSentryUser()`.
-
-## 4. Test & Build Verification
-- **Automated Tests**: 140/140 unit and regression tests passing.
-- **Production Builds**: Successful client bundle (`dist/public`) and server bundle (`dist/index.js`) compilation.
+## 3. Production Deployment & Verification Status
+- **Client Bundle**: Successfully built and bundled.
+- **Sentry Dashboard Status**: Awaiting Vercel environment variable configuration of `VITE_SENTRY_DSN` and subsequent redeployment by the operator.
+- **Source Maps**: Not YET configured for upload; recommended as a P1 post-launch improvement.
