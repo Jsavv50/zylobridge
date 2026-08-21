@@ -707,3 +707,11 @@
 - [x] Authentication and payment final integrity checks
 - [x] Automated test suite execution (140/140 passed) and clean production builds
 - [x] Produced `Zylobridge_Phase_9A_Launch_Hardening_Report.md` and updated `Zylobridge_Launch_Readiness_Checklist.md`
+
+## Phase 20: Phase 8.6 Frontend Sentry Integration
+- [x] Inspected React/Vite frontend entry point and build configuration
+- [x] Installed `@sentry/react` via pnpm
+- [x] Configured `VITE_SENTRY_DSN` with privacy-safe headers/cookies scrubbing and session replay masking
+- [x] Integrated Sentry error boundary and user context lifecycle
+- [x] Verified automated tests (140/140 passed) and clean production builds
+- [x] Produced `Zylobridge_Phase_8_6_Frontend_Sentry_Integration.md`
