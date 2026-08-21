@@ -31,9 +31,12 @@ import {
   deleteJob,
   getJobCount,
   createApplication,
+  hasActiveApplication,
   getApplicationById,
   getApplicationsByJobId,
   getApplicationsByProfessionalId,
+  getDetailedApplicationsByJobId,
+  getDetailedApplicationsByProfessionalId,
   updateApplicationStatus,
   getApplicationCount,
   createProfile,
@@ -499,6 +502,10 @@ export const appRouter = router({
         const job = await getJobById(input.jobId);
         if (!job) throw new TRPCError({ code: "NOT_FOUND" });
         if (job.status !== "open") throw new TRPCError({ code: "BAD_REQUEST", message: "Job is not open." });
+        const duplicate = await hasActiveApplication(input.jobId, ctx.user.id);
+        if (duplicate) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "You already have an active application for this job." });
+        }
         await createApplication({
           jobId: input.jobId,
           professionalId: ctx.user.id,
@@ -510,20 +517,32 @@ export const appRouter = router({
       }),
 
     listForJob: protectedProcedure
-      .input(z.object({ jobId: z.number().int().positive(), limit: z.number().int().min(1).max(MAX_PAGE_SIZE).optional().default(MAX_PAGE_SIZE), offset: z.number().int().nonnegative().optional().default(0) }))
+      .input(z.object({
+        jobId: z.number().int().positive(),
+        status: z.string().optional().default("all"),
+        limit: z.number().int().min(1).max(MAX_PAGE_SIZE).optional().default(MAX_PAGE_SIZE),
+        offset: z.number().int().nonnegative().optional().default(0),
+      }))
       .query(async ({ ctx, input }) => {
         const job = await getJobById(input.jobId);
         if (!job) throw new TRPCError({ code: "NOT_FOUND" });
-        if (job.clientId !== ctx.user.id && ctx.user.role !== "admin") {
-          throw new TRPCError({ code: "FORBIDDEN" });
+        let canManage = job.clientId === ctx.user.id || ctx.user.role === "admin" || ctx.user.role === "SUPER_ADMIN";
+        if (!canManage && job.organizationId) {
+          const member = await requireOrganizationAccess(ctx.user.id, job.organizationId);
+          canManage = ["OWNER", "ADMIN", "HIRING_MANAGER", "RECRUITER"].includes(member.role);
         }
-        return getApplicationsByJobId(input.jobId, input.limit, input.offset);
+        if (!canManage) throw new TRPCError({ code: "FORBIDDEN" });
+        return getDetailedApplicationsByJobId(input.jobId, input.limit, input.offset, input.status);
       }),
 
     myApplications: protectedProcedure
-      .input(z.object({ limit: z.number().int().min(1).max(MAX_PAGE_SIZE).optional().default(MAX_PAGE_SIZE), offset: z.number().int().nonnegative().optional().default(0) }).optional())
+      .input(z.object({
+        status: z.string().optional().default("all"),
+        limit: z.number().int().min(1).max(MAX_PAGE_SIZE).optional().default(MAX_PAGE_SIZE),
+        offset: z.number().int().nonnegative().optional().default(0),
+      }).optional())
       .query(async ({ ctx, input }) => {
-        return getApplicationsByProfessionalId(ctx.user.id, input?.limit, input?.offset);
+        return getDetailedApplicationsByProfessionalId(ctx.user.id, input?.limit, input?.offset, input?.status);
       }),
 
     updateStatus: protectedProcedure

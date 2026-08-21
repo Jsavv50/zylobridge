@@ -14,6 +14,8 @@ const TalentDirectory = lazy(() => import("./pages/TalentDirectory"));
 const ProfessionalProfilePage = lazy(() => import("./pages/ProfessionalProfilePage"));
 const CompanyProfile = lazy(() => import("./pages/CompanyProfile"));
 const EmployerJobs = lazy(() => import("./pages/EmployerJobs"));
+const ProfessionalApplications = lazy(() => import("./pages/ProfessionalApplications"));
+const EmployerCandidates = lazy(() => import("./pages/EmployerCandidates"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const ClientDashboard = lazy(() => import("./pages/ClientDashboard"));
 const ProfessionalDashboard = lazy(() => import("./pages/ProfessionalDashboard"));
@@ -49,6 +51,8 @@ function Router() {
       <Route path="/professionals/:id" component={ProfessionalProfilePage} />
       <Route path="/companies/:slug" component={CompanyProfile} />
       <Route path="/employer/jobs" component={EmployerJobs} />
+      <Route path="/applications" component={ProfessionalApplications} />
+      <Route path="/employer/jobs/:jobId/candidates" component={EmployerCandidates} />
       <Route path="/onboarding" component={Onboarding} />
       <Route path="/dashboard" component={ProfessionalDashboard} />
       <Route path="/employer" component={ClientDashboard} />

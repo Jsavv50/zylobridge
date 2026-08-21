@@ -547,10 +547,96 @@ export async function getJobCount() {
 }
 
 // ─── Applications ─────────────────────────────────────────────────────────────
+export async function hasActiveApplication(jobId: number, professionalId: number) {
+  const db = await getDb();
+  if (!db) return false;
+  const [existing] = await db.select({ id: applications.id })
+    .from(applications)
+    .where(and(eq(applications.jobId, jobId), eq(applications.professionalId, professionalId), sql`${applications.status} != 'withdrawn'`))
+    .limit(1);
+  return Boolean(existing);
+}
+
 export async function createApplication(data: InsertApplication) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  return db.insert(applications).values(data);
+  const duplicate = await hasActiveApplication(data.jobId, data.professionalId);
+  if (duplicate) {
+    throw new Error("You already have an active application for this job.");
+  }
+  const [inserted] = await db.insert(applications).values(data).returning();
+  return inserted ?? { id: 0, ...data };
+}
+
+export async function getDetailedApplicationsByJobId(jobId: number, limit = MAX_PAGE_SIZE, offset = 0, statusFilter?: string) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions = [eq(applications.jobId, jobId)];
+  if (statusFilter && statusFilter !== "all") {
+    conditions.push(eq(applications.status, statusFilter as any));
+  }
+  const rows = await db.select({
+    application: applications,
+    professional: {
+      id: users.id,
+      name: users.name,
+      avatarUrl: users.avatarUrl,
+      isVerified: users.isVerified,
+    },
+    profile: profiles,
+  })
+    .from(applications)
+    .innerJoin(users, eq(applications.professionalId, users.id))
+    .leftJoin(profiles, eq(profiles.userId, users.id))
+    .where(and(...conditions))
+    .orderBy(desc(applications.createdAt))
+    .limit(clampPageSize(limit, MAX_PAGE_SIZE))
+    .offset(clampOffset(offset));
+
+  return rows.map(r => ({
+    ...r.application,
+    professional: r.professional,
+    profile: r.profile,
+  }));
+}
+
+export async function getDetailedApplicationsByProfessionalId(professionalId: number, limit = MAX_PAGE_SIZE, offset = 0, statusFilter?: string) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions = [eq(applications.professionalId, professionalId)];
+  if (statusFilter && statusFilter !== "all") {
+    conditions.push(eq(applications.status, statusFilter as any));
+  }
+  const rows = await db.select({
+    application: applications,
+    job: {
+      id: jobs.id,
+      title: jobs.title,
+      location: jobs.location,
+      budget: jobs.budget,
+      status: jobs.status,
+      clientId: jobs.clientId,
+      organizationId: jobs.organizationId,
+    },
+    client: {
+      name: users.name,
+      isVerified: users.isVerified,
+    },
+  })
+    .from(applications)
+    .innerJoin(jobs, eq(applications.jobId, jobs.id))
+    .leftJoin(users, eq(jobs.clientId, users.id))
+    .where(and(...conditions))
+    .orderBy(desc(applications.createdAt))
+    .limit(clampPageSize(limit, MAX_PAGE_SIZE))
+    .offset(clampOffset(offset));
+
+  return rows.map(r => ({
+    ...r.application,
+    job: r.job,
+    employerName: r.client?.name ?? "Employer",
+    employerVerified: Boolean(r.client?.isVerified),
+  }));
 }
 
 export async function getApplicationById(id: number) {
