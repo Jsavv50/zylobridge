@@ -50,6 +50,7 @@ import {
   getMessagesByConversationId,
   getUnreadMessageCount,
   createMessage,
+  markConversationMessagesRead,
   listDisputes,
   getDisputeById,
   // createDispute,
@@ -700,6 +701,18 @@ export const appRouter = router({
     unreadCount: protectedProcedure.query(async ({ ctx }) => {
       return { count: await getUnreadMessageCount(ctx.user.id) };
     }),
+
+    markAsRead: protectedProcedure
+      .input(z.object({ conversationId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const conversation = await getConversationById(input.conversationId);
+        if (!conversation) throw new TRPCError({ code: "NOT_FOUND" });
+        if (conversation.clientId !== ctx.user.id && conversation.professionalId !== ctx.user.id && ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
+        await markConversationMessagesRead(input.conversationId, ctx.user.id);
+        return { success: true };
+      }),
   }),
 
   // ── Escrow Payments ───────────────────────────────────────────────────────
@@ -1527,20 +1540,74 @@ export const appRouter = router({
 
     scheduleInterview: protectedProcedure
       .input(z.object({ jobId: z.number().int().positive(), applicationId: z.number().int().positive().optional(), professionalId: z.number().int().positive(), scheduledAt: z.string().transform(v => new Date(v)), locationOrLink: z.string().optional(), notes: z.string().optional() }))
-      .mutation(async ({ ctx, input }) => createInterview({ ...input, employerId: ctx.user.id })),
+      .mutation(async ({ ctx, input }) => {
+        const job = await getJobById(input.jobId);
+        if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
+        let canManage = job.clientId === ctx.user.id || ctx.user.role === "admin" || ctx.user.role === "SUPER_ADMIN";
+        if (!canManage && job.organizationId) {
+          const member = await requireOrganizationAccess(ctx.user.id, job.organizationId);
+          canManage = ["OWNER", "ADMIN", "HIRING_MANAGER"].includes(member.role);
+        }
+        if (!canManage) throw new TRPCError({ code: "FORBIDDEN", message: "Unauthorized to schedule interviews for this job." });
+        const interview = await createInterview({ ...input, employerId: job.clientId });
+        return interview;
+      }),
     updateInterview: protectedProcedure
       .input(z.object({ id: z.number().int().positive(), status: z.enum(["proposed", "confirmed", "cancelled", "completed"]) }))
-      .mutation(async ({ input }) => updateInterviewStatus(input.id, input.status)),
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        const interviewsList = await db.select().from(interviews).where(eq(interviews.id, input.id)).limit(1);
+        const interview = interviewsList[0];
+        if (!interview) throw new TRPCError({ code: "NOT_FOUND" });
+        const isParticipant = interview.employerId === ctx.user.id || interview.professionalId === ctx.user.id || ctx.user.role === "admin" || ctx.user.role === "SUPER_ADMIN";
+        if (!isParticipant) throw new TRPCError({ code: "FORBIDDEN" });
+        return updateInterviewStatus(input.id, input.status);
+      }),
     listInterviews: protectedProcedure
       .input(z.object({ role: z.enum(["employer", "professional"]) }))
       .query(async ({ ctx, input }) => getInterviewsByUserId(ctx.user.id, input.role)),
 
     createOffer: protectedProcedure
       .input(z.object({ jobId: z.number().int().positive(), applicationId: z.number().int().positive().optional(), professionalId: z.number().int().positive(), compensation: z.string(), roleDescription: z.string(), startDate: z.string().transform(v => new Date(v)), duration: z.string().optional() }))
-      .mutation(async ({ ctx, input }) => createOffer({ ...input, employerId: ctx.user.id })),
+      .mutation(async ({ ctx, input }) => {
+        const job = await getJobById(input.jobId);
+        if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
+        let canManage = job.clientId === ctx.user.id || ctx.user.role === "admin" || ctx.user.role === "SUPER_ADMIN";
+        if (!canManage && job.organizationId) {
+          const member = await requireOrganizationAccess(ctx.user.id, job.organizationId);
+          canManage = ["OWNER", "ADMIN", "HIRING_MANAGER"].includes(member.role);
+        }
+        if (!canManage) throw new TRPCError({ code: "FORBIDDEN", message: "Unauthorized to create offers for this job." });
+        const offer = await createOffer({ ...input, employerId: job.clientId });
+        return offer;
+      }),
     updateOffer: protectedProcedure
       .input(z.object({ id: z.number().int().positive(), status: z.enum(["pending", "accepted", "declined"]) }))
-      .mutation(async ({ input }) => updateOfferStatus(input.id, input.status)),
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        const offersList = await db.select().from(offers).where(eq(offers.id, input.id)).limit(1);
+        const offer = offersList[0];
+        if (!offer) throw new TRPCError({ code: "NOT_FOUND" });
+        const isProfessional = offer.professionalId === ctx.user.id;
+        const isEmployer = offer.employerId === ctx.user.id || ctx.user.role === "admin" || ctx.user.role === "SUPER_ADMIN";
+        if (!isProfessional && !isEmployer) throw new TRPCError({ code: "FORBIDDEN" });
+        const updated = await updateOfferStatus(input.id, input.status);
+        if (input.status === "accepted") {
+          // Automatically create engagement and update job
+          await createEngagement({
+            jobId: offer.jobId,
+            offerId: offer.id,
+            employerId: offer.employerId,
+            professionalId: offer.professionalId,
+            compensation: offer.compensation,
+            startDate: offer.startDate,
+          });
+          await updateJob(offer.jobId, { status: "in_progress", assignedProfessionalId: offer.professionalId });
+        }
+        return updated;
+      }),
     listOffers: protectedProcedure
       .input(z.object({ role: z.enum(["employer", "professional"]) }))
       .query(async ({ ctx, input }) => getOffersByUserId(ctx.user.id, input.role)),

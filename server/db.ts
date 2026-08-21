@@ -877,6 +877,14 @@ export async function getConversationsByUserId(userId: number, limit = MAX_PAGE_
   ).orderBy(desc(conversations.lastMessageAt)).limit(clampPageSize(limit, MAX_PAGE_SIZE)).offset(clampOffset(offset));
 }
 
+export async function markConversationMessagesRead(conversationId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(messages)
+    .set({ isRead: true })
+    .where(and(eq(messages.conversationId, conversationId), sql`${messages.senderId} != ${userId}`));
+}
+
 export async function getMessagesByConversationId(conversationId: number, limit = 50, offset = 0) {
   const db = await getDb();
   if (!db) return [];
