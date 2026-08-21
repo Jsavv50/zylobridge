@@ -738,3 +738,11 @@
 - [x] Inspected backend Sentry implementation and health checks
 - [x] Performed live verification audit for Railway backend Sentry integration
 - [x] Documented BLOCKED classification and operator DSN verification steps in `Zylobridge_Phase_8_7_Backend_Sentry_Integration.md`
+
+## Phase 25: Phase 8.7 Live Sentry Event Verification PASS
+- [x] Verified Railway production `SENTRY_DSN` and `SENTRY_ENVIRONMENT=production`
+- [x] Verified live production health (`/api/health`) and backend Sentry initialization
+- [x] Generated controlled backend test exception labeled **"Zylobridge Sentry Backend Production Verification Test"**
+- [x] Confirmed live event receipt in the dedicated Zylobridge Backend Sentry project
+- [x] Verified privacy scrubbing (headers/cookies removed) and cleaned up test route
+- [x] Updated `Zylobridge_Phase_8_7_Backend_Sentry_Integration.md` with **PASS** classification
