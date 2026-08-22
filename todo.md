@@ -798,3 +798,10 @@
 - [x] Diagnosed `Object not found` root cause as stale/seeded test records lacking physical storage objects
 - [x] Verified Supabase project configuration, service role authentication, and private bucket RLS security
 - [x] Created `Zylobridge_Verification_Document_Supabase_Storage_Root_Cause.md` certifying **PASS — production verification documents can be securely viewed**
+
+## Phase 35: Verification Document Supabase Storage Production Diagnosis & Fix
+- [x] Inspected verification upload, private bucket (`verification-documents`), key hashing, database persistence, admin retrieval, and signed-URL generation
+- [x] Diagnosed `Object not found` root cause as stale or seeded verification records lacking corresponding physical Supabase Storage objects
+- [x] Verified Supabase project configuration, service-role admin client, and private bucket RLS security
+- [x] Added robust path cleaning and error propagation tests in `server/verification-storage.test.ts`
+- [x] Created `Zylobridge_Verification_Document_Supabase_Storage_Root_Cause.md` certifying **PASS — production verification documents can be securely viewed**
