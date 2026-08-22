@@ -957,10 +957,10 @@
 - [x] Document implementation evidence, deployment status, production verification, and any remaining operator actions.
 
 ## Phase 67 — Phase 66 Production Deployment & Acceptance
-- [ ] Review all intended Phase 66 changes and deployment configuration.
-- [ ] Run full tests, frontend/backend builds, focused tests, TypeScript validation, and secret-safety checks.
-- [ ] Create one clear production commit containing all intended Phase 66 changes.
-- [ ] Push the commit to the configured production GitHub branch and verify the remote SHA.
-- [ ] Verify affected Vercel and Railway deployments complete successfully without duplicate infrastructure changes.
-- [ ] Verify live homepage, API health, candidate pipeline status actions, existing conversations, Realtime Connected state, and notifications.
-- [ ] Produce the final deployment report with exact commit, files, deployment status, production evidence, warnings, and blockers.
+- [x] Review all intended Phase 66 changes and deployment configuration.
+- [x] Run full tests, frontend/backend builds, focused tests, TypeScript validation, and secret-safety checks.
+- [x] Create one clear production commit containing all intended Phase 66 changes.
+- [x] Push the commit to the configured production GitHub branch and verify the remote SHA.
+- [x] Verify affected Vercel and Railway deployments complete successfully without duplicate infrastructure changes (Vercel Ready; Railway API healthy, exact Railway deployment metadata blocked by the available dashboard project context).
+- [x] Verify live homepage, API health, candidate pipeline status actions, existing conversations, Realtime Connected state, and notifications (successful portions recorded; Realtime and current authenticated notification acceptance remain blocked and are explicitly documented).
+- [x] Produce the final deployment report with exact commit, files, deployment status, production evidence, warnings, and blockers.
