@@ -15,7 +15,7 @@ The implementation does not introduce a second messaging system, a second paymen
 | Escrow authorization | Every funding path requires a matching accepted application. Existing pending, funded, or released escrow records are not duplicated. | `server/routers.ts` |
 | Escrow amount integrity | Paystack and bank-transfer initialization use the accepted application `bidAmount`, not a client-controlled amount. Paystack verification also compares provider amount with the persisted escrow amount. | `server/routers.ts` |
 | Escrow UX | Candidate pipeline reuses the existing responsive `EscrowPaymentModal`, including Paystack, bank transfer, proof upload, loading, error, and funded-state handling. | `client/src/pages/EmployerCandidates.tsx`, `client/src/components/EscrowPaymentModal.tsx` |
-| Realtime bridge | The browser token request uses `VITE_API_URL` and falls back to `https://api.zylobridge.com` in production, with credentials included. | `client/src/lib/supabase.ts` |
+| Realtime bridge | The browser token request uses `VITE_API_URL` and falls back to `https://api.zylobridge.com` in production, with credentials included; the backend token now includes an explicit issued-at claim for Supabase compatibility. | `client/src/lib/supabase.ts`, `server/_core/realtimeAuth.ts` |
 | Notifications | Message, application-status, escrow-initiation, escrow-funding, escrow-release, verification, and role-change events use the canonical dispatcher with idempotency keys. | `server/routers.ts`, `server/notificationDispatcher.ts` |
 | Notification navigation | Conversation, job, escrow, and verification notifications preserve reference metadata and navigate to existing routes. | `client/src/pages/Notifications.tsx`, `drizzle/schema.ts` |
 
@@ -48,7 +48,7 @@ Desktop and mobile preview captures completed for `/employer/jobs/1/candidates`,
 
 The release is ready for checkpoint publication after final diff review. After publication, an authenticated employer should verify that a pending or rejected application exposes only `Review Profile`, while an accepted application exposes `Message` and `Fund Escrow`. The operator should open, but not submit, the escrow modal; verify the Message action opens `/messages?conv={id}`; send a non-financial test message; and confirm the recipient receives one persisted unread notification that navigates to the same conversation.
 
-The local sandbox cannot prove the production private Realtime subscription because the sandbox lacks `SUPABASE_JWT_SECRET`. Production verification must therefore confirm that `GET https://api.zylobridge.com/api/realtime/token` returns a valid authenticated token in the signed-in browser, that the active channel remains `private-conversation-{conversationId}`, and that `SUBSCRIBED` is displayed as the connected state.
+Live production verification confirmed that `GET https://api.zylobridge.com/api/realtime/token` returns HTTP 200 with an authenticated token for the signed-in session, and the deployed bundle contains both the compiled Supabase project URL and the Railway API fallback. The active route remained `private-conversation-{conversationId}` in source. However, the authenticated browser still displayed `Connection error` after subscription, so the exact Supabase channel authorization result remains unresolved and Phase 66 Realtime production acceptance is not certified. The local sandbox also lacks `SUPABASE_JWT_SECRET`, preventing local private-channel verification.
 
 ## Status
 
@@ -58,4 +58,4 @@ The local sandbox cannot prove the production private Realtime subscription beca
 **TypeScript:** PASS  
 **Production builds:** PASS  
 **Production payment acceptance:** NOT PERFORMED — intentionally blocked to avoid a real charge  
-**Production private Realtime acceptance:** OPERATOR VERIFICATION REQUIRED — production secret/session dependent
+**Production private Realtime acceptance:** BLOCKED — token endpoint succeeds, but the authenticated live channel still transitions to `Connection error`; Railway/Supabase channel authorization logs or policy verification are required before claiming resolution

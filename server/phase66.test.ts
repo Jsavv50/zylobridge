@@ -29,8 +29,10 @@ describe("Phase 66 candidate actions, escrow, realtime, and notifications", () =
 
   it("uses the production Railway fallback for Realtime authorization", () => {
     const source = read("../client/src/lib/supabase.ts");
+    const serverSource = read("./_core/realtimeAuth.ts");
     expect(source).toContain('import.meta.env.PROD ? "https://api.zylobridge.com" : ""');
     expect(source).toContain('credentials: "include"');
+    expect(serverSource).toContain(".setIssuedAt(issuedAt)");
   });
 
   it("persists message and account events through the canonical notification dispatcher", () => {

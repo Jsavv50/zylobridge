@@ -953,5 +953,5 @@
 - [x] Ensure message, account, hiring, verification, job, and escrow events use the canonical persisted Notifications system with correct recipients, deduplication, read state, ordering, and links.
 - [x] Add regression and integration coverage for status visibility, authorization/IDOR, escrow eligibility/idempotency, connection lifecycle, notification delivery, and notification isolation.
 - [x] Run full tests, TypeScript validation, production client/server builds, and desktop/tablet/mobile checks.
-- [ ] Commit, push, publish, and perform safe production acceptance without creating unintended financial charges.
+- [x] Commit, push, publish, and perform safe production acceptance without creating unintended financial charges (latest code and environment configuration published; authenticated candidate and Message flow verified; no payment submitted; Realtime recheck required after backend secret reload).
 - [x] Document implementation evidence, deployment status, production verification, and any remaining operator actions.

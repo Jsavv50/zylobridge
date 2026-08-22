@@ -43,6 +43,7 @@ async function generateRealtimeToken(userId: number): Promise<string> {
     user_id: userId,
   })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+    .setIssuedAt(issuedAt)
     .setExpirationTime(expirationSeconds)
     .sign(secretKey);
 }
