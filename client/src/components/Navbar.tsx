@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
+import { ZylobridgeLogo } from "./ZylobridgeLogo";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { Button } from "@/components/ui/button";
@@ -56,25 +57,7 @@ export default function Navbar() {
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-3 shrink-0">
-            <img
-              src={LOGO_URL}
-              alt="ZYLOBRIDGE"
-              className="h-9 w-9 object-contain"
-            />
-            <span
-              className="text-xl font-extrabold tracking-tight"
-              style={{
-                fontFamily: "'Space Grotesk', sans-serif",
-                background: "linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                backgroundClip: "text",
-              }}
-            >
-              ZYLOBRIDGE
-            </span>
-          </Link>
+          <ZylobridgeLogo />
 
           {/* Desktop Nav */}
           <div className="hidden md:flex items-center gap-6">
