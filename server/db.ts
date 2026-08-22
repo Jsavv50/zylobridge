@@ -261,59 +261,8 @@ export async function createJob(data: InsertJob) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
 
-  console.log("[JobCreate] Pre-insert payload inspection:", {
-    clientId: data.clientId,
-    title: data.title,
-    description: data.description ? data.description.substring(0, 40) + "..." : null,
-    vocation: data.vocation,
-    budget: data.budget,
-    location: data.location,
-    deadline: data.deadline,
-    status: data.status,
-    isUrgent: data.isUrgent,
-    organizationId: data.organizationId ?? null,
-    projectId: data.projectId ?? null,
-  });
-
-  try {
-    const [created] = await db.insert(jobs).values(data).returning();
-    console.log("[JobCreate] Successfully inserted job id:", created.id);
-    return created;
-  } catch (error) {
-    const candidate = error instanceof Error && "cause" in error && error.cause
-      ? error.cause
-      : error;
-    const originalError = error instanceof Error && "originalError" in error
-      ? (error as any).originalError
-      : undefined;
-
-    const pgError = candidate as {
-      code?: unknown;
-      message?: unknown;
-      detail?: unknown;
-      hint?: unknown;
-      schema?: unknown;
-      table?: unknown;
-      column?: unknown;
-      constraint?: unknown;
-      dataType?: unknown;
-    };
-
-    console.error("[JobCreate] Detailed PostgreSQL / Drizzle Exception:", {
-      name: error instanceof Error ? error.name : typeof error,
-      message: error instanceof Error ? error.message : String(error),
-      code: typeof pgError.code === "string" ? pgError.code : undefined,
-      pgMessage: typeof pgError.message === "string" ? pgError.message : undefined,
-      detail: typeof pgError.detail === "string" ? pgError.detail : undefined,
-      hint: typeof pgError.hint === "string" ? pgError.hint : undefined,
-      constraint: typeof pgError.constraint === "string" ? pgError.constraint : undefined,
-      table: typeof pgError.table === "string" ? pgError.table : undefined,
-      column: typeof pgError.column === "string" ? pgError.column : undefined,
-      schema: typeof pgError.schema === "string" ? pgError.schema : undefined,
-      originalError: originalError ? String(originalError) : undefined,
-    });
-    throw error;
-  }
+  const [created] = await db.insert(jobs).values(data).returning();
+  return created;
 }
 
 export async function getJobById(id: number) {

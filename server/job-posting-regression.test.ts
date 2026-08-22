@@ -68,6 +68,24 @@ describe("Job Posting Validation & Regression Tests", () => {
     }
   });
 
+  it("accepts the standard Painter payload without requiring optional location columns", () => {
+    const result = jobCreateSchema.safeParse({
+      title: "Painter",
+      description: "An experienced painter is needed urgently.",
+      vocation: "painter",
+      budget: 100000,
+      location: "Cape Town",
+      deadline: "2026-08-25T00:00:00.000Z",
+      isUrgent: true,
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.organizationId).toBeUndefined();
+      expect(result.data.projectId).toBeUndefined();
+    }
+  });
+
   it("constructs secure job insert object mapping authenticated clientId and parsing budget as string", () => {
     const userId = 1;
     const input = {
@@ -98,5 +116,8 @@ describe("Job Posting Validation & Regression Tests", () => {
     expect(jobData.isUrgent).toBe(true);
     expect(jobData.organizationId).toBeUndefined();
     expect(jobData.projectId).toBeUndefined();
+    expect(jobData.latitude).toBeUndefined();
+    expect(jobData.longitude).toBeUndefined();
+    expect(jobData.serviceRadiusKm).toBeUndefined();
   });
 });

@@ -880,3 +880,26 @@
 - [x] Commit and push to GitHub (`Jsavv50/zylobridge`), redeploy Railway, and verify API health
 - [x] Perform mandatory live client Painter job test on `https://zylobridge.com`, verify database persistence and client dashboard visibility
 - [x] Produce `Zylobridge_Canonical_Job_Creation_Acceptance_Report.md` and declare PASS or FAIL strictly based on live evidence
+
+## Phase 61: Production Jobs Schema Reconciliation & Publish Acceptance
+- [ ] Inspect canonical jobs schema, all jobs migrations, job-create procedure, and deployment migration strategy
+- [ ] Verify production latitude, longitude, and serviceRadiusKm columns against Drizzle types and nullability
+- [ ] Create or validate an idempotent migration for the three production location columns without duplicating or dropping data
+- [ ] Verify migration history and production schema consistency
+- [ ] Add schema-contract and authenticated client Publish Job regression coverage for nullable optional fields
+- [ ] Run complete tests, integration tests, TypeScript checks, production client/server builds, secret scan, and final diff review
+- [ ] Push intentional changes and deploy exact GitHub commit to Railway/Vercel as required
+- [ ] Perform the real authenticated Production Publish Test - Painter and verify job ID, database row, `/jobs` visibility, detail route, refresh persistence, ownership, and duplicate prevention
+- [ ] Create final production schema reconciliation report and issue strict PASS/FAIL status
+- [x] Add an idempotent PostgreSQL reconciliation migration for jobs latitude, longitude, and serviceRadiusKm.
+- [x] Expand job-posting regression coverage for optional location fields and server-authoritative identity.
+- [x] Remove temporary job-posting diagnostic payload/error logging from production code.
+- [x] Resolve the current TypeScript error in server/routers.ts and verify tests/builds.
+- [x] Run live authenticated Painter job-posting acceptance and verify production row/dashboard visibility before declaring PASS.
+- [x] Document the production database dialect/connection discrepancy if local project tooling cannot reach the Railway PostgreSQL target.
+
+## Phase 61 — Production Jobs Schema Reconciliation & Publish Acceptance
+- [x] Inspect repository migration history and identify 0008 as the canonical source of jobs location columns.
+- [x] Confirm production schema evidence supplied by operator for latitude, longitude, and serviceRadiusKm.
+- [x] Add a repository reconciliation migration without re-running production schema changes blindly.
+- [x] Complete tests, typecheck, builds, and authenticated production acceptance.
