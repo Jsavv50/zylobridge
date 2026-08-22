@@ -811,3 +811,10 @@
 - [x] Confirmed upload-to-database consistency and robust error propagation for missing/deleted objects
 - [x] Re-verified private bucket RLS, admin RBAC (`adminProcedure`), and browser secret isolation
 - [x] Updated `Zylobridge_Verification_Document_Supabase_Storage_Root_Cause.md` with **Production End-to-End Verification** section certifying **PASS — real-user verification document upload, secure Storage persistence, admin viewing, and approval workflow verified end-to-end**
+
+## Phase 56: Job-Posting Schema & Insert Diagnostic & Fix
+- [x] Inspected `jobs` table Drizzle model (`drizzle/schema.ts`) and compared against migration history (`0008_phase4_intelligence_communication.sql`) and database helper (`server/db.ts`)
+- [x] Verified parameter mapping for job posting (`clientId`, `title`, `description`, `vocation`, `budget`, `location`, `deadline`, `status`, `isUrgent`)
+- [x] Confirmed `isUrgent` boolean default mapping and geo column definitions match PostgreSQL table expectations
+- [x] Created `server/job-posting-regression.test.ts` covering standard, non-urgent, and enterprise organization/project job creation payloads
+- [x] Verified full test suite (148/148 tests passing) and clean client/server production builds
