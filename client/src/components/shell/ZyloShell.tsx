@@ -7,6 +7,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../_core/hooks/useAuth";
 import { ZylobridgeLogo } from "../ZylobridgeLogo";
+import { trpc } from "../../lib/trpc";
+import { useNotificationRealtime } from "../../hooks/useNotificationRealtime";
 
 export interface PageHeaderProps {
   title: string;
@@ -58,6 +60,17 @@ export function ApplicationShell({ children, role = "user" }: { children: React.
   const [mobileOpen, setMobileOpen] = useState(false);
   const [location] = useLocation();
   const { user, logout } = useAuth();
+  const notificationUtils = trpc.useUtils();
+  const { data: unreadCount = 0 } = trpc.notifications.unreadCount.useQuery(undefined, { enabled: !!user });
+  useNotificationRealtime(user?.id, (event) => {
+    if (event.type === "sync") {
+      void notificationUtils.notifications.unreadCount.invalidate();
+      return;
+    }
+    if (event.notification && !event.notification.isRead && event.notification.userId === user?.id) {
+      notificationUtils.notifications.unreadCount.setData(undefined, (count) => (count ?? 0) + 1);
+    }
+  });
 
   const resolvedRole = role !== "user"
     ? role
@@ -171,7 +184,8 @@ export function ApplicationShell({ children, role = "user" }: { children: React.
                   }`}
                 >
                   <Icon className="w-4 h-4" />
-                  <span>{item.label}</span>
+                  <span className="flex-1">{item.label}</span>
+                  {item.label === "Notifications" && unreadCount > 0 && <span className="min-w-5 h-5 px-1 rounded-full bg-primary-foreground/20 text-primary-foreground text-[10px] font-bold inline-flex items-center justify-center">{unreadCount > 99 ? "99+" : unreadCount}</span>}
                 </Link>
               );
             })}
@@ -200,7 +214,8 @@ export function ApplicationShell({ children, role = "user" }: { children: React.
                     }`}
                   >
                     <Icon className="w-5 h-5" />
-                    <span>{item.label}</span>
+                    <span className="flex-1">{item.label}</span>
+                    {item.label === "Notifications" && unreadCount > 0 && <span className="min-w-5 h-5 px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold inline-flex items-center justify-center">{unreadCount > 99 ? "99+" : unreadCount}</span>}
                   </Link>
                 );
               })}

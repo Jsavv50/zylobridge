@@ -8,7 +8,7 @@ import { enterpriseProcedure, adminProcedure, superAdminProcedure, protectedProc
 import { storagePut, storageGetSignedUrl, storageObjectExists, sanitizeStorageFileName } from "./storage";
 import { getDb } from "./db";
 import { conversations, users, professionalVerifications, interviews, offers, type InsertJob } from "../drizzle/schema";
-import { eq, desc } from "drizzle-orm";
+import { and, eq, desc, sql } from "drizzle-orm";
 import { notifications, notificationPreferences } from "../drizzle/schema";
 import { VOCATION_KEYS } from "../shared/vocations";
 import {
@@ -469,6 +469,15 @@ export const appRouter = router({
         jobData.projectId = Number(input.projectId);
       }
       const job = await createJob(jobData);
+      await dispatchNotification({
+        userId: ctx.user.id,
+        title: "Job posted",
+        message: `Your job \"${job.title}\" has been successfully posted.`,
+        category: "job",
+        entityType: "job",
+        entityId: job.id,
+        idempotencyKey: `job-posted:${job.id}`,
+      });
       return { success: true, job };
     }),
 
@@ -522,12 +531,21 @@ export const appRouter = router({
         if (duplicate) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "You already have an active application for this job." });
         }
-        await createApplication({
+        const application = await createApplication({
           jobId: input.jobId,
           professionalId: ctx.user.id,
           coverLetter: input.coverLetter,
           bidAmount: String(input.bidAmount),
           status: "pending",
+        });
+        await dispatchNotification({
+          userId: job.clientId,
+          title: "New application",
+          message: `You received a new application for Job #${job.id}.`,
+          category: "job",
+          entityType: "job",
+          entityId: job.id,
+          idempotencyKey: `application-received:${application.id}`,
         });
         return { success: true };
       }),
@@ -592,6 +610,20 @@ export const appRouter = router({
           entityId: app.jobId,
           idempotencyKey: `application-status:${app.id}:${input.status}`,
         });
+        if (input.status === "accepted") {
+          const acceptedJob = await getJobById(app.jobId);
+          if (acceptedJob) {
+            await dispatchNotification({
+              userId: acceptedJob.clientId,
+              title: "Candidate hired",
+              message: `Candidate #${app.professionalId} has been hired for Job #${acceptedJob.id}.`,
+              category: "job",
+              entityType: "job",
+              entityId: acceptedJob.id,
+              idempotencyKey: `candidate-hired:${app.id}`,
+            });
+          }
+        }
         return { success: true };
       }),
   }),
@@ -1087,8 +1119,8 @@ export const appRouter = router({
           title: `Verification ${input.status}`,
           message: input.status === "approved" ? "Your professional verification has been approved." : `Your professional verification was ${input.status}.`,
           category: "verification",
-          entityType: "verification",
-          entityId: req.id,
+          entityType: "profile",
+          entityId: req.userId,
           idempotencyKey: `verification-review:${req.id}:${input.status}`,
         });
         return { success: true };
@@ -1796,13 +1828,30 @@ export const appRouter = router({
   }),
   notifications: router({
     list: protectedProcedure
-      .query(async ({ ctx }) => {
+      .input(z.object({
+        limit: z.number().int().min(1).max(MAX_PAGE_SIZE).optional().default(50),
+        offset: z.number().int().nonnegative().optional().default(0),
+      }).optional())
+      .query(async ({ ctx, input }) => {
         const db = await getDb();
         if (!db) return [];
-        return db.select().from(notifications).where(eq(notifications.userId, ctx.user.id)).orderBy(desc(notifications.createdAt)).limit(50);
+        return db.select().from(notifications)
+          .where(eq(notifications.userId, ctx.user.id))
+          .orderBy(desc(notifications.createdAt))
+          .limit(input?.limit ?? 50)
+          .offset(input?.offset ?? 0);
       }),
     listUnread: protectedProcedure
       .query(async ({ ctx }) => getUnreadNotifications(ctx.user.id)),
+    unreadCount: protectedProcedure
+      .query(async ({ ctx }) => {
+        const db = await getDb();
+        if (!db) return 0;
+        const [{ count }] = await db.select({ count: sql<number>`count(*)` })
+          .from(notifications)
+          .where(and(eq(notifications.userId, ctx.user.id), eq(notifications.isRead, false)));
+        return Number(count ?? 0);
+      }),
     markRead: protectedProcedure
       .input(z.object({ id: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => markNotificationRead(input.id, ctx.user.id)),

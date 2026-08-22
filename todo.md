@@ -964,3 +964,14 @@
 - [x] Verify affected Vercel and Railway deployments complete successfully without duplicate infrastructure changes (Vercel Ready; Railway API healthy, exact Railway deployment metadata blocked by the available dashboard project context).
 - [x] Verify live homepage, API health, candidate pipeline status actions, existing conversations, Realtime Connected state, and notifications (successful portions recorded; Realtime and current authenticated notification acceptance remain blocked and are explicitly documented).
 - [x] Produce the final deployment report with exact commit, files, deployment status, production evidence, warnings, and blockers.
+
+## Phase 68 — Live Notifications System
+- [x] Audit the existing notification schema, API procedures, dispatcher, event triggers, Realtime bridge, UI, read/unread behavior, and authorization.
+- [x] Define one canonical notification event/type and delivery contract with persisted records, idempotency, user scoping, deep links, and safe payloads.
+- [x] Implement live per-user notification delivery with Supabase Realtime, reconnect synchronization, missed-event recovery, and no excessive polling.
+- [x] Complete trusted backend notification coverage for messages, jobs, applications, hiring, account/profile/verification, and payment/escrow events already supported by the platform.
+- [x] Implement responsive Notifications feed, live unread badge, read/mark-all-read behavior, pagination, actionable navigation, and recipient isolation.
+- [x] Add regression and integration tests for event coverage, deduplication, authorization/IDOR, realtime updates, reconnect recovery, unread state, pagination, and responsive contracts.
+- [x] Run full tests, TypeScript validation, production client/server builds, and desktop/tablet/mobile checks.
+- [ ] Commit, push, deploy, and perform safe production acceptance for live notifications without creating unintended financial charges (code validation complete; production database Realtime policy/publication and authenticated live acceptance remain pending).
+- [x] Produce a complete live-notifications implementation and deployment report with evidence, limitations, and final status.

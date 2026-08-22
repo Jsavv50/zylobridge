@@ -16,6 +16,10 @@ vi.mock("./db", async () => {
   };
 });
 
+vi.mock("./notificationDispatcher", () => ({
+  dispatchNotification: vi.fn().mockResolvedValue(undefined),
+}));
+
 function createProfCtx() {
   return {
     ctx: {
