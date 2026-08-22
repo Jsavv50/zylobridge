@@ -442,22 +442,24 @@ export const appRouter = router({
         if (!["OWNER", "ADMIN", "HIRING_MANAGER"].includes(member.role)) throw new TRPCError({ code: "FORBIDDEN", message: "Organization job-posting permission required." });
         if (input.projectId && !(await getOrganizationProjectById(input.projectId, input.organizationId))) throw new TRPCError({ code: "BAD_REQUEST", message: "Project is not active in this organization." });
       }
+      // Canonical server-authoritative job payload construction
+      // clientId is exclusively derived from authenticated server session (ctx.user.id)
       const jobData: InsertJob = {
         clientId: ctx.user.id,
-        title: input.title,
-        description: input.description,
+        title: input.title.trim(),
+        description: input.description.trim(),
         vocation: input.vocation as any,
         budget: String(input.budget),
-        location: input.location,
+        location: input.location.trim(),
         deadline: input.deadline ? new Date(input.deadline) : undefined,
         isUrgent: input.isUrgent ?? false,
         status: "open",
       };
-      if (input.organizationId !== undefined) {
-        jobData.organizationId = input.organizationId;
+      if (input.organizationId !== undefined && input.organizationId !== null) {
+        jobData.organizationId = Number(input.organizationId);
       }
-      if (input.projectId !== undefined) {
-        jobData.projectId = input.projectId;
+      if (input.projectId !== undefined && input.projectId !== null) {
+        jobData.projectId = Number(input.projectId);
       }
       const job = await createJob(jobData);
       return { success: true, job };

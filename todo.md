@@ -870,3 +870,13 @@
 - [x] Run TypeScript checks, full tests, frontend/backend production builds, and secret-safety review
 - [x] Push the real fix to GitHub, redeploy Vercel/Railway as applicable, verify health and deployed commit parity
 - [x] Remove temporary diagnostics after capturing evidence and create the final production job-posting root-cause report
+
+## Phase 60: Canonical Job-Creation Flow Rebuild & Acceptance
+- [ ] Verify exact Railway production revision and ensure server is running latest commit
+- [ ] Verify server-derived `clientId` mapping (`ctx.user.id`) and ensure zero browser-supplied clientId authority
+- [ ] Inspect actual production jobs and users schema against drizzle/schema.ts
+- [ ] Implement canonical server-authoritative job insert builder and add schema/identity regression tests
+- [ ] Run 148+ automated tests, TypeScript validation, and frontend/backend production builds
+- [ ] Commit and push to GitHub (`Jsavv50/zylobridge`), redeploy Railway, and verify API health
+- [ ] Perform mandatory live client Painter job test on `https://zylobridge.com`, verify database persistence and client dashboard visibility
+- [ ] Produce `Zylobridge_Canonical_Job_Creation_Acceptance_Report.md` and declare PASS or FAIL strictly based on live evidence
