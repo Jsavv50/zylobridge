@@ -69,14 +69,14 @@ describe("Job Posting Validation & Regression Tests", () => {
   });
 
   it("constructs secure job insert object mapping authenticated clientId and parsing budget as string", () => {
-    const userId = 42;
+    const userId = 1;
     const input = {
-      title: "Production Diagnostic Painter Job",
-      description: "Controlled production diagnostic job-posting test.",
+      title: "painter",
+      description: "painter needed",
       vocation: "painter",
-      budget: 100,
-      location: "Cape Town",
-      deadline: "2026-09-27T00:00:00.000Z",
+      budget: 100000,
+      location: "cape town",
+      deadline: "2026-08-25T00:00:00.000Z",
       isUrgent: true,
     };
 
@@ -92,8 +92,8 @@ describe("Job Posting Validation & Regression Tests", () => {
       status: "open",
     };
 
-    expect(jobData.clientId).toBe(42);
-    expect(jobData.budget).toBe("100");
+    expect(jobData.clientId).toBe(1);
+    expect(jobData.budget).toBe("100000");
     expect(jobData.vocation).toBe("painter");
     expect(jobData.isUrgent).toBe(true);
     expect(jobData.organizationId).toBeUndefined();
