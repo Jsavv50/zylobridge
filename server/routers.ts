@@ -8,7 +8,8 @@ import { enterpriseProcedure, adminProcedure, superAdminProcedure, protectedProc
 import { storagePut, storageGetSignedUrl } from "./storage";
 import { getDb } from "./db";
 import { conversations, users, professionalVerifications, interviews, offers } from "../drizzle/schema";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
+import { notifications, notificationPreferences } from "../drizzle/schema";
 import {
   upsertUser,
   getUserByOpenId,
@@ -1643,11 +1644,24 @@ export const appRouter = router({
       }),
   }),
   notifications: router({
+    list: protectedProcedure
+      .query(async ({ ctx }) => {
+        const db = await getDb();
+        if (!db) return [];
+        return db.select().from(notifications).where(eq(notifications.userId, ctx.user.id)).orderBy(desc(notifications.createdAt)).limit(50);
+      }),
     listUnread: protectedProcedure
       .query(async ({ ctx }) => getUnreadNotifications(ctx.user.id)),
     markRead: protectedProcedure
       .input(z.object({ id: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => markNotificationRead(input.id, ctx.user.id)),
+    markAllAsRead: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        const db = await getDb();
+        if (!db) return false;
+        await db.update(notifications).set({ isRead: true }).where(eq(notifications.userId, ctx.user.id));
+        return true;
+      }),
     preferences: protectedProcedure
       .query(async ({ ctx }) => getUserNotificationPreference(ctx.user.id)),
   }),

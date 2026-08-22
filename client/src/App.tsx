@@ -34,6 +34,7 @@ const TermsOfService = lazy(() => import("./pages/TermsOfService"));
 const UserProfile = lazy(() => import("./pages/UserProfile"));
 const EditProfile = lazy(() => import("./pages/EditProfile"));
 const CookiePolicy = lazy(() => import("./pages/CookiePolicy"));
+const Notifications = lazy(() => import("./pages/Notifications"));
 
 function RouteFallback() {
   return <div className="min-h-screen bg-[#0d1117] text-gray-300 flex items-center justify-center px-6"><div className="rounded-2xl border border-white/10 bg-[#131a26] px-6 py-5 text-sm shadow-xl">Loading workspace…</div></div>;
@@ -75,6 +76,7 @@ function Router() {
       <Route path="/privacy-policy" component={PrivacyPolicy} />
       <Route path="/terms" component={TermsOfService} />
       <Route path="/cookie-policy" component={CookiePolicy} />
+      <Route path="/notifications" component={Notifications} />
       <Route path="/profile" component={UserProfile} />
       <Route path="/profile/edit" component={EditProfile} />
       <Route path="/404" component={NotFound} />
