@@ -44,7 +44,8 @@ export function getSupabaseBrowserClient(): SupabaseClient {
  */
 async function fetchRealtimeToken(): Promise<{ token: string; expiresIn: number } | null> {
   try {
-    const backendUrl = ((import.meta.env.VITE_API_URL as string | undefined) ?? "").replace(/\/$/, "");
+    const configuredApiUrl = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
+    const backendUrl = (configuredApiUrl || (import.meta.env.PROD ? "https://api.zylobridge.com" : "")).replace(/\/$/, "");
     const res = await fetch(`${backendUrl}/api/realtime/token`, {
       method: "GET",
       credentials: "include",

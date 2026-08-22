@@ -2,11 +2,12 @@ import React, { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Bell, CheckCircle2, ShieldAlert, Briefcase, MessageSquare, ArrowLeft } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { toast } from "sonner";
 
 export default function Notifications() {
   const { user } = useAuth();
+  const [, setLocation] = useLocation();
   const [filter, setFilter] = useState<"all" | "unread">("all");
 
   const utils = trpc.useUtils();
@@ -31,6 +32,16 @@ export default function Notifications() {
     if (filter === "unread") return !n.isRead;
     return true;
   });
+
+  const getNotificationHref = (notification: any) => {
+    if (!notification.referenceType || !notification.referenceId) return null;
+    const id = encodeURIComponent(String(notification.referenceId));
+    if (notification.referenceType === "conversation") return `/messages?conv=${id}`;
+    if (notification.referenceType === "job") return `/jobs/${id}`;
+    if (notification.referenceType === "escrow") return `/payments?jobId=${id}`;
+    if (notification.referenceType === "verification") return "/admin/verifications";
+    return null;
+  };
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -128,6 +139,8 @@ export default function Notifications() {
                   if (!n.isRead) {
                     markReadMutation.mutate({ id: n.id });
                   }
+                  const href = getNotificationHref(n);
+                  if (href) setLocation(href);
                 }}
                 className={`group relative flex items-start gap-4 p-4 rounded-2xl border transition cursor-pointer ${
                   n.isRead

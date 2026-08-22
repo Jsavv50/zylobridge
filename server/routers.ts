@@ -125,6 +125,7 @@ import {
 } from "./paystack";
 import { maskPhoneNumber, normalizePhoneNumber, sendPhoneOtpSms, SmsDeliveryError } from "./sms";
 import { getUserNotificationPreference, createInAppNotification, getUnreadNotifications, markNotificationRead, generateIcsContent, executeMatchingV2 } from "./phase4";
+import { dispatchNotification } from "./notificationDispatcher";
 import { initializeMilestonePayment, processVerifiedPayment, verifyPaystackWebhookSignature } from "./finance";
 import { addOrVerifyProfessionalBank, initiateMilestonePayout, authorizeRefund, createDispute, resolveDispute } from "./financeProtection";
 import {
@@ -171,18 +172,21 @@ async function requireOrganizationManager(userId: number, organizationId: number
 async function requireEscrowJobAccess(userId: number, role: string, jobId: number, professionalId: number) {
   const job = await getJobById(jobId);
   if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found." });
-  if (role === "admin" || role === "SUPER_ADMIN") return job;
-  if (job.clientId !== userId) throw new TRPCError({ code: "FORBIDDEN", message: "Only the job owner can fund escrow." });
+  if (role !== "admin" && role !== "SUPER_ADMIN" && job.clientId !== userId) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Only the job owner can fund escrow." });
+  }
   if (job.assignedProfessionalId && job.assignedProfessionalId !== professionalId) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Escrow professional must match the assigned professional." });
   }
-  if (!job.assignedProfessionalId) {
-    const applications = await getApplicationsByJobId(jobId, MAX_PAGE_SIZE, 0);
-    if (!applications.some(application => application.professionalId === professionalId)) {
-      throw new TRPCError({ code: "FORBIDDEN", message: "Professional is not associated with this job." });
-    }
+  const applications = await getApplicationsByJobId(jobId, MAX_PAGE_SIZE, 0);
+  const application = applications.find(candidate => candidate.professionalId === professionalId);
+  if (!application) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Professional is not associated with this job." });
   }
-  return job;
+  if (application.status !== "accepted") {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Escrow can only be funded for an accepted applicant." });
+  }
+  return { job, application };
 }
 
 const jobFilterSchema = z.object({
@@ -578,6 +582,16 @@ export const appRouter = router({
           }
         }
         await updateApplicationStatus(input.id, input.status);
+        const statusLabel = input.status === "accepted" ? "accepted" : "rejected";
+        await dispatchNotification({
+          userId: app.professionalId,
+          title: `Application ${statusLabel}`,
+          message: `Your application for Job #${app.jobId} was ${statusLabel}.`,
+          category: "job",
+          entityType: "job",
+          entityId: app.jobId,
+          idempotencyKey: `application-status:${app.id}:${input.status}`,
+        });
         return { success: true };
       }),
   }),
@@ -656,11 +670,17 @@ export const appRouter = router({
         if (!job) throw new TRPCError({ code: "NOT_FOUND" });
         const isClient = job.clientId === ctx.user.id;
         const applications = job.assignedProfessionalId ? [] : await getApplicationsByJobId(input.jobId, MAX_PAGE_SIZE, 0);
-        const isProfessional = job.assignedProfessionalId === ctx.user.id || applications.some(application => application.professionalId === ctx.user.id);
+        const applicant = applications.find(application => application.professionalId === ctx.user.id);
+        const isProfessional = job.assignedProfessionalId === ctx.user.id || Boolean(applicant);
         if (!isClient && !isProfessional) throw new TRPCError({ code: "FORBIDDEN", message: "Only job participants can open a conversation." });
+        if (applicant?.status === "rejected") throw new TRPCError({ code: "FORBIDDEN", message: "Rejected applicants cannot be messaged." });
         const allowedProfessionalId = job.assignedProfessionalId ?? (isClient ? input.otherUserId : ctx.user.id);
-        if (isClient && input.otherUserId !== allowedProfessionalId && !applications.some(application => application.professionalId === input.otherUserId)) {
+        const selectedApplicant = applications.find(application => application.professionalId === input.otherUserId);
+        if (isClient && input.otherUserId !== allowedProfessionalId && !selectedApplicant) {
           throw new TRPCError({ code: "FORBIDDEN", message: "The selected professional is not associated with this job." });
+        }
+        if (isClient && selectedApplicant?.status === "rejected") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Rejected applicants cannot be messaged." });
         }
         if (isProfessional && input.otherUserId !== job.clientId) throw new TRPCError({ code: "FORBIDDEN", message: "Professionals may only message the job client." });
         const clientId = isClient ? ctx.user.id : job.clientId;
@@ -704,6 +724,20 @@ export const appRouter = router({
           throw new TRPCError({ code: "FORBIDDEN", message: "Not a member of this conversation" });
         }
         const message = await createMessage(input.conversationId, ctx.user.id, input.content);
+        const recipientId = conv.clientId === ctx.user.id ? conv.professionalId : conv.clientId;
+        try {
+          await dispatchNotification({
+            userId: recipientId,
+            title: "New message",
+            message: `You received a new message about Job #${conv.jobId}.`,
+            category: "message",
+            entityType: "conversation",
+            entityId: conv.id,
+            idempotencyKey: `message:${message.id}`,
+          });
+        } catch (notificationError) {
+          console.warn("[Messaging] Notification dispatch failed after message persistence", notificationError instanceof Error ? notificationError.message : "unknown error");
+        }
         return message;
       }),
 
@@ -741,15 +775,19 @@ export const appRouter = router({
         if (!ctx.user.email) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Account email required for payment." });
         }
-        await requireEscrowJobAccess(ctx.user.id, ctx.user.role, input.jobId, input.professionalId);
+        const { application } = await requireEscrowJobAccess(ctx.user.id, ctx.user.role, input.jobId, input.professionalId);
+        const fundingAmount = Number(application.bidAmount);
+        if (!Number.isFinite(fundingAmount) || fundingAmount <= 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "The accepted application has an invalid funding amount." });
+        }
         const existing = await getEscrowByJobId(input.jobId);
-        if (existing && existing.status === "funded") {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Escrow already funded for this job." });
+        if (existing && ["pending", "funded", "released"].includes(existing.status)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Escrow funding is already active for this job." });
         }
         const reference = generatePaystackReference("ZB-ESC");
         const result = await initializePaystackTransaction({
           email: ctx.user.email,
-          amount: input.amount,
+          amount: fundingAmount,
           reference,
           metadata: { jobId: input.jobId, clientId: ctx.user.id, professionalId: input.professionalId },
           callback_url: input.callbackUrl,
@@ -758,13 +796,22 @@ export const appRouter = router({
           jobId: input.jobId,
           clientId: ctx.user.id,
           professionalId: input.professionalId,
-          amount: String(input.amount),
+          amount: String(fundingAmount),
           currency: "NGN",
           paymentMethod: "paystack",
           status: "pending",
           paystackReference: reference,
           paystackAccessCode: result.access_code,
           paystackAuthorizationUrl: result.authorization_url,
+        });
+        await dispatchNotification({
+          userId: input.professionalId,
+          title: "Escrow funding initiated",
+          message: `Funding has been initiated for Job #${input.jobId}.`,
+          category: "escrow",
+          entityType: "escrow",
+          entityId: input.jobId,
+          idempotencyKey: `escrow-init:${reference}`,
         });
         return { authorizationUrl: result.authorization_url, reference };
       }),
@@ -782,7 +829,33 @@ export const appRouter = router({
         if (result.status !== "success") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Payment not successful." });
         }
+        if (escrow.status === "funded" || escrow.status === "released") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "This escrow has already been finalized." });
+        }
+        if (Math.round(Number(escrow.amount) * 100) !== result.amount) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "The payment amount does not match the accepted application bid." });
+        }
         await updateEscrowStatus(escrow.id, "funded", { paidAt: new Date() });
+        await Promise.all([
+          dispatchNotification({
+            userId: escrow.clientId,
+            title: "Escrow funded",
+            message: `Escrow for Job #${escrow.jobId} has been successfully funded.`,
+            category: "escrow",
+            entityType: "escrow",
+            entityId: escrow.jobId,
+            idempotencyKey: `escrow-funded:${escrow.id}`,
+          }),
+          dispatchNotification({
+            userId: escrow.professionalId,
+            title: "Escrow funded",
+            message: `Escrow for Job #${escrow.jobId} has been successfully funded.`,
+            category: "escrow",
+            entityType: "escrow",
+            entityId: escrow.jobId,
+            idempotencyKey: `escrow-funded:${escrow.id}:professional`,
+          }),
+        ]);
         return { success: true, amount: result.amount / 100 };
       }),
 
@@ -800,16 +873,20 @@ export const appRouter = router({
         if (ctx.user.userType !== "client" && ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") {
           throw new TRPCError({ code: "FORBIDDEN", message: "Only clients can fund escrow." });
         }
-        await requireEscrowJobAccess(ctx.user.id, ctx.user.role, input.jobId, input.professionalId);
+        const { application } = await requireEscrowJobAccess(ctx.user.id, ctx.user.role, input.jobId, input.professionalId);
+        const fundingAmount = Number(application.bidAmount);
+        if (!Number.isFinite(fundingAmount) || fundingAmount <= 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "The accepted application has an invalid funding amount." });
+        }
         const existing = await getEscrowByJobId(input.jobId);
-        if (existing && existing.status === "funded") {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Escrow already funded." });
+        if (existing && ["pending", "funded", "released"].includes(existing.status)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Escrow funding is already active for this job." });
         }
         await createEscrowPayment({
           jobId: input.jobId,
           clientId: ctx.user.id,
           professionalId: input.professionalId,
-          amount: String(input.amount),
+          amount: String(fundingAmount),
           currency: "NGN",
           paymentMethod: "bank_transfer",
           status: "pending",
@@ -817,13 +894,22 @@ export const appRouter = router({
           bankAccountName: input.bankAccountName,
           bankName: input.bankName,
         });
+        await dispatchNotification({
+          userId: input.professionalId,
+          title: "Escrow transfer instructions ready",
+          message: `Bank transfer instructions are ready for Job #${input.jobId}.`,
+          category: "escrow",
+          entityType: "escrow",
+          entityId: input.jobId,
+          idempotencyKey: `escrow-bank-init:${input.jobId}:${input.professionalId}`,
+        });
         return {
           success: true,
           instructions: {
             bankName: "Zenith Bank",
             accountNumber: "1234567890",
             accountName: "ZYLOBRIDGE ESCROW SERVICES LTD",
-            amount: input.amount,
+            amount: fundingAmount,
             narration: `ZYLOBRIDGE-JOB-${input.jobId}`,
           },
         };
@@ -877,6 +963,15 @@ export const appRouter = router({
         }
         await updateEscrowStatus(escrow.id, "released", { releasedAt: new Date() });
         await updateJob(input.jobId, { status: "completed" });
+        await dispatchNotification({
+          userId: escrow.professionalId,
+          title: "Escrow released",
+          message: `Escrow for Job #${escrow.jobId} has been released after completion.`,
+          category: "escrow",
+          entityType: "escrow",
+          entityId: escrow.jobId,
+          idempotencyKey: `escrow-released:${escrow.id}`,
+        });
         return { success: true };
       }),
 
@@ -987,6 +1082,15 @@ export const appRouter = router({
             await db.update(users).set({ isVerified: true }).where(eq(users.id, req.userId));
           }
         }
+        await dispatchNotification({
+          userId: req.userId,
+          title: `Verification ${input.status}`,
+          message: input.status === "approved" ? "Your professional verification has been approved." : `Your professional verification was ${input.status}.`,
+          category: "verification",
+          entityType: "verification",
+          entityId: req.id,
+          idempotencyKey: `verification-review:${req.id}:${input.status}`,
+        });
         return { success: true };
       }),
   }),
@@ -1020,6 +1124,16 @@ export const appRouter = router({
           throw new TRPCError({ code: "FORBIDDEN", message: "Cannot modify or demote the permanent super administrator." });
         }
         await updateUserRole(input.userId, input.role);
+        await dispatchNotification({
+          userId: input.userId,
+          title: "Account access updated",
+          message: `Your ZYLOBRIDGE account role is now ${input.role}.`,
+          category: "security",
+          entityType: "user",
+          entityId: input.userId,
+          channels: ["in_app"],
+          idempotencyKey: `user-role:${input.userId}:${input.role}`,
+        });
         return { success: true };
       }),
     listAllJobs: adminProcedure
@@ -1048,6 +1162,26 @@ export const appRouter = router({
           paidAt: new Date(),
           adminConfirmedBy: ctx.user.id,
         });
+        await Promise.all([
+          dispatchNotification({
+            userId: escrow.clientId,
+            title: "Bank transfer verified",
+            message: `Your bank transfer for Job #${escrow.jobId} has been verified and escrow is funded.`,
+            category: "escrow",
+            entityType: "escrow",
+            entityId: escrow.jobId,
+            idempotencyKey: `escrow-bank-verified:${escrow.id}`,
+          }),
+          dispatchNotification({
+            userId: escrow.professionalId,
+            title: "Escrow funded",
+            message: `Escrow for Job #${escrow.jobId} has been funded.`,
+            category: "escrow",
+            entityType: "escrow",
+            entityId: escrow.jobId,
+            idempotencyKey: `escrow-bank-verified:${escrow.id}:professional`,
+          }),
+        ]);
         return { success: true };
       }),
   }),

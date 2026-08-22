@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { trpc } from "../lib/trpc";
 import { ApplicationShell, PageHeader, StatusBadge, EmptyState } from "../components/shell/ZyloShell";
-import { Users, Briefcase, Mail, CheckCircle2, XCircle, ChevronRight, ShieldCheck, Star, MessageSquare, Loader2 } from "lucide-react";
+import { Users, Briefcase, Mail, CheckCircle2, XCircle, ChevronRight, ShieldCheck, Star, MessageSquare, Loader2, Wallet } from "lucide-react";
+import EscrowPaymentModal from "@/components/EscrowPaymentModal";
 import { useRoute, useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
@@ -14,6 +15,7 @@ export default function EmployerCandidates() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedCandidate, setSelectedCandidate] = useState<any | null>(null);
   const [messagingCandidateId, setMessagingCandidateId] = useState<number | null>(null);
+  const [escrowCandidate, setEscrowCandidate] = useState<{ jobId: number; professionalId: number; jobTitle: string; bidAmount: number } | null>(null);
 
   const startConversationMutation = trpc.messaging.getOrCreateConversation.useMutation({
     onMutate: ({ otherUserId }) => setMessagingCandidateId(otherUserId),
@@ -136,18 +138,29 @@ export default function EmployerCandidates() {
                   </div>
 
                   <div className="flex flex-col items-stretch sm:flex-row sm:items-center sm:justify-end gap-2 pt-2">
-                    <button
-                      onClick={() => handleMessageCandidate(app.professionalId)}
-                      disabled={messagingCandidateId !== null || jobId <= 0}
-                      aria-busy={messagingCandidateId === app.professionalId}
-                      className="px-3 py-1.5 border border-primary/40 text-primary hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1"
-                    >
-                      {messagingCandidateId === app.professionalId ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageSquare className="w-3.5 h-3.5" />}
-                      {messagingCandidateId === app.professionalId ? "Opening…" : "Message"}
-                    </button>
+                    {app.status === "accepted" && (
+                      <button
+                        onClick={() => handleMessageCandidate(app.professionalId)}
+                        disabled={messagingCandidateId !== null || jobId <= 0}
+                        aria-busy={messagingCandidateId === app.professionalId}
+                        className="px-3 py-2 border border-primary/40 text-primary hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1"
+                      >
+                        {messagingCandidateId === app.professionalId ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageSquare className="w-3.5 h-3.5" />}
+                        {messagingCandidateId === app.professionalId ? "Opening…" : "Message"}
+                      </button>
+                    )}
+                    {app.status === "accepted" && (
+                      <button
+                        onClick={() => setEscrowCandidate({ jobId, professionalId: app.professionalId, jobTitle: `Job #${jobId}`, bidAmount: Number(app.bidAmount) })}
+                        disabled={escrowCandidate !== null}
+                        className="px-3 py-2 border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-60 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1"
+                      >
+                        <Wallet className="w-3.5 h-3.5" /> Fund Escrow
+                      </button>
+                    )}
                     <button
                       onClick={() => setSelectedCandidate(app)}
-                      className="px-3 py-1.5 border border-border hover:bg-muted rounded-lg text-xs font-medium transition-colors"
+                      className="px-3 py-2 border border-border hover:bg-muted rounded-lg text-xs font-medium transition-colors"
                     >
                       Review Profile
                     </button>
@@ -174,6 +187,14 @@ export default function EmployerCandidates() {
               );
             })}
           </div>
+        )}
+
+        {escrowCandidate && (
+          <EscrowPaymentModal
+            open={true}
+            onClose={() => setEscrowCandidate(null)}
+            {...escrowCandidate}
+          />
         )}
 
         {/* Candidate Detail Modal / Drawer */}

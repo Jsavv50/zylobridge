@@ -944,3 +944,14 @@
 - [x] Add regression tests for existing conversation reuse, new conversation creation, duplicate prevention, and preserved Review Profile behavior.
 - [x] Run full tests, TypeScript validation, production client/server builds, and responsive checks.
 - [x] Commit and push the feature to the production branch, verify deployment, and perform live employer acceptance (published at checkpoint 8d78bf83; live Job 7 redirect reached /employer/jobs/7/candidates; one stale browser session reported a cached dynamic-import chunk, so use a hard refresh before operator acceptance).
+
+## Phase 66 — Candidate Status Actions, Escrow, Messaging Reliability & Notifications
+- [x] Audit canonical application statuses, candidate actions, escrow/payment flow, messaging transport, and notification architecture.
+- [x] Implement status-aware candidate actions: Message/Fund Escrow only for Accepted/Hired, with Review Profile preserved and rejected users blocked server-side.
+- [x] Connect Fund Escrow to the existing canonical engagement/payment flow with authorization, idempotency, trusted amount/status handling, and no unintended charges in tests.
+- [x] Diagnose and fix the actual Messaging connection error across frontend, Supabase Realtime, backend/API, CORS, credentials, and deployment topology without insecure transport changes.
+- [x] Ensure message, account, hiring, verification, job, and escrow events use the canonical persisted Notifications system with correct recipients, deduplication, read state, ordering, and links.
+- [x] Add regression and integration coverage for status visibility, authorization/IDOR, escrow eligibility/idempotency, connection lifecycle, notification delivery, and notification isolation.
+- [x] Run full tests, TypeScript validation, production client/server builds, and desktop/tablet/mobile checks.
+- [ ] Commit, push, publish, and perform safe production acceptance without creating unintended financial charges.
+- [x] Document implementation evidence, deployment status, production verification, and any remaining operator actions.

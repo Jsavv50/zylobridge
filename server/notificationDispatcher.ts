@@ -52,6 +52,7 @@ export async function dispatchNotification(event: NotificationEvent): Promise<vo
       title: event.title,
       content: event.message,
       category: event.category || event.entityType || "system",
+      referenceType: event.entityType ?? null,
       referenceId: event.entityId ? String(event.entityId) : null,
       isRead: false,
     }).returning({ id: notifications.id });
