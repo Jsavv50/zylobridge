@@ -915,3 +915,15 @@
 - [x] Run complete tests, TypeScript validation, client/server production builds, and diff review.
 - [x] Perform live authenticated profile load/save verification for user 2489 or an operator-approved equivalent account.
 - [x] Document production schema/deployment evidence and final profile-save status.
+
+## Phase 63 — Verification Document Canonical Storage Path
+- [x] Trace frontend upload, Storage upload, database persistence, and Super Admin viewer flow.
+- [x] Persist the exact collision-safe Storage key and URL returned by storagePut.
+- [x] Add private Storage object existence validation before creating verification requests.
+- [x] Ensure Super Admin signed URLs use the canonical stored documentKey only.
+- [x] Add safe filename normalization for spaces, punctuation, Unicode, duplicate names, and suffixes.
+- [x] Add dry-run-by-default legacy verification_requests reconciliation script without touching storage.objects.
+- [x] Add regression coverage for canonical key persistence, existence validation, signed URL lookup, and reconciliation safety.
+- [x] Run focused tests, full tests, TypeScript validation, and production builds.
+- [x] Verify the production Super Admin signed-document endpoint and private object retrieval for an existing valid request.
+- [ ] Complete a fresh professional-account upload acceptance test where no pending request suppresses the form.

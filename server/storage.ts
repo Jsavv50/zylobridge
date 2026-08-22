@@ -21,6 +21,22 @@ function normalizeKey(relKey: string): string {
   return relKey.replace(/^\/+/, "");
 }
 
+/** Preserve human-readable names while preventing path traversal/control characters. */
+export function sanitizeStorageFileName(fileName: string): string {
+  const sanitized = fileName
+    .normalize("NFC")
+    .replace(/[\\/\0]/g, "_")
+    .replace(/[\u0000-\u001f\u007f]/g, "_")
+    .trim();
+  return sanitized || "verification-document";
+}
+
+/** Return the exact object key relative to the private verification-documents bucket. */
+export function verificationObjectKey(relKey: string): string {
+  const key = normalizeKey(relKey).replace(/^supabase:\/\/verification-documents\//, "");
+  return key.replace(/^verification-documents\//, "");
+}
+
 function appendHashSuffix(relKey: string): string {
   const hash = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
   const lastDot = relKey.lastIndexOf(".");
@@ -97,6 +113,27 @@ export async function storageGet(relKey: string): Promise<{ key: string; url: st
   return { key, url: `/manus-storage/${key}` };
 }
 
+export async function storageObjectExists(relKey: string): Promise<boolean> {
+  const key = normalizeKey(relKey);
+
+  if (key.startsWith("verification-docs/")) {
+    const supabase = getSupabaseAdmin();
+    if (supabase) {
+      const { data, error } = await supabase.storage
+        .from("verification-documents")
+        .createSignedUrl(verificationObjectKey(key), 60);
+      return !error && !!data?.signedUrl;
+    }
+  }
+
+  try {
+    await storageGetSignedUrl(key);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function storageGetSignedUrl(relKey: string): Promise<string> {
   const key = normalizeKey(relKey);
 
@@ -104,8 +141,8 @@ export async function storageGetSignedUrl(relKey: string): Promise<string> {
   if (key.startsWith("verification-docs/") || key.includes("verification-")) {
     const supabase = getSupabaseAdmin();
     if (supabase) {
-      // Extract key relative to verification-documents bucket if stored as supabase://
-      const cleanKey = key.replace(/^verification-documents\//, "");
+      // The database stores the canonical object key; strip only an optional bucket prefix.
+      const cleanKey = verificationObjectKey(key);
       const { data, error } = await supabase.storage
         .from("verification-documents")
         .createSignedUrl(cleanKey, 3600); // 1 hour expiration

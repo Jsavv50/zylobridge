@@ -5,7 +5,7 @@ import { COOKIE_NAME } from "../shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { enterpriseProcedure, adminProcedure, superAdminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { storagePut, storageGetSignedUrl } from "./storage";
+import { storagePut, storageGetSignedUrl, storageObjectExists, sanitizeStorageFileName } from "./storage";
 import { getDb } from "./db";
 import { conversations, users, professionalVerifications, interviews, offers, type InsertJob } from "../drizzle/schema";
 import { eq, desc } from "drizzle-orm";
@@ -917,16 +917,22 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         const buffer = Buffer.from(input.fileBase64, "base64");
-        const key = `verification-docs/${ctx.user.id}-${Date.now()}-${input.fileName}`;
-        const { url } = await storagePut(key, buffer, input.mimeType);
+        const originalKey = `verification-docs/${ctx.user.id}-${Date.now()}-${sanitizeStorageFileName(input.fileName)}`;
+        const { key: canonicalKey, url } = await storagePut(originalKey, buffer, input.mimeType);
+        if (!(await storageObjectExists(canonicalKey))) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "The verification document was uploaded but could not be verified in private storage. Please try again.",
+          });
+        }
         await createVerificationRequest({
           userId: ctx.user.id,
           documentType: input.documentType,
           documentUrl: url,
-          documentKey: key,
+          documentKey: canonicalKey,
           status: "pending",
         });
-        return { success: true };
+        return { success: true, documentKey: canonicalKey };
       }),
 
     myRequests: protectedProcedure
@@ -947,6 +953,9 @@ export const appRouter = router({
         const req = await getVerificationRequestById(input.requestId);
         if (!req || !req.documentKey) {
           throw new TRPCError({ code: "NOT_FOUND", message: "Verification request or document key not found." });
+        }
+        if (!(await storageObjectExists(req.documentKey))) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "The verification document is no longer available in private storage." });
         }
         const signedUrl = await storageGetSignedUrl(req.documentKey);
         return { signedUrl };
