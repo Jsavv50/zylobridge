@@ -10,6 +10,7 @@ import { getDb } from "./db";
 import { conversations, users, professionalVerifications, interviews, offers, type InsertJob } from "../drizzle/schema";
 import { eq, desc } from "drizzle-orm";
 import { notifications, notificationPreferences } from "../drizzle/schema";
+import { VOCATION_KEYS } from "../shared/vocations";
 import {
   upsertUser,
   getUserByOpenId,
@@ -40,9 +41,8 @@ import {
   getDetailedApplicationsByProfessionalId,
   updateApplicationStatus,
   getApplicationCount,
-  createProfile,
   getProfileByUserId,
-  updateProfile,
+  upsertProfile,
   createReview,
   getReviewsByRevieweeId,
   getAdminStats,
@@ -208,7 +208,7 @@ const jobCreateSchema = z.object({
 });
 
 const profileUpdateSchema = z.object({
-  vocation: z.string().max(64).optional(),
+  vocation: z.enum(VOCATION_KEYS).optional(),
   bio: z.string().max(2000).trim().optional(),
   skills: z.string().max(1000).trim().optional(),
   certifications: z.string().max(1000).trim().optional(),
@@ -217,6 +217,9 @@ const profileUpdateSchema = z.object({
   location: z.string().max(200).trim().optional(),
   yearsExperience: z.number().int().nonnegative().max(60).optional(),
   isAvailable: z.boolean().optional(),
+  latitude: z.number().finite().min(-90).max(90).nullable().optional(),
+  longitude: z.number().finite().min(-180).max(180).nullable().optional(),
+  serviceRadiusKm: z.number().int().positive().max(500).nullable().optional(),
 });
 
 const reviewCreateSchema = z.object({
@@ -590,29 +593,27 @@ export const appRouter = router({
         return getProfileByUserId(input.userId);
       }),
     upsert: protectedProcedure.input(profileUpdateSchema).mutation(async ({ ctx, input }) => {
-      const existing = await getProfileByUserId(ctx.user.id);
-      if (existing) {
-        await updateProfile(ctx.user.id, {
+      try {
+        return await upsertProfile(ctx.user.id, {
           ...input,
           vocation: input.vocation as any,
           hourlyRate: input.hourlyRate !== undefined ? String(input.hourlyRate) : undefined,
+          latitude: input.latitude !== undefined ? String(input.latitude) : undefined,
+          longitude: input.longitude !== undefined ? String(input.longitude) : undefined,
+          serviceRadiusKm: input.serviceRadiusKm !== undefined ? String(input.serviceRadiusKm) : undefined,
         });
-      } else {
-        if (!input.vocation) throw new TRPCError({ code: "BAD_REQUEST", message: "Vocation required." });
-        await createProfile({
+      } catch (error) {
+        if (error instanceof Error && error.message === "Vocation required.") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: error.message });
+        }
+        const databaseError = error as { code?: string };
+        console.error("[Profile] profiles.upsert request failed", {
+          operation: "profiles.upsert",
           userId: ctx.user.id,
-          vocation: input.vocation as any,
-          bio: input.bio,
-          skills: input.skills,
-          certifications: input.certifications,
-          portfolioUrl: input.portfolioUrl,
-          hourlyRate: input.hourlyRate !== undefined ? String(input.hourlyRate) : undefined,
-          location: input.location,
-          yearsExperience: input.yearsExperience,
-          isAvailable: input.isAvailable ?? true,
+          sqlState: databaseError?.code ?? "unknown",
         });
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Unable to save profile. Please try again." });
       }
-      return { success: true };
     }),
   }),
 

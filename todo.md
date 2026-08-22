@@ -903,3 +903,15 @@
 - [x] Confirm production schema evidence supplied by operator for latitude, longitude, and serviceRadiusKm.
 - [x] Add a repository reconciliation migration without re-running production schema changes blindly.
 - [x] Complete tests, typecheck, builds, and authenticated production acceptance.
+
+## Phase 62 — Production Profile Save Reconciliation & Acceptance
+- [x] Audit profile schema, migrations, routers, database helpers, frontend profile form, and production error evidence.
+- [x] Add an idempotent PostgreSQL migration for profiles latitude, longitude, and serviceRadiusKm.
+- [x] Safely assess profiles.userId uniqueness and duplicate userId rows before adding a constraint or unique index.
+- [x] Implement authenticated idempotent profile create-or-update behavior with server-derived user ownership.
+- [x] Ensure profile updates refresh updatedAt and return the saved profile.
+- [x] Add safe structured profile error handling without exposing SQL details to clients.
+- [x] Add profile tests for first save, update, repeated save, optional location fields, and duplicate prevention.
+- [x] Run complete tests, TypeScript validation, client/server production builds, and diff review.
+- [ ] Perform live authenticated profile load/save verification for user 2489 or an operator-approved equivalent account.
+- [x] Document production schema/deployment evidence and final profile-save status.

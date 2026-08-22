@@ -42,6 +42,9 @@ export default function EditProfile() {
   const [hourlyRate, setHourlyRate] = useState("");
   const [locationStr, setLocationStr] = useState("");
   const [yearsExperience, setYearsExperience] = useState("");
+  const [latitude, setLatitude] = useState("");
+  const [longitude, setLongitude] = useState("");
+  const [serviceRadiusKm, setServiceRadiusKm] = useState("");
 
   useEffect(() => {
     if (user) {
@@ -59,7 +62,10 @@ export default function EditProfile() {
       setCertifications(profProfile.certifications ?? "");
       setHourlyRate(profProfile.hourlyRate ? String(profProfile.hourlyRate) : "");
       setLocationStr(profProfile.location ?? "");
-      setYearsExperience(profProfile.yearsExperience ? String(profProfile.yearsExperience) : "");
+      setYearsExperience(profProfile.yearsExperience != null ? String(profProfile.yearsExperience) : "");
+      setLatitude(profProfile.latitude != null ? String(profProfile.latitude) : "");
+      setLongitude(profProfile.longitude != null ? String(profProfile.longitude) : "");
+      setServiceRadiusKm(profProfile.serviceRadiusKm != null ? String(profProfile.serviceRadiusKm) : "");
     }
   }, [profProfile]);
 
@@ -94,13 +100,16 @@ export default function EditProfile() {
 
       if (user?.userType === "professional") {
         await upsertProfMutation.mutateAsync({
-          vocation: vocation || undefined,
+          vocation: vocation ? (vocation as VocationKey) : undefined,
           bio: bio || undefined,
           skills: skills || undefined,
           certifications: certifications || undefined,
           hourlyRate: hourlyRate ? Number(hourlyRate) : undefined,
           location: locationStr || undefined,
           yearsExperience: yearsExperience ? Number(yearsExperience) : undefined,
+          latitude: latitude.trim() ? Number(latitude) : undefined,
+          longitude: longitude.trim() ? Number(longitude) : undefined,
+          serviceRadiusKm: serviceRadiusKm.trim() ? Number(serviceRadiusKm) : undefined,
         });
       }
 
@@ -272,6 +281,48 @@ export default function EditProfile() {
                       value={yearsExperience}
                       onChange={(e) => setYearsExperience(e.target.value)}
                       placeholder="5"
+                      className="bg-[#0a0f1a] border-white/10 text-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-xs text-gray-400 font-medium uppercase tracking-wider">Latitude</label>
+                    <Input
+                      type="number"
+                      step="any"
+                      min="-90"
+                      max="90"
+                      value={latitude}
+                      onChange={(e) => setLatitude(e.target.value)}
+                      placeholder="-33.9249"
+                      className="bg-[#0a0f1a] border-white/10 text-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs text-gray-400 font-medium uppercase tracking-wider">Longitude</label>
+                    <Input
+                      type="number"
+                      step="any"
+                      min="-180"
+                      max="180"
+                      value={longitude}
+                      onChange={(e) => setLongitude(e.target.value)}
+                      placeholder="18.4241"
+                      className="bg-[#0a0f1a] border-white/10 text-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs text-gray-400 font-medium uppercase tracking-wider">Service Radius (km)</label>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="500"
+                      step="1"
+                      value={serviceRadiusKm}
+                      onChange={(e) => setServiceRadiusKm(e.target.value)}
+                      placeholder="50"
                       className="bg-[#0a0f1a] border-white/10 text-white"
                     />
                   </div>

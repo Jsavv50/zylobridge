@@ -689,10 +689,68 @@ export async function getProfileByUserId(userId: number) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function updateProfile(userId: number, data: Partial<InsertProfile>) {
+export type ProfileUpdateData = Partial<Omit<InsertProfile, "id" | "userId" | "createdAt" | "updatedAt">>;
+
+export function resolveProfileUpsert(existingProfileId: number | undefined, data: ProfileUpdateData) {
+  if (existingProfileId !== undefined) {
+    return { action: "update" as const, profileId: existingProfileId, data };
+  }
+
+  const { vocation, ...profileFields } = data;
+  if (!vocation) throw new Error("Vocation required.");
+  return { action: "insert" as const, data: { ...profileFields, vocation } };
+}
+
+function logProfileDatabaseError(error: unknown, userId: number) {
+  const databaseError = error as {
+    code?: string;
+    message?: string;
+    table?: string;
+    constraint?: string;
+    column?: string;
+  };
+  console.error("[Profile] Save failed", {
+    operation: "profiles.upsert",
+    userId,
+    sqlState: databaseError?.code ?? "unknown",
+    message: databaseError?.message ?? "unknown",
+    table: databaseError?.table ?? "profiles",
+    constraint: databaseError?.constraint ?? undefined,
+    column: databaseError?.column ?? undefined,
+  });
+}
+
+export async function upsertProfile(userId: number, data: ProfileUpdateData) {
   const db = await getDb();
-  if (!db) return;
-  await db.update(profiles).set(data).where(eq(profiles.userId, userId));
+  if (!db) throw new Error("Database unavailable");
+
+  try {
+    const [saved] = await db.transaction(async (tx) => {
+      // Serialize profile creation/update for this user. The unique index in
+      // the profile reconciliation migration remains the database backstop.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`profiles:${userId}`}))`);
+      const [existing] = await tx.select({ id: profiles.id }).from(profiles).where(eq(profiles.userId, userId)).limit(1);
+      const decision = resolveProfileUpsert(existing?.id, data);
+      const updatedAt = new Date();
+
+      if (decision.action === "update") {
+        return tx.update(profiles)
+          .set({ ...decision.data, updatedAt })
+          .where(eq(profiles.id, decision.profileId))
+          .returning();
+      }
+
+      return tx.insert(profiles)
+        .values({ ...decision.data, userId, updatedAt })
+        .returning();
+    });
+
+    if (!saved) throw new Error("Profile could not be saved");
+    return saved;
+  } catch (error) {
+    logProfileDatabaseError(error, userId);
+    throw error;
+  }
 }
 
 // ─── Reviews ──────────────────────────────────────────────────────────────────
