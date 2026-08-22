@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
+import { ZylobridgeLogo } from "@/components/ZylobridgeLogo";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -226,7 +227,11 @@ export default function Messaging() {
     <div className="min-h-screen bg-background pt-16">
       <div className="max-w-6xl mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold text-foreground">Messages</h1>
+          <div className="flex items-center gap-4">
+            <ZylobridgeLogo imageClassName="h-8 w-8 object-contain" textSizeClass="text-lg font-extrabold tracking-tight" />
+            <div className="h-6 w-[1px] bg-border" />
+            <h1 className="text-2xl font-bold text-foreground">Messages</h1>
+          </div>
           <div className="flex items-center gap-2">
             <div
               className={`h-2 w-2 rounded-full ${

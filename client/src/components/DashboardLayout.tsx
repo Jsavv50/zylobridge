@@ -1,5 +1,6 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { ZylobridgeLogo } from "@/components/ZylobridgeLogo";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -168,9 +169,7 @@ function DashboardLayoutContent({
               </button>
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-semibold tracking-tight truncate">
-                    Navigation
-                  </span>
+                  <ZylobridgeLogo imageClassName="h-7 w-7 object-contain" textSizeClass="text-base font-extrabold tracking-tight" />
                 </div>
               ) : null}
             </div>
