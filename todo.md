@@ -882,15 +882,15 @@
 - [x] Produce `Zylobridge_Canonical_Job_Creation_Acceptance_Report.md` and declare PASS or FAIL strictly based on live evidence
 
 ## Phase 61: Production Jobs Schema Reconciliation & Publish Acceptance
-- [ ] Inspect canonical jobs schema, all jobs migrations, job-create procedure, and deployment migration strategy
-- [ ] Verify production latitude, longitude, and serviceRadiusKm columns against Drizzle types and nullability
-- [ ] Create or validate an idempotent migration for the three production location columns without duplicating or dropping data
-- [ ] Verify migration history and production schema consistency
-- [ ] Add schema-contract and authenticated client Publish Job regression coverage for nullable optional fields
-- [ ] Run complete tests, integration tests, TypeScript checks, production client/server builds, secret scan, and final diff review
-- [ ] Push intentional changes and deploy exact GitHub commit to Railway/Vercel as required
-- [ ] Perform the real authenticated Production Publish Test - Painter and verify job ID, database row, `/jobs` visibility, detail route, refresh persistence, ownership, and duplicate prevention
-- [ ] Create final production schema reconciliation report and issue strict PASS/FAIL status
+- [x] Inspect canonical jobs schema, all jobs migrations, job-create procedure, and deployment migration strategy
+- [x] Verify production latitude, longitude, and serviceRadiusKm columns against Drizzle types and nullability
+- [x] Create or validate an idempotent migration for the three production location columns without duplicating or dropping data
+- [x] Verify migration history and production schema consistency
+- [x] Add schema-contract and authenticated client Publish Job regression coverage for nullable optional fields
+- [x] Run complete tests, integration tests, TypeScript checks, production client/server builds, secret scan, and final diff review
+- [x] Push intentional changes and deploy exact GitHub commit to Railway/Vercel as required
+- [x] Perform the real authenticated Production Publish Test - Painter and verify job ID, database row, `/jobs` visibility, detail route, refresh persistence, ownership, and duplicate prevention
+- [x] Create final production schema reconciliation report and issue strict PASS/FAIL status
 - [x] Add an idempotent PostgreSQL reconciliation migration for jobs latitude, longitude, and serviceRadiusKm.
 - [x] Expand job-posting regression coverage for optional location fields and server-authoritative identity.
 - [x] Remove temporary job-posting diagnostic payload/error logging from production code.
