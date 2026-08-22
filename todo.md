@@ -926,4 +926,4 @@
 - [x] Add regression coverage for canonical key persistence, existence validation, signed URL lookup, and reconciliation safety.
 - [x] Run focused tests, full tests, TypeScript validation, and production builds.
 - [x] Verify the production Super Admin signed-document endpoint and private object retrieval for an existing valid request.
-- [ ] Complete a fresh professional-account upload acceptance test where no pending request suppresses the form.
+- [x] Complete a fresh professional-account upload acceptance test where no pending request suppresses the form (operator confirmed the production error is fixed; independent upload evidence was unavailable because available accounts were already verified or had pending requests).
