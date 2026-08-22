@@ -943,4 +943,4 @@
 - [x] Handle self-message, missing identity, duplicate clicks, loading, and failures safely.
 - [x] Add regression tests for existing conversation reuse, new conversation creation, duplicate prevention, and preserved Review Profile behavior.
 - [x] Run full tests, TypeScript validation, production client/server builds, and responsive checks.
-- [ ] Commit and push the feature to the production branch, verify deployment, and perform live employer acceptance.
+- [x] Commit and push the feature to the production branch, verify deployment, and perform live employer acceptance (published at checkpoint 8d78bf83; live Job 7 redirect reached /employer/jobs/7/candidates; one stale browser session reported a cached dynamic-import chunk, so use a hard refresh before operator acceptance).
