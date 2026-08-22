@@ -913,5 +913,5 @@
 - [x] Add safe structured profile error handling without exposing SQL details to clients.
 - [x] Add profile tests for first save, update, repeated save, optional location fields, and duplicate prevention.
 - [x] Run complete tests, TypeScript validation, client/server production builds, and diff review.
-- [ ] Perform live authenticated profile load/save verification for user 2489 or an operator-approved equivalent account.
+- [x] Perform live authenticated profile load/save verification for user 2489 or an operator-approved equivalent account.
 - [x] Document production schema/deployment evidence and final profile-save status.
