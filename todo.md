@@ -848,3 +848,14 @@
 - [x] Verified complete route coverage across Super Admin, Admin, Contractor, Client, Professional, and Enterprise roles
 - [x] Ran automated test suite (148/148 tests passing) and clean client/server production builds
 - [x] Created Zylobridge_Comprehensive_Route_Audit_Report.md and pushed release to GitHub (`Jsavv50/zylobridge`)
+
+## Phase 59: Live Production Job-Posting Failure Resolution
+- [ ] Capture the nested PostgreSQL error from the deployed production job insert path without logging secrets or bind values
+- [ ] Inspect the actual production jobs schema and migration history against drizzle/schema.ts
+- [ ] Identify and prove the exact schema, data, constraint, or deployment mismatch
+- [ ] Implement and commit a production-safe forward migration or application fix without weakening security or deleting data
+- [ ] Run a real authenticated production job-posting verification, including urgent and non-urgent variants where safe
+- [ ] Verify production row persistence, retrieval, dashboard visibility, and urgent-field behavior
+- [ ] Run TypeScript checks, full tests, frontend/backend production builds, and secret-safety review
+- [ ] Push the real fix to GitHub, redeploy Vercel/Railway as applicable, verify health and deployed commit parity
+- [ ] Remove temporary diagnostics after capturing evidence and create the final production job-posting root-cause report

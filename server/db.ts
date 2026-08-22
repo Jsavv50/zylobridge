@@ -260,8 +260,40 @@ export async function getUserCount() {
 export async function createJob(data: InsertJob) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
-  const [created] = await db.insert(jobs).values(data).returning();
-  return created;
+
+  try {
+    const [created] = await db.insert(jobs).values(data).returning();
+    return created;
+  } catch (error) {
+    // Temporary diagnostic: surface only safe PostgreSQL metadata. Never log
+    // SQL text, bind parameters, connection strings, cookies, or credentials.
+    const candidate = error instanceof Error && "cause" in error && error.cause
+      ? error.cause
+      : error;
+    const pgError = candidate as {
+      code?: unknown;
+      message?: unknown;
+      detail?: unknown;
+      hint?: unknown;
+      schema?: unknown;
+      table?: unknown;
+      column?: unknown;
+      constraint?: unknown;
+      dataType?: unknown;
+    };
+    console.error("[JobCreate] PostgreSQL insert failure metadata", {
+      code: typeof pgError.code === "string" ? pgError.code : undefined,
+      message: typeof pgError.message === "string" ? pgError.message : "Unknown database error",
+      detail: typeof pgError.detail === "string" ? pgError.detail : undefined,
+      hint: typeof pgError.hint === "string" ? pgError.hint : undefined,
+      schema: typeof pgError.schema === "string" ? pgError.schema : undefined,
+      table: typeof pgError.table === "string" ? pgError.table : undefined,
+      column: typeof pgError.column === "string" ? pgError.column : undefined,
+      constraint: typeof pgError.constraint === "string" ? pgError.constraint : undefined,
+      dataType: typeof pgError.dataType === "string" ? pgError.dataType : undefined,
+    });
+    throw error;
+  }
 }
 
 export async function getJobById(id: number) {
