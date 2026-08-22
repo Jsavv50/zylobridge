@@ -927,3 +927,11 @@
 - [x] Run focused tests, full tests, TypeScript validation, and production builds.
 - [x] Verify the production Super Admin signed-document endpoint and private object retrieval for an existing valid request.
 - [x] Complete a fresh professional-account upload acceptance test where no pending request suppresses the form (operator confirmed the production error is fixed; independent upload evidence was unavailable because available accounts were already verified or had pending requests).
+
+## Phase 64 — Employer Candidate Review Navigation
+- [x] Audit `/employer/jobs`, the Review candidate action, and the existing View Details route.
+- [x] Confirm the existing Applications workflow supports job-scoped filtering and employer authorization.
+- [x] Change Review candidate to the existing job-scoped Applications route without duplicating pages or APIs.
+- [x] Add regression coverage for Job 7/Job 8 route parameters, filtering, back navigation, and cross-employer authorization.
+- [x] Run the full automated test suite and production client/server builds.
+- [x] Verify the corrected navigation and report exact changed files, old route, and new route.
