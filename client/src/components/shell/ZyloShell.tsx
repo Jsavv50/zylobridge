@@ -75,10 +75,10 @@ export function ApplicationShell({ children, role = "user" }: { children: React.
     if (resolvedRole === "admin" || user?.role === "admin" || user?.role === "SUPER_ADMIN") {
       return [
         { href: "/admin", label: "Admin Overview", icon: BarChart3 },
-        { href: "/admin/users", label: "User Management", icon: Users },
-        { href: "/admin/verifications", label: "Verification Queue", icon: Shield },
-        { href: "/admin/disputes", label: "Dispute Arbitration", icon: AlertTriangle },
-        { href: "/admin/audit", label: "Audit Logs", icon: Settings },
+        { href: "/admin", label: "User Management", icon: Users },
+        { href: "/admin", label: "Verification Queue", icon: Shield },
+        { href: "/admin", label: "Dispute Arbitration", icon: AlertTriangle },
+        { href: "/admin", label: "Audit Logs", icon: Settings },
       ];
     }
     if (resolvedRole === "professional") {
@@ -98,7 +98,7 @@ export function ApplicationShell({ children, role = "user" }: { children: React.
         { href: "/employer/jobs", label: "My Job Postings", icon: Briefcase },
         { href: "/talent", label: "Find Talent", icon: Search },
         { href: "/messages", label: "Messages", icon: MessageSquare },
-        { href: "/enterprise", label: "Enterprise Org", icon: Building2 },
+        { href: "/dashboard/enterprise", label: "Enterprise Org", icon: Building2 },
         { href: "/payments", label: "Escrow & Funding", icon: DollarSign },
         { href: "/notifications", label: "Notifications", icon: Bell },
       ];
