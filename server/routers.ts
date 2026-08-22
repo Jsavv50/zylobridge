@@ -7,7 +7,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { enterpriseProcedure, adminProcedure, superAdminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { storagePut, storageGetSignedUrl } from "./storage";
 import { getDb } from "./db";
-import { conversations, users, professionalVerifications, interviews, offers } from "../drizzle/schema";
+import { conversations, users, professionalVerifications, interviews, offers, type InsertJob } from "../drizzle/schema";
 import { eq, desc } from "drizzle-orm";
 import { notifications, notificationPreferences } from "../drizzle/schema";
 import {
@@ -442,7 +442,7 @@ export const appRouter = router({
         if (!["OWNER", "ADMIN", "HIRING_MANAGER"].includes(member.role)) throw new TRPCError({ code: "FORBIDDEN", message: "Organization job-posting permission required." });
         if (input.projectId && !(await getOrganizationProjectById(input.projectId, input.organizationId))) throw new TRPCError({ code: "BAD_REQUEST", message: "Project is not active in this organization." });
       }
-      const job = await createJob({
+      const jobData: InsertJob = {
         clientId: ctx.user.id,
         title: input.title,
         description: input.description,
@@ -451,10 +451,15 @@ export const appRouter = router({
         location: input.location,
         deadline: input.deadline ? new Date(input.deadline) : undefined,
         isUrgent: input.isUrgent ?? false,
-        organizationId: input.organizationId,
-        projectId: input.projectId,
         status: "open",
-      });
+      };
+      if (input.organizationId !== undefined) {
+        jobData.organizationId = input.organizationId;
+      }
+      if (input.projectId !== undefined) {
+        jobData.projectId = input.projectId;
+      }
+      const job = await createJob(jobData);
       return { success: true, job };
     }),
 

@@ -859,3 +859,14 @@
 - [ ] Run TypeScript checks, full tests, frontend/backend production builds, and secret-safety review
 - [ ] Push the real fix to GitHub, redeploy Vercel/Railway as applicable, verify health and deployed commit parity
 - [ ] Remove temporary diagnostics after capturing evidence and create the final production job-posting root-cause report
+
+## Phase 59: Live Production Job-Posting Failure Resolution
+- [x] Capture the nested PostgreSQL error from the deployed production job insert path without logging secrets or bind values
+- [x] Inspect the actual production jobs schema and migration history against drizzle/schema.ts
+- [x] Identify and prove the exact schema, data, constraint, or deployment mismatch
+- [x] Implement and commit a production-safe forward migration or application fix without weakening security or deleting data
+- [x] Run a real authenticated production job-posting verification, including urgent and non-urgent variants where safe
+- [x] Verify production row persistence, retrieval, dashboard visibility, and urgent-field behavior
+- [x] Run TypeScript checks, full tests, frontend/backend production builds, and secret-safety review
+- [x] Push the real fix to GitHub, redeploy Vercel/Railway as applicable, verify health and deployed commit parity
+- [x] Remove temporary diagnostics after capturing evidence and create the final production job-posting root-cause report
