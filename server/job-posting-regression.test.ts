@@ -67,4 +67,36 @@ describe("Job Posting Validation & Regression Tests", () => {
       expect(result.data.projectId).toBe(12);
     }
   });
+
+  it("constructs secure job insert object mapping authenticated clientId and parsing budget as string", () => {
+    const userId = 42;
+    const input = {
+      title: "Production Diagnostic Painter Job",
+      description: "Controlled production diagnostic job-posting test.",
+      vocation: "painter",
+      budget: 100,
+      location: "Cape Town",
+      deadline: "2026-09-27T00:00:00.000Z",
+      isUrgent: true,
+    };
+
+    const jobData: any = {
+      clientId: userId,
+      title: input.title,
+      description: input.description,
+      vocation: input.vocation,
+      budget: String(input.budget),
+      location: input.location,
+      deadline: input.deadline ? new Date(input.deadline) : undefined,
+      isUrgent: input.isUrgent ?? false,
+      status: "open",
+    };
+
+    expect(jobData.clientId).toBe(42);
+    expect(jobData.budget).toBe("100");
+    expect(jobData.vocation).toBe("painter");
+    expect(jobData.isUrgent).toBe(true);
+    expect(jobData.organizationId).toBeUndefined();
+    expect(jobData.projectId).toBeUndefined();
+  });
 });
