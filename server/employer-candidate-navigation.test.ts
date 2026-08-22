@@ -7,6 +7,7 @@ const employerJobsSource = fs.readFileSync(path.join(projectRoot, "client/src/pa
 const employerCandidatesSource = fs.readFileSync(path.join(projectRoot, "client/src/pages/EmployerCandidates.tsx"), "utf8");
 const appSource = fs.readFileSync(path.join(projectRoot, "client/src/App.tsx"), "utf8");
 const routerSource = fs.readFileSync(path.join(projectRoot, "server/routers.ts"), "utf8");
+const messagingPageSource = fs.readFileSync(path.join(projectRoot, "client/src/pages/Messaging.tsx"), "utf8");
 
 describe("employer candidate-review navigation", () => {
   it("uses the existing job-scoped candidate workflow while keeping View detail canonical", () => {
@@ -32,5 +33,19 @@ describe("employer candidate-review navigation", () => {
 
   it("keeps the candidate page’s back navigation inside the employer workflow", () => {
     expect(employerCandidatesSource).toContain('setLocation("/employer/jobs")');
+  });
+
+  it("places Message directly above Review Profile and reuses the canonical conversation flow", () => {
+    const messageIndex = employerCandidatesSource.indexOf(': "Message"');
+    const reviewIndex = employerCandidatesSource.indexOf('Review Profile');
+    expect(messageIndex).toBeGreaterThan(-1);
+    expect(reviewIndex).toBeGreaterThan(messageIndex);
+    expect(employerCandidatesSource).toContain("trpc.messaging.getOrCreateConversation.useMutation");
+    expect(employerCandidatesSource).toContain("startConversationMutation.mutate({ jobId, otherUserId: candidateId });");
+    expect(employerCandidatesSource).toContain('setLocation(`/messages?conv=${conversation.id}`)');
+    expect(employerCandidatesSource).toContain('candidateId === user.id');
+    expect(employerCandidatesSource).toContain('candidate does not have a valid messaging identity');
+    expect(messagingPageSource).toContain('new URLSearchParams(window.location.search).get("conv")');
+    expect(messagingPageSource).toContain('return initialConversationId;');
   });
 });

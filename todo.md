@@ -935,3 +935,12 @@
 - [x] Add regression coverage for Job 7/Job 8 route parameters, filtering, back navigation, and cross-employer authorization.
 - [x] Run the full automated test suite and production client/server builds.
 - [x] Verify the corrected navigation and report exact changed files, old route, and new route.
+
+## Phase 65 — Candidate Pipeline Direct Messaging
+- [x] Audit candidate card actions and the canonical get-or-create conversation procedure.
+- [x] Add a responsive Message button directly above Review Profile in EmployerCandidates.
+- [x] Reuse the existing messaging page and conversation flow with job context where supported.
+- [x] Handle self-message, missing identity, duplicate clicks, loading, and failures safely.
+- [x] Add regression tests for existing conversation reuse, new conversation creation, duplicate prevention, and preserved Review Profile behavior.
+- [x] Run full tests, TypeScript validation, production client/server builds, and responsive checks.
+- [ ] Commit and push the feature to the production branch, verify deployment, and perform live employer acceptance.

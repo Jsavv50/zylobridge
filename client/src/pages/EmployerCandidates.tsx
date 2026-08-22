@@ -1,15 +1,45 @@
 import React, { useState } from "react";
 import { trpc } from "../lib/trpc";
 import { ApplicationShell, PageHeader, StatusBadge, EmptyState } from "../components/shell/ZyloShell";
-import { Users, Briefcase, Mail, CheckCircle2, XCircle, ChevronRight, ShieldCheck, Star } from "lucide-react";
+import { Users, Briefcase, Mail, CheckCircle2, XCircle, ChevronRight, ShieldCheck, Star, MessageSquare, Loader2 } from "lucide-react";
 import { useRoute, useLocation } from "wouter";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { toast } from "sonner";
 
 export default function EmployerCandidates() {
   const [, params] = useRoute("/employer/jobs/:jobId/candidates");
   const [, setLocation] = useLocation();
+  const { user } = useAuth({ redirectOnUnauthenticated: true });
   const jobId = Number(params?.jobId ?? 0);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedCandidate, setSelectedCandidate] = useState<any | null>(null);
+  const [messagingCandidateId, setMessagingCandidateId] = useState<number | null>(null);
+
+  const startConversationMutation = trpc.messaging.getOrCreateConversation.useMutation({
+    onMutate: ({ otherUserId }) => setMessagingCandidateId(otherUserId),
+    onSuccess: (conversation) => setLocation(`/messages?conv=${conversation.id}`),
+    onError: () => {
+      setMessagingCandidateId(null);
+      toast.error("Unable to open this conversation. Please try again.");
+    },
+    onSettled: () => setMessagingCandidateId(null),
+  });
+
+  const handleMessageCandidate = (candidateId: number | null | undefined) => {
+    if (!user?.id) {
+      toast.error("Please sign in to message a candidate.");
+      return;
+    }
+    if (!candidateId) {
+      toast.error("This candidate does not have a valid messaging identity.");
+      return;
+    }
+    if (candidateId === user.id) {
+      toast.error("You cannot start a conversation with yourself.");
+      return;
+    }
+    startConversationMutation.mutate({ jobId, otherUserId: candidateId });
+  };
 
   const { data: applications = [], isLoading, refetch } = trpc.applications.listForJob.useQuery(
     { jobId, status: statusFilter },
@@ -105,7 +135,16 @@ export default function EmployerCandidates() {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-end gap-2 pt-2">
+                  <div className="flex flex-col items-stretch sm:flex-row sm:items-center sm:justify-end gap-2 pt-2">
+                    <button
+                      onClick={() => handleMessageCandidate(app.professionalId)}
+                      disabled={messagingCandidateId !== null || jobId <= 0}
+                      aria-busy={messagingCandidateId === app.professionalId}
+                      className="px-3 py-1.5 border border-primary/40 text-primary hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1"
+                    >
+                      {messagingCandidateId === app.professionalId ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageSquare className="w-3.5 h-3.5" />}
+                      {messagingCandidateId === app.professionalId ? "Opening…" : "Message"}
+                    </button>
                     <button
                       onClick={() => setSelectedCandidate(app)}
                       className="px-3 py-1.5 border border-border hover:bg-muted rounded-lg text-xs font-medium transition-colors"

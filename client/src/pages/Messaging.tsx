@@ -35,6 +35,10 @@ type RealtimeStatus = "CONNECTING" | "CONNECTED" | "ERROR";
 
 export default function Messaging() {
   const { user, isAuthenticated, loading } = useAuth();
+  const [initialConversationId] = useState(() => {
+    const value = Number(new URLSearchParams(window.location.search).get("conv") ?? 0);
+    return Number.isInteger(value) && value > 0 ? value : null;
+  });
   const [selectedConvId, setSelectedConvId] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
@@ -50,6 +54,15 @@ export default function Messaging() {
     { conversationId: selectedConvId! },
     { enabled: !!selectedConvId }
   );
+
+  useEffect(() => {
+    if (!conversations?.length) return;
+    setSelectedConvId((currentId) => {
+      if (currentId && conversations.some((conversation) => conversation.id === currentId)) return currentId;
+      if (initialConversationId && conversations.some((conversation) => conversation.id === initialConversationId)) return initialConversationId;
+      return conversations[0]?.id ?? null;
+    });
+  }, [conversations, initialConversationId]);
 
   useEffect(() => {
     if (fetchedMessages) {
