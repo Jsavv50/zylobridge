@@ -975,3 +975,4 @@
 - [x] Run full tests, TypeScript validation, production client/server builds, and desktop/tablet/mobile checks.
 - [ ] Commit, push, deploy, and perform safe production acceptance for live notifications without creating unintended financial charges (code validation complete; production database Realtime policy/publication and authenticated live acceptance remain pending).
 - [x] Produce a complete live-notifications implementation and deployment report with evidence, limitations, and final status.
+- [ ] Diagnose and resolve the reported production case where a freshly sent message persists but no recipient notification appears; verify persistence, dispatcher, Realtime subscription, and recipient isolation end to end.

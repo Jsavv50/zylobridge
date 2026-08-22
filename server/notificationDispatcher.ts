@@ -14,19 +14,20 @@ export type NotificationEvent = {
 };
 
 function advisoryLockKey(key: string) {
-  // Keep the signed 32-bit range accepted by PostgreSQL hashtext/pg_advisory_xact_lock.
   return key.length > 0 ? key : "notification";
 }
 
 /**
- * Unified notification dispatch layer. In-app notifications are persisted first;
- * Supabase Realtime observes the committed row through the existing Postgres
- * Changes transport. The transaction lock makes retry handling safe when the
- * same trusted event is delivered concurrently.
+ * Persist the in-app notification first. Delivery-log writes are deliberately
+ * best effort and cannot roll back the user-visible notification row. Supabase
+ * Realtime observes the committed notifications INSERT through Postgres Changes.
  */
 export async function dispatchNotification(event: NotificationEvent): Promise<void> {
   const db = await getDb();
   if (!db) return;
+
+  const channels = event.channels || ["in_app"];
+  let notificationId: number | undefined;
 
   await db.transaction(async (tx) => {
     if (event.idempotencyKey) {
@@ -45,8 +46,6 @@ export async function dispatchNotification(event: NotificationEvent): Promise<vo
     if (event.category === "marketing" && !userPref.marketingEnabled) return;
     if (event.category !== "security" && userPref.marketplaceEvents === false) return;
 
-    const channels = event.channels || ["in_app"];
-    let notifId: number | undefined;
     if (channels.includes("in_app")) {
       const inserted = await tx.insert(notifications).values({
         userId: event.userId,
@@ -57,27 +56,22 @@ export async function dispatchNotification(event: NotificationEvent): Promise<vo
         referenceId: event.entityId ? String(event.entityId) : null,
         isRead: false,
       }).returning({ id: notifications.id });
-      notifId = inserted[0]?.id;
-    }
-
-    for (const channel of channels) {
-      try {
-        await tx.insert(notificationDeliveryLogs).values({
-          notificationId: notifId || null,
-          userId: event.userId,
-          channel,
-          status: "sent",
-          payload: event.idempotencyKey || JSON.stringify({ title: event.title, message: event.message }),
-        });
-      } catch (err: any) {
-        await tx.insert(notificationDeliveryLogs).values({
-          notificationId: notifId || null,
-          userId: event.userId,
-          channel,
-          status: "failed",
-          errorMessage: err?.message || String(err),
-        });
-      }
+      notificationId = inserted[0]?.id;
     }
   });
+
+  if (!notificationId && channels.includes("in_app")) return;
+  for (const channel of channels) {
+    try {
+      await db.insert(notificationDeliveryLogs).values({
+        notificationId: notificationId || null,
+        userId: event.userId,
+        channel,
+        status: "sent",
+        payload: event.idempotencyKey || JSON.stringify({ title: event.title, message: event.message }),
+      });
+    } catch (error) {
+      console.warn("[Notifications] Delivery log write skipped after notification persistence", error instanceof Error ? error.message : "unknown error");
+    }
+  }
 }
