@@ -30,7 +30,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 export default function AdminDashboard() {
   const { user, isAuthenticated } = useAuth();
-  const [activeTab, setActiveTab] = useState<"overview" | "users" | "jobs" | "escrow" | "verification" | "analytics" | "products" | "orders">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "users" | "jobs" | "escrow" | "verification" | "analytics" | "products" | "orders" | "disputes" | "audit" | "reports">("overview");
   const [showProductForm, setShowProductForm] = useState(false);
   const [productForm, setProductForm] = useState({ name: "", description: "", price: "", currency: "NGN", category: "", stock: "-1" });
   const utils = trpc.useUtils();
@@ -55,6 +55,28 @@ export default function AdminDashboard() {
   });
   const { data: allOrders, isLoading: ordersLoading } = trpc.orders.all.useQuery(undefined, {
     enabled: !!user && (user.role === "admin" || user.role === "SUPER_ADMIN") && activeTab === "orders",
+  });
+  const { data: allDisputes, isLoading: disputesLoading, refetch: refetchDisputes } = trpc.adminDisputes.list.useQuery(undefined, {
+    enabled: !!user && (user.role === "admin" || user.role === "SUPER_ADMIN") && activeTab === "disputes",
+  });
+  const { data: allAuditLogs, isLoading: auditLoading } = trpc.adminAudit.list.useQuery({ limit: 100 }, {
+    enabled: !!user && user.role === "SUPER_ADMIN" && activeTab === "audit",
+  });
+  const { data: platformReports, isLoading: reportsLoading } = trpc.adminReports.get.useQuery(undefined, {
+    enabled: !!user && (user.role === "admin" || user.role === "SUPER_ADMIN") && activeTab === "reports",
+  });
+
+  const updateDisputeStatusMutation = trpc.adminDisputes.updateStatus.useMutation({
+    onSuccess: () => { toast.success("Dispute status updated."); refetchDisputes(); },
+    onError: (err) => toast.error(err.message),
+  });
+  const resolveDisputeMutation = trpc.adminDisputes.resolve.useMutation({
+    onSuccess: () => { toast.success("Dispute resolved."); refetchDisputes(); },
+    onError: (err) => toast.error(err.message),
+  });
+  const addDisputeNoteMutation = trpc.adminDisputes.addNote.useMutation({
+    onSuccess: () => { toast.success("Administrative note added."); refetchDisputes(); },
+    onError: (err) => toast.error(err.message),
   });
 
   const createProductMutation = trpc.products.create.useMutation({
@@ -165,7 +187,7 @@ export default function AdminDashboard() {
 
         {/* Tabs */}
         <div className="flex gap-1 mb-6 bg-[#131a26] rounded-xl p-1 w-fit border border-white/5 flex-wrap">
-          {(["overview", "users", "jobs", "escrow", "verification", "products", "orders", "analytics"] as const).map((tab) => (
+          {(["overview", "users", "jobs", "escrow", "verification", "products", "orders", "analytics", "disputes", "audit", "reports"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -173,7 +195,7 @@ export default function AdminDashboard() {
                 activeTab === tab ? "bg-violet-600 text-white" : "text-gray-400 hover:text-white"
               }`}
             >
-              {tab}
+              {tab === "audit" ? "Audit Logs" : tab}
             </button>
           ))}
         </div>
@@ -800,6 +822,39 @@ export default function AdminDashboard() {
                 )}
           </div>
         )}
+        {/* Disputes Tab */}
+        {activeTab === "disputes" && (
+          <div className="rounded-xl border border-white/8 bg-[#131a26] p-8 text-center space-y-3">
+            <AlertTriangle className="h-10 w-10 text-amber-400 mx-auto mb-2" />
+            <h3 className="text-lg font-bold text-white">Dispute Management</h3>
+            <p className="text-sm text-gray-400 max-w-md mx-auto">
+              NOT IMPLEMENTED: Dedicated dispute arbitration workflows are not yet backed by the current escrow state machine. Existing escrow transactions can be reviewed under the Escrow tab.
+            </p>
+          </div>
+        )}
+
+        {/* Audit Logs Tab */}
+        {activeTab === "audit" && (
+          <div className="rounded-xl border border-white/8 bg-[#131a26] p-8 text-center space-y-3">
+            <Shield className="h-10 w-10 text-violet-400 mx-auto mb-2" />
+            <h3 className="text-lg font-bold text-white">Audit Logs</h3>
+            <p className="text-sm text-gray-400 max-w-md mx-auto">
+              NOT IMPLEMENTED: Immutable administrative audit logging is scheduled for the upcoming release. All verification reviews and role updates are recorded directly in database metadata.
+            </p>
+          </div>
+        )}
+
+        {/* Reports Tab */}
+        {activeTab === "reports" && (
+          <div className="rounded-xl border border-white/8 bg-[#131a26] p-8 text-center space-y-3">
+            <BarChart3 className="h-10 w-10 text-cyan-400 mx-auto mb-2" />
+            <h3 className="text-lg font-bold text-white">Platform Reports</h3>
+            <p className="text-sm text-gray-400 max-w-md mx-auto">
+              NOT IMPLEMENTED: Automated CSV/PDF report generation is not yet available. Real-time platform metrics and analytics are fully accessible under the Analytics tab.
+            </p>
+          </div>
+        )}
+
         {/* Orders Tab */}
         {activeTab === "orders" && (
           <div className="space-y-6">
@@ -822,7 +877,7 @@ export default function AdminDashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {allOrders.map((o) => (
+                        {allOrders.map((o: any) => (
                           <tr key={o.id} className="border-b border-white/5 hover:bg-white/2">
                             <td className="py-3 px-4 text-gray-400 font-mono text-xs">#{o.id}</td>
                             <td className="py-3 px-4 text-gray-300">User #{o.userId}</td>

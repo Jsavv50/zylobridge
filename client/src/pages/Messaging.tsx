@@ -56,20 +56,31 @@ export default function Messaging() {
     }
   }, [fetchedMessages]);
 
-  // Supabase Realtime channel subscription for the active conversation, gated on awaited initSupabaseRealtimeAuth
+  const refetchConversationsRef = useRef(refetchConversations);
+
+  useEffect(() => {
+    refetchConversationsRef.current = refetchConversations;
+  }, [refetchConversations]);
+
+  // Realtime starts only after the centralized auth provider confirms a
+  // server-accepted session. Cleanup is synchronous so a channel cannot be
+  // left behind if the conversation changes while token auth is pending.
   useEffect(() => {
     if (!isAuthenticated || !selectedConvId) {
       setRealtimeStatus("CONNECTING");
       return;
     }
 
-    let isMounted = true;
+    let isActive = true;
+    let channel: ReturnType<ReturnType<typeof getSupabaseBrowserClient>["channel"]> | null = null;
+    const conversationId = selectedConvId;
+    const channelName = `private-conversation-${conversationId}`;
     setRealtimeStatus("CONNECTING");
 
     const setupRealtimeChannel = async () => {
       try {
         const authSuccess = await initSupabaseRealtimeAuth();
-        if (!isMounted) return;
+        if (!isActive) return;
 
         if (!authSuccess) {
           setRealtimeStatus("ERROR");
@@ -78,8 +89,7 @@ export default function Messaging() {
         }
 
         const supabase = getSupabaseBrowserClient();
-        const channelName = `private-conversation-${selectedConvId}`;
-        const channel = supabase.channel(channelName, {
+        channel = supabase.channel(channelName, {
           config: {
             private: true,
           },
@@ -92,16 +102,14 @@ export default function Messaging() {
               event: "INSERT",
               schema: "public",
               table: "messages",
-              filter: `conversationId=eq.${selectedConvId}`,
+              filter: `conversationId=eq.${conversationId}`,
             },
             (payload) => {
-              if (!isMounted) return;
+              if (!isActive) return;
               const newMsg = payload.new as any;
-              if (newMsg && newMsg.id && newMsg.conversationId === selectedConvId) {
+              if (newMsg && newMsg.id && newMsg.conversationId === conversationId) {
                 setMessages((prev) => {
-                  if (prev.some((m) => m.id === newMsg.id)) {
-                    return prev;
-                  }
+                  if (prev.some((m) => m.id === newMsg.id)) return prev;
                   return [
                     ...prev,
                     {
@@ -114,44 +122,42 @@ export default function Messaging() {
                     },
                   ];
                 });
-                refetchConversations();
+                void refetchConversationsRef.current();
               }
-            }
+            },
           )
           .subscribe((status, err) => {
-            if (!isMounted) return;
+            if (!isActive) return;
             if (status === "SUBSCRIBED") {
               setRealtimeStatus("CONNECTED");
               console.log(`[Messaging] Realtime channel ${channelName} SUBSCRIBED`);
-            } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+            } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
               setRealtimeStatus("ERROR");
               console.warn(`[Messaging] Realtime channel ${channelName} status: ${status}`, err);
+            } else if (status === "CLOSED") {
+              // CLOSED is normal during teardown/rejoin and must not turn a
+              // healthy active connection into a false connection error.
+              console.debug(`[Messaging] Realtime channel ${channelName} CLOSED`);
             }
           });
-
-        return () => {
-          supabase.removeChannel(channel);
-        };
       } catch (error) {
-        if (!isMounted) return;
+        if (!isActive) return;
         setRealtimeStatus("ERROR");
         console.error("[Messaging] Realtime setup error:", String(error));
       }
     };
 
-    let cleanupFn: (() => void) | undefined;
-    setupRealtimeChannel().then((cleanup) => {
-      cleanupFn = cleanup;
-    });
+    void setupRealtimeChannel();
 
     return () => {
-      isMounted = false;
-      if (cleanupFn) {
-        cleanupFn();
+      isActive = false;
+      if (channel) {
+        const supabase = getSupabaseBrowserClient();
+        void supabase.removeChannel(channel);
       }
       setRealtimeStatus("CONNECTING");
     };
-  }, [isAuthenticated, selectedConvId, refetchConversations]);
+  }, [isAuthenticated, selectedConvId]);
 
   // Auto-scroll to bottom
   useEffect(() => {

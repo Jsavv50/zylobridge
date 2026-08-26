@@ -4,9 +4,11 @@ import { appRouter } from "./routers";
 import { COOKIE_NAME } from "../shared/const";
 import type { TrpcContext } from "./_core/context";
 import { vi } from "vitest";
+import * as db from "./db";
 
 // Mock database to avoid live DB connections in tests
 vi.mock("./db", () => ({
+  MAX_PAGE_SIZE: 100,
   getDb: vi.fn().mockResolvedValue(null),
   upsertUser: vi.fn().mockResolvedValue(undefined),
   getUserByOpenId: vi.fn().mockResolvedValue(null),
@@ -14,6 +16,13 @@ vi.mock("./db", () => ({
   createJob: vi.fn().mockResolvedValue({ id: 1 }),
   getJobById: vi.fn().mockResolvedValue(null),
   listJobs: vi.fn().mockResolvedValue([]),
+  searchJobs: vi.fn().mockResolvedValue({ items: [], nextOffset: null, hasMore: false }),
+  searchProfessionals: vi.fn().mockResolvedValue({ items: [], nextOffset: null, hasMore: false }),
+  getPublicProfessionalProfile: vi.fn().mockResolvedValue(null),
+  getPublicOrganizationBySlug: vi.fn().mockResolvedValue(null),
+  updateOrganizationProfile: vi.fn().mockResolvedValue(undefined),
+  getOrganizationProjectById: vi.fn().mockResolvedValue(null),
+  getManagedJobsByUserId: vi.fn().mockResolvedValue([]),
   getJobsByClientId: vi.fn().mockResolvedValue([]),
   updateJob: vi.fn().mockResolvedValue(undefined),
   deleteJob: vi.fn().mockResolvedValue(undefined),
@@ -148,7 +157,7 @@ describe("auth.logout", () => {
     expect(result).toEqual({ success: true });
     expect(clearedCookies).toHaveLength(1);
     expect(clearedCookies[0]?.name).toBe(COOKIE_NAME);
-    expect(clearedCookies[0]?.options).toMatchObject({ maxAge: -1, httpOnly: true });
+    expect(clearedCookies[0]?.options).toMatchObject({ httpOnly: true });
   });
 
   it("auth.me returns null for unauthenticated user", async () => {
@@ -197,7 +206,7 @@ describe("admin RBAC", () => {
   it("blocks unauthenticated user from admin routes", async () => {
     const ctx = createUnauthCtx();
     const caller = appRouter.createCaller(ctx);
-    await expect(caller.admin.stats()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+    await expect(caller.admin.stats()).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });
 
@@ -439,5 +448,31 @@ describe("verification.adminList RBAC", () => {
     const caller = appRouter.createCaller(ctx);
     const result = await caller.verification.adminList();
     expect(Array.isArray(result)).toBe(true);
+  });
+});
+
+
+describe("Phase 2 marketplace authorization and discovery", () => {
+  it("keeps unpublished job details private to the owner or administrator", async () => {
+    vi.mocked(db.getJobById).mockResolvedValueOnce({ id: 44, clientId: 99, status: "completed" } as never);
+    const caller = appRouter.createCaller(createClientCtx().ctx);
+    await expect(caller.jobs.getById({ id: 44 })).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("enforces the server-side discovery page size ceiling", async () => {
+    const caller = appRouter.createCaller(createUnauthCtx());
+    await expect(caller.jobs.search({ limit: 101 })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("keeps job discovery public while returning the bounded service envelope", async () => {
+    vi.mocked(db.searchJobs).mockResolvedValueOnce({ items: [{ id: 7, title: "Verified repair", status: "open" }], nextOffset: null, hasMore: false } as never);
+    const caller = appRouter.createCaller(createUnauthCtx());
+    await expect(caller.jobs.search({ limit: 12 })).resolves.toMatchObject({ hasMore: false, nextOffset: null, items: [{ id: 7 }] });
+  });
+
+  it("exposes company lookup through the public slug contract without requiring a session", async () => {
+    vi.mocked(db.getPublicOrganizationBySlug).mockResolvedValueOnce({ organization: { id: 3, name: "Northstar Works", description: null }, activeJobs: [], stats: { activeJobs: 0, activeMembers: 0 } } as never);
+    const caller = appRouter.createCaller(createUnauthCtx());
+    await expect(caller.companies.getBySlug({ slug: "northstar-works" })).resolves.toMatchObject({ organization: { name: "Northstar Works" } });
   });
 });

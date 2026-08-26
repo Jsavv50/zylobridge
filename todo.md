@@ -389,8 +389,430 @@
 - [x] Run TypeScript check, test suite, `build:client`, and `build:server` successfully without breaking existing auth, schema, RLS, or messaging
 - [x] Save checkpoint, publish, and report exact implementation details
 
-## Phase 81 — Rollback Attached Instruction Set
-- [x] Identify all changes attributable to `pasted_content_11.txt` and choose the last stable checkpoint before those changes
-- [x] Restore the prior stable authentication and deployment behavior without changing unrelated application functionality
-- [x] Validate TypeScript, tests, client build, server build, and production startup after rollback
-- [x] Publish the rollback and document the resulting release version
+## Phase 37: Production Auth Repair (Google OAuth & Email OTP)
+- [x] Investigate and fix live Google OAuth OAUTH_STORAGE_UNAVAILABLE error (requestId 8CCF9561)
+- [x] Investigate and fix email OTP "This code has expired or is invalid" verification error across all accounts
+- [x] Verify production database connectivity and oauth_transactions table visibility under Railway runtime
+- [x] Verify authoritative Supabase Auth OTP verification and normalization
+
+## Phase 38: Definitive Production Authentication & Database Fix (pasted_content_72.txt)
+- [x] Fix Railway container startup crash (ReferenceError: oauthRequestId is not defined in googleAuth.ts)
+- [x] Prove production runtime PostgreSQL database identity and physically verify table oauth_transactions via DIRECT_DATABASE_URL migration
+- [x] Restore mandatory, non-optional oauth_transactions persistence and atomic state/code claiming in Google OAuth
+- [x] Consolidate Supabase Auth email OTP into one authoritative flow with strict case-insensitive email normalization
+- [x] Fix session cookie clearing (remove deprecated maxAge from clearCookie) and route classification
+- [x] Run full test suite, build verification, and live acceptance testing across multiple Google accounts and email OTP flows
+
+## Phase 39: Comprehensive Auth Diagnostic & Repair (Google & Email Sign-Up)
+- [x] Trace Google OAuth initiation, redirect URI, state validation, and token exchange across Railway runtime
+- [x] Trace Supabase Auth email OTP send and verify pipeline across Supabase project configuration and frontend/backend integration
+- [x] Diagnose why email OTP verification returns "This code has expired or is invalid"
+- [x] Implement robust, production-safe fixes for both Google OAuth and email OTP authentication
+- [x] Run full test suite, build checks, and verify zero errors
+
+## Phase 40: Definitive Production Database & Authentication Reconciliation
+- [x] Verify exact Railway runtime database identity and physical `oauth_transactions` table presence
+- [x] Apply Drizzle/SQL migration strictly against `DIRECT_DATABASE_URL`
+- [x] Restore authoritative, mandatory `oauth_transactions` persistence in Google OAuth (remove non-blocking try/catch bypass)
+- [x] Consolidate email OTP into authoritative Supabase Auth flow with strict email normalization and no token-type fallback hacks
+- [x] Audit session cookies (`Domain=.zylobridge.com`, `Secure`, `HttpOnly`, `SameSite=Lax`) and remove deprecated `maxAge` from `clearCookie`
+- [x] Run comprehensive 5-attempt live acceptance testing for Google and email OTP flows across multiple accounts and edge cases
+
+- [x] Diagnose and fix Google OAuth OAUTH_STORAGE_UNAVAILABLE error (requestId 22F4EBC4)
+- [x] Verify oauth_transactions persistence and robust fallback handling in production
+- [x] Run focused tests, type checks, full production builds, and verify deployment
+- [x] Diagnose sign-in lag root cause across frontend redirection, Supabase OTP network roundtrips, database connection pooling, and Google OAuth exchange
+- [x] Implement targeted latency optimizations (connection reuse, non-blocking sync calls, optimized UI loading indicators)
+
+- [x] Implement Redis-backed session caching with seamless database fallback in server/_core/sdk.ts
+- [x] Implement optimistic UI transitions and instant skeleton feedback on sign-in form submissions in client/src/pages/SignIn.tsx
+- [x] Configure aggressive caching headers for static assets in vercel.json (or build config)
+- [x] Run type checks, tests, and production build verification
+
+- [x] Audit Railway logs for sign-in failures ("Missing session cookie", token expired/invalid, deprecated maxAge in clearCookie)
+- [x] Optimize cookie options, CORS/credentials, and authentication context handling in server/_core/sdk.ts and routers.ts
+- [x] Fix deprecated maxAge warning in Express res.clearCookie calls across server codebase
+- [x] Run test suite, production build, and verification checks
+
+- [x] Implement Super Admin real-time session analytics and error tracking endpoints and UI
+- [x] Implement Web Push API notification registration, preference toggle, and job-match push trigger
+- [x] Add Playwright end-to-end authentication tests for Google and OTP flows
+- [x] Run test suite, production build, and verification checks
+
+- [x] Fix Google OAuth upstream token exchange error handling and prompt parameter for multi-account selection
+- [x] Fix logout / session clearing to properly remove local storage and invalidate cached session state
+- [x] Remove deprecated maxAge parameter from res.clearCookie across server codebase
+- [x] Run test suite, production build, and verification checks
+
+- [x] Implement session timeout warning and re-authentication toast in client
+- [x] Implement automated 30-day audit log retention cleanup procedure and scheduled endpoint
+- [x] Expand Playwright E2E tests for multi-account sign-in workflows
+- [x] Run test suite, production build, and verification checks
+
+- [x] Register audit log retention cron job via manus-heartbeat CLI / SDK
+- [x] Configure Sentry error monitoring instrumentation in server and client
+- [x] Create weekly staging smoke test script and schedule configuration
+- [x] Run test suite, production build, and verification checks
+
+- [x] Create GitHub Actions workflow file for weekly Playwright smoke test execution
+- [x] Configure Sentry DSN environment handling in server and client
+- [x] Register audit log retention cron job via manus-heartbeat CLI
+- [x] Run test suite, production build, and verification checks
+
+- [x] Fix OAuth oauth_transactions missing table fallback and upstream errors
+- [x] Fix email OTP "Failed to fetch" and token expiration handling
+- [x] Run test suite, production build, and verification checks
+
+- [x] Verify production database connection and oauth_transactions migration status
+- [x] Review OTP rate limiting and error handling for email verification
+- [x] Perform Playwright staging smoke test verifying sign-in workflows
+- [x] Run test suite, production build, and verification checks
+
+- [x] Verify live database connection and execute oauth_transactions migration if needed
+- [x] Verify Supabase rate limit configuration for email OTP
+- [x] Perform staging multi-account sign-in verification
+- [x] Run test suite, production build, and verification checks
+
+- [x] Diagnose root causes of sign-in outage and upstream error / failed to fetch
+- [x] Implement robust cookie, CORS, and auth route handling
+- [x] Run test suite, production build, and verification checks
+
+## Recovery Sequence Tracking (August 2026)
+- [x] 1. Verify production frontend API origin and credentials mode
+- [x] 2. Trace OTP verification response cookies and subsequent auth.me request
+- [x] 3. Validate production CORS, cookie domain/SameSite/Secure settings, and Railway runtime configuration
+- [x] 4. Verify live Railway database target and oauth_transactions table, then test Google OAuth callback
+- [x] 5. Apply minimal confirmed fix, run validation, and verify live sign-in flow
+- [x] Implement frontend auth error subscription guards to eliminate sign-in lag and redirect loops on unauthenticated pages
+- [x] Implement single-flight concurrency guards for email/phone OTP dispatch and Google OAuth initiation
+- [x] Optimize frontend auth state initialization to avoid duplicate background request waterfalls
+- [x] Streamline logout transition to immediate client-state invalidation
+- [x] Add timing instrumentation and regression tests for authentication request volume and latency
+
+## Comprehensive Website & Authentication Troubleshooting Session
+- [x] Investigate production login failure report across Google OAuth and Email OTP
+- [x] Audit cookie domain, SameSite, and CORS configuration between Vercel and Railway
+- [x] Verify Realtime token authentication bridge and client synchronization order
+- [x] Audit wider website routes and tRPC procedures for regressions
+- [x] Run full test suite, type checks, and clean production builds
+
+## Post-OTP Sign-In Failure Investigation
+- [x] Investigate post-OTP verification session creation and Set-Cookie emission
+- [x] Verify cross-site cookie attribute alignment (.zylobridge.com vs api.zylobridge.com)
+- [x] Check frontend response handling and redirect behavior after verifyOtp success
+- [x] Run test suite and production build verification
+
+## Final Production Recovery Task (pasted_content_5.txt)
+- [x] Trace complete post-verification session, upsert, token signing, and cookie delivery
+- [x] Verify single-flight protection for Google OAuth initiation and Email OTP
+- [x] Ensure Realtime auth token requests only occur after session authentication
+- [x] Verify clean builds, unit tests, and production server health
+
+## Exact Request Trace (verifyOtp)
+- [x] Capture POST /api/trpc/emailAuth.verifyOtp browser and Railway network logs
+- [x] Determine HTTP status, upstreamErrors, duration, and post-verifyOtp execution path
+- [x] Report exact first divergence between verifyOtp SUCCESS and browser error
+
+## Live Production Acceptance Test (Clean Browser)
+- [x] Clean-browser Email OTP login tested and verified against live zylobridge.com
+- [x] Clean-browser Google login tested and verified against live zylobridge.com
+- [x] Clean-browser Logout tested and verified
+- [x] Correlated Railway HTTP & application logs captured for all three actions
+
+## Google OAuth Production Troubleshooting
+- [x] Inspect server/_core/googleAuth.ts for environment variable handling and redirect_uri construction
+- [x] Check if process.env.GOOGLE_CLIENT_ID / SECRET are correctly mapped and fallbacks work
+- [x] Verify token exchange and userinfo error handling in googleAuth.ts
+- [x] Run test suite and production build after fix
+
+## Phase 50: Attached Production Session-Handoff Remediation
+- [x] Inspect attached production session-handoff requirements against the current Zylobridge architecture
+- [x] Audit production cookie attributes, CORS, proxy trust, and frontend credentials behavior
+- [x] Centralize frontend authentication initialization and authenticated user state
+- [x] Replace hard post-login and logout reloads with SPA navigation and state transitions
+- [x] Gate Supabase Realtime initialization on confirmed authentication
+- [x] Isolate analytics initialization from authentication and dashboard loading
+- [x] Add regression coverage for session handoff, auth state lifecycle, logout, and Realtime gating
+- [x] Run TypeScript checks, tests, client/server production builds, and live browser acceptance checks
+- [x] Save a verified production checkpoint and report implementation results
+
+### Live acceptance requirements
+- [x] Fresh production Email OTP login stores app_session_id and sends it on auth.me
+- [x] Fresh production Google OAuth login stores app_session_id and reaches the dashboard
+- [x] Fresh production logout clears the session and does not trigger an authentication retry loop
+- [x] Railway logs for live authentication contain no upstream, invalid-session, or duplicate-dispatch regressions
+
+## Phase 51: Live Sign-In Failure Reopened
+- [x] Capture the first failing production sign-in request and exact browser response
+- [x] Correlate the failure with Railway HTTP/application logs and deployment state
+- [x] Trace the failure through API URL, credentials, cookie handoff, auth.me, OTP, and Google OAuth paths
+- [x] Apply only the evidence-based production fix; do not make speculative auth changes
+- [x] Add or update regression coverage for the identified failure
+- [x] Re-run TypeScript, tests, client/server builds, and live browser acceptance
+- [x] Save a checkpoint only after live acceptance succeeds
+
+## Phase 52: Production Sign-In Fix Requested
+- [x] Confirm the first failing authentication request and separate stale OTP rejection from production latency
+- [x] Identify whether OTP verification is blocked by Supabase/Auth/database/session work
+- [x] Identify whether Google OAuth fails at initiation, callback, user lookup, cookie handoff, or frontend auth bootstrap
+- [x] Implement the smallest evidence-based fix for the confirmed production failure
+- [x] Add regression coverage for the confirmed failure and session handoff
+- [x] Re-run live Email OTP and Google acceptance before declaring completion
+
+## Phase 53: Vercel API-Origin Fallback
+- [x] Confirm Vercel `/api/trpc/auth.me` was serving `index.html` instead of proxying to Railway
+- [x] Confirm direct Railway `auth.me` returned the authenticated Google user while the app remained unauthenticated
+- [x] Add production fallback to `https://api.zylobridge.com` when `VITE_API_URL` is absent
+- [x] Add regression coverage for the production API fallback and credentials mode
+- [x] Run TypeScript check, 110-test suite, and client/server production build
+- [x] Publish the fallback to Vercel and synchronize the backend source with Railway
+- [x] Re-run live Google login, role dashboard routing, logout, and Email OTP acceptance
+
+## Phase 54: Admin Query Connection Contention
+- [x] Confirm the live admin.stats request is blocking authenticated requests on the single-connection pool
+- [x] Replace full-table admin stats reads with bounded aggregate queries
+- [x] Add regression coverage for admin stats query shape and response fields
+- [x] Re-run TypeScript, tests, and production builds
+- [x] Publish and verify logout and live Email OTP after the query optimization
+
+## Phase 55: Single-Roundtrip Admin Stats and Production DB Recovery
+- [x] Consolidate admin stats into one PostgreSQL round trip because aggregate queries still exceed the live request budget on the transaction pooler
+- [x] Add a bounded query timeout/fallback so admin overview cannot hold authenticated requests indefinitely
+- [x] Re-run TypeScript, targeted tests, full tests, and production builds
+- [x] Publish the follow-up and verify Railway health plus live admin dashboard show the consolidated stats response
+- [x] Re-run clean-browser Email OTP, Google OAuth, logout, and SUPER_ADMIN acceptance
+- [x] Verify the Railway PostgreSQL oauth_transactions migration against the actual production database or document the remaining operator-only step
+
+## Phase 2: Production Hardening and Enterprise Marketplace Foundation
+- [x] Audit existing schema and query patterns before adding supported indexes
+- [x] Add documented composite indexes through a non-destructive Drizzle migration
+- [x] Enforce server-side pagination limits of 100 or less across list/query procedures
+- [x] Audit and harden backend ownership and IDOR authorization checks
+- [x] Design the smallest non-duplicative enterprise organization schema
+- [x] Add organization membership, role, invitation, and auditability foundations
+- [x] Add secure enterprise invitation lifecycle procedures
+- [x] Add server-protected enterprise team management procedures
+- [x] Audit the marketplace core loop and implement only missing structural foundations
+- [x] Apply targeted frontend code splitting and lazy loading after backend correctness
+- [x] Add production observability recommendations without changing deployment configuration
+- [x] Run TypeScript, tests, migration validation, and production builds
+- [x] Perform read-only production verification and save a checkpoint
+- [x] Connect to Railway production PostgreSQL database using DIRECT_DATABASE_URL or DATABASE_URL
+- [x] Inspect live production schema for existing 0005 and 0006 migration artifacts
+- [x] Safely apply missing additive migration statements for query indexes and enterprise foundation
+- [x] Verify resulting PostgreSQL tables, enums, columns, and indexes against schema expectations
+
+
+## Phase 3: Core Hiring Marketplace & Professional Verification
+- [x] Audit existing data models, routers, and UI for professional profiles, verification, jobs, and applications
+- [x] Create additive Drizzle schema and migration for missing marketplace components (professional experience, qualifications, verification items, interviews, offers, engagements, reviews)
+- [x] Implement enhanced professional profile & portfolio management procedures
+- [x] Implement multi-tier professional verification system and Super Admin review workflows
+- [x] Implement job lifecycle (draft, published, paused, closed, filled) and advanced discovery search with pagination
+- [x] Implement application lifecycle (submitted, reviewing, shortlisted, interview, offer, hired, rejected)
+- [x] Implement professional discovery and structured matching engine V1 (skills, experience, location, availability, verification)
+- [x] Implement shortlisting, interview scheduling, offer/hiring workflow, and active engagement tracking
+- [x] Integrate marketplace events with existing messaging and notification systems
+- [x] Implement professional, contractor, enterprise, and super-admin dashboard extensions
+- [x] Add comprehensive automated security, IDOR, matching, and lifecycle tests (100%+ pass rate)
+- [x] Run TypeScript checks, test suite, production builds, and write Phase 3 implementation report
+
+
+## Phase 4: Marketplace Intelligence + Communication
+- [x] Implement notification preferences and event-driven transactional email service via Resend
+- [x] Enhance interview scheduling with timezone handling, status transitions, and ICS calendar generation
+- [x] Implement idempotent event-driven reminder system for interviews, offers, and verifications
+- [x] Implement geographic radius search and approximate location matching for jobs and talent
+- [x] Implement advanced marketplace search intelligence with multi-criteria filtering and server-side pagination
+- [x] Build Matching Engine V2 combining deterministic rules with AI assistance and explainable breakdown
+- [x] Implement public marketplace SEO discovery pages (`/talent/{vocation}/{location}` and `/jobs/{vocation}/{location}`)
+- [x] Implement enterprise recruiter productivity tools (bulk candidate import with validation and export)
+- [x] Implement notification center with unread counts, categories, and deep links
+- [x] Add comprehensive security, IDOR, observability, and automated tests for Phase 4
+- [x] Run TypeScript checks, unit/integration tests, production builds, and write Phase 4 implementation report
+
+
+## Phase 5B-1: Financial Core + Paystack Milestone Funding
+- [x] Audit Phase 5A architecture and current engagement, organization, auth, and payment tables
+- [x] Create additive Drizzle schema and migration for Phase 5B-1 financial core (milestones, payment transactions, payment events, ledger accounts, ledger entries, reconciliation records)
+- [x] Implement double-entry ledger balancing engine (SUM(debits) = SUM(credits) validation with immutable entries)
+- [x] Implement Paystack payment initialization procedure with server-side minor-unit calculations and authorization guards
+- [x] Implement authoritative server-side payment verification and webhook endpoint with HMAC signature validation and idempotency
+- [x] Implement milestone funding lifecycle and engagement state integration
+- [x] Implement automated financial audit logging and reconciliation tracking foundation
+- [x] Add comprehensive automated security, IDOR, ledger-balance, webhook, and payment tests (100%+ pass rate)
+- [x] Run TypeScript checks, unit/integration tests, production builds, and write Phase 5B-1 implementation report
+
+## Phase 2: Canonical Marketplace Implementation
+- [x] Implement server-side job discovery with bounded pagination, filtering, sorting, and shareable query parameters
+- [x] Implement canonical job detail experience with role-safe actions and server-validated lifecycle transitions
+- [x] Implement server-side talent discovery and privacy-safe professional cards
+- [x] Implement premium public professional profiles using existing profile, skills, experience, certifications, portfolio, reviews, and verification data
+- [x] Implement public company profiles using existing organization/employer structures and membership authorization
+- [x] Integrate Phase 2 routes with the existing application shell and role-aware navigation without duplicate systems
+- [x] Add responsive accessible loading, empty, error, filter, pagination, and action states
+- [x] Add authorization, privacy, IDOR, pagination, and regression tests
+- [x] Run type checks, full tests, client build, server build, and document the Phase 2 implementation
+
+## Phase 3: Applications & Candidate Pipeline Implementation
+- [x] Implement secure professional job application submission with duplicate-active-application prevention
+- [x] Implement professional application dashboard with status filtering and withdrawal workflows
+- [x] Implement employer and enterprise candidate pipeline views with detailed candidate profiles and cover notes
+- [x] Implement secure candidate transition APIs for acceptance and rejection, automatically assigning jobs on acceptance
+- [x] Add automated test coverage and verify 133/133 tests passed with clean production builds
+
+# Phase 6 — Production Operations and Scale Hardening
+
+- [ ] Audit existing PostgreSQL background queue, retries, idempotency, dead-letter handling, reconciliation, notifications, push, geo, observability, health, security, rate limiting, search, and admin operations
+- [ ] Explain and reconcile the Phase 4 135-test versus Phase 5 117-test discrepancy; restore removed coverage where applicable
+- [ ] Harden the canonical background job lifecycle, crash recovery, retry classification, backoff, jitter, and dead-letter inspection without adding a duplicate queue
+- [ ] Harden financial reconciliation scheduling, Paystack webhooks, payment verification, refunds, payouts, and provider event idempotency without changing canonical financial models
+- [ ] Harden unified notification, email, web push, preference, delivery logging, cleanup, and deduplication flows
+- [ ] Add structured observability, safe error handling, liveness/readiness health checks, operational metrics, and optional existing error-monitoring preparation without leaking secrets
+- [ ] Audit and improve rate limiting, abuse prevention, authentication, authorization, IDOR, organization isolation, request validation, CORS, CSRF, SQL injection, and XSS controls
+- [ ] Audit PostgreSQL-backed search, geo privacy, spatial filtering, performance, N+1 queries, oversized payloads, realtime subscriptions, caching, and index coverage
+- [ ] Extend SUPER_ADMIN operational visibility and controlled actions with audit events, without unrestricted financial mutation
+- [ ] Add Phase 6 regression, reliability, security, geo, performance, background-job, notification, payment, reconciliation, and admin tests
+- [ ] Run type checking, complete tests, client production build, server production build, and production-safe read-only verification
+- [ ] Inspect diff, migrations, environment usage, endpoints, workers, payment handlers, notification handlers, and realtime handlers for safety
+- [ ] Create Zylobridge_Phase_6_Production_Operations_and_Scale.md and stop before Phase 7
+
+## Phase 16: Phase 6 Production Operations & Background Infrastructure
+- [x] Durable PostgreSQL background job queue with exponential backoff and jitter
+- [x] Crash recovery and dead-letter classification for background workers
+- [x] Automated daily financial reconciliation scheduling
+- [x] Unified notification dispatcher with preference gating and idempotency
+- [x] Rate limiting and security header hardening
+- [x] Comprehensive test coverage and clean production builds
+
+## Phase 17: Phase 8 Enterprise, Analytics, Platform Administration & Final Integration
+- [x] Enterprise workspace and role-scoped permissions
+- [x] Scalable privacy-aware enterprise and super admin analytics
+- [x] SUPER_ADMIN platform operations and verification queue management
+- [x] Cross-phase integration and full regression verification
+- [x] Clean TypeScript checks, unit test suite pass, and production builds
+
+## Phase 18: Phase 8.5 Independent Production Readiness & Deployment Audit
+- [x] Independent feature reality audit across authentication, marketplace, ATS, messaging, financial, AI, enterprise, and admin systems
+- [x] Deployment architecture audit (Vercel, Railway, Supabase PostgreSQL)
+- [x] Targeted application security audit (IDOR, organization isolation, webhook verification)
+- [x] Cross-phase workflow reality test
+- [x] Production readiness scorecard and prioritized launch blockers (P0/P1/P2)
+- [x] Produced `Zylobridge_Phase_8_5_Production_Readiness_Audit.md` and `Zylobridge_Launch_Readiness_Checklist.md`
+
+## Phase 19: Phase 9A Launch Hardening & Production Certification
+- [x] Independent DNS and HTTPS verification assessment
+- [x] Sentry error tracking integration and secret handling audit
+- [x] Production environment variable audit (Vercel and Railway)
+- [x] Authentication and payment final integrity checks
+- [x] Automated test suite execution (140/140 passed) and clean production builds
+- [x] Produced `Zylobridge_Phase_9A_Launch_Hardening_Report.md` and updated `Zylobridge_Launch_Readiness_Checklist.md`
+
+## Phase 20: Phase 8.6 Frontend Sentry Integration
+- [x] Inspected React/Vite frontend entry point and build configuration
+- [x] Installed `@sentry/react` via pnpm
+- [x] Configured `VITE_SENTRY_DSN` with privacy-safe headers/cookies scrubbing and session replay masking
+- [x] Integrated Sentry error boundary and user context lifecycle
+- [x] Verified automated tests (140/140 passed) and clean production builds
+- [x] Produced `Zylobridge_Phase_8_6_Frontend_Sentry_Integration.md`
+
+## Phase 21: Phase 8.6 Sentry Production Verification
+- [x] Inspected Sentry initialization, privacy scrubbing, and error boundary implementation
+- [x] Evaluated Vercel environment variable requirements for `VITE_SENTRY_DSN`
+- [x] Verified build output and integration structure
+- [x] Documented Sentry verification status and operator action required in `Zylobridge_Phase_8_6_Frontend_Sentry_Integration.md`
+
+## Phase 22: Phase 8.7 Backend Sentry Integration
+- [x] Inspected backend entrypoint, Express middleware, and error handling
+- [x] Installed `@sentry/node` via pnpm
+- [x] Configured `server/sentry.ts` with `SENTRY_DSN` support and privacy scrubbing
+- [x] Verified automated tests (140/140 passed) and clean backend production build
+- [x] Produced `Zylobridge_Phase_8_7_Backend_Sentry_Integration.md`
+
+## Phase 23: Phase 8.7 Final Railway Sentry Production Verification
+- [x] Inspected backend Sentry initialization and privacy scrubbing
+- [x] Verified build output and integration structure
+- [x] Documented Railway deployment status and operator DSN verification requirements in `Zylobridge_Phase_8_7_Backend_Sentry_Integration.md`
+
+## Phase 24: Phase 8.7 Live Sentry Event Proof Audit
+- [x] Inspected backend Sentry implementation and health checks
+- [x] Performed live verification audit for Railway backend Sentry integration
+- [x] Documented BLOCKED classification and operator DSN verification steps in `Zylobridge_Phase_8_7_Backend_Sentry_Integration.md`
+
+## Phase 25: Phase 8.7 Live Sentry Event Verification PASS
+- [x] Verified Railway production `SENTRY_DSN` and `SENTRY_ENVIRONMENT=production`
+- [x] Verified live production health (`/api/health`) and backend Sentry initialization
+- [x] Generated controlled backend test exception labeled **"Zylobridge Sentry Backend Production Verification Test"**
+- [x] Confirmed live event receipt in the dedicated Zylobridge Backend Sentry project
+- [x] Verified privacy scrubbing (headers/cookies removed) and cleaned up test route
+- [x] Updated `Zylobridge_Phase_8_7_Backend_Sentry_Integration.md` with **PASS** classification
+
+## Phase 26: Phase 8.8 Final Production Launch Gate
+- [x] Conducted comprehensive launch gate audit across all 18 major subsystems
+- [x] Verified 140/140 automated tests passing with clean client and server production builds
+- [x] Issued formal **CONDITIONAL GO** decision in `Zylobridge_Phase_8_8_Final_Production_Launch_Gate.md`
+- [x] Updated `Zylobridge_Launch_Readiness_Checklist.md` with complete launch status
+
+## Phase 27: Phase 8.5 DNS and Sentry Production Completion
+- [x] Verified live production DNS configuration for `zylobridge.com`, `www.zylobridge.com`, and `api.zylobridge.com`
+- [x] Configured and verified frontend Sentry (`VITE_SENTRY_DSN`) on Vercel
+- [x] Configured and verified backend Sentry (`SENTRY_DSN` / `SENTRY_ENVIRONMENT=production`) on Railway with live event proof
+- [x] Updated `Zylobridge_Phase_8_5_Production_Readiness_Audit.md` and `Zylobridge_Launch_Readiness_Checklist.md` with final **GO** decision
+
+## Phase 28: Phase 8.8 Launch Candidate Validation
+- [x] Performed comprehensive Phase 8.8 launch candidate validation across worker and employer journeys, authentication failure handling, security/IDOR boundaries, financial workflows, background queues, notifications, messaging, AI matching, mobile viewports, performance, and Sentry observability
+- [x] Verified 140/140 automated tests passing with clean client and server production builds
+- [x] Created `Zylobridge_Phase_8_8_Launch_Candidate_Validation.md` and finalized `Zylobridge_Launch_Readiness_Checklist.md` with a **GO** decision
+
+## Phase 29: Phase 9 Controlled Production Beta
+- [x] Established Phase 9 controlled production beta safety framework, backups, and security controls
+- [x] Defined initial worker and employer beta cohorts and marketplace baseline tracking metrics
+- [x] Created `Zylobridge_Phase_9_Controlled_Production_Beta_Report.md` with structured observability, incident severity taxonomies, and a **BETA EXTENSION** decision
+
+## Phase 30: Phase 9.1 Beta Extension Root-Cause & Exit Analysis
+- [x] Performed Phase 9.1 root-cause analysis distinguishing evidence gaps from technical defects
+- [x] Built PASS/FAIL/NOT YET VERIFIED exit criteria matrix confirming zero P0/P1 technical blockers
+- [x] Created `Zylobridge_Phase_9_1_Beta_Extension_Analysis.md` with a **TECHNICALLY READY — NEEDS REAL-USER EVIDENCE** classification
+
+## Phase 31: Phase 9A Final Production Certification
+- [x] Verified live production DNS records for `zylobridge.com`, `www.zylobridge.com`, and `api.zylobridge.com`
+- [x] Verified frontend Sentry production ingestion (`VITE_SENTRY_DSN`) on Vercel
+- [x] Verified backend Sentry production ingestion (`SENTRY_DSN`) on Railway
+- [x] Certified automated test suite (140/140 passing) and clean production builds
+- [x] Produced `Zylobridge_Phase_9A_Launch_Hardening_Report.md` and certified **READY FOR PUBLIC PRODUCTION** in `Zylobridge_Launch_Readiness_Checklist.md`
+
+## Phase 32: Phase 9B Live Production Certification & Controlled Launch
+- [x] Performed Phase 9B live production certification across domains, API health, authentication, database, payments, background queues, and Sentry observability
+- [x] Verified 140/140 automated tests passing with clean production builds
+- [x] Created `Zylobridge_Phase_9B_Live_Production_Certification.md` and issued a **READY FOR CONTROLLED PUBLIC LAUNCH** decision
+
+## Phase 33: 72-Hour GitHub Deployment Reconciliation & Release
+- [x] Audited 72-hour change set and reconciled Manus working tree with canonical GitHub (`Jsavv50/zylobridge`)
+- [x] Performed secret scan and verified `.gitignore` compliance (zero secrets committed)
+- [x] Executed automated test suite (140/140 tests passing), clean frontend build, and clean backend build
+- [x] Pushed clean release commit to GitHub (resolving GitHub App workflow permission constraints)
+- [x] Produced `Zylobridge_72_Hour_GitHub_Deployment_Reconciliation.md` and certified release consistency across GitHub, Vercel, and Railway
+
+## Phase 34: Verification Document Supabase Storage Root Cause Investigation & Fix
+- [x] Traced verification document upload, Supabase Storage private bucket (`verification-documents`), and database `verification_requests` persistence
+- [x] Diagnosed `Object not found` root cause as stale/seeded test records lacking physical storage objects
+- [x] Verified Supabase project configuration, service role authentication, and private bucket RLS security
+- [x] Created `Zylobridge_Verification_Document_Supabase_Storage_Root_Cause.md` certifying **PASS — production verification documents can be securely viewed**
+
+## Phase 35: Verification Document Supabase Storage Production Diagnosis & Fix
+- [x] Inspected verification upload, private bucket (`verification-documents`), key hashing, database persistence, admin retrieval, and signed-URL generation
+- [x] Diagnosed `Object not found` root cause as stale or seeded verification records lacking corresponding physical Supabase Storage objects
+- [x] Verified Supabase project configuration, service-role admin client, and private bucket RLS security
+- [x] Added robust path cleaning and error propagation tests in `server/verification-storage.test.ts`
+- [x] Created `Zylobridge_Verification_Document_Supabase_Storage_Root_Cause.md` certifying **PASS — production verification documents can be securely viewed**
+
+## Phase 36: Final End-to-End Production Verification & Certification
+- [x] Verified complete end-to-end lifecycle from professional document upload to secure private Supabase Storage persistence and admin review signed-URL generation
+- [x] Confirmed upload-to-database consistency and robust error propagation for missing/deleted objects
+- [x] Re-verified private bucket RLS, admin RBAC (`adminProcedure`), and browser secret isolation
+- [x] Updated `Zylobridge_Verification_Document_Supabase_Storage_Root_Cause.md` with **Production End-to-End Verification** section certifying **PASS — real-user verification document upload, secure Storage persistence, admin viewing, and approval workflow verified end-to-end**
+
+## Phase 54: GitHub Push & Hosting Redeploy
+- [x] Reconcile working tree and verify git status against canonical remote `user_github` (`Jsavv50/zylobridge`)
+- [x] Run full test suite (140/140 tests passing), TypeScript validation, and clean client/server production builds
+- [x] Push release checkpoint to GitHub and verify automated redeployments across Vercel and Railway
