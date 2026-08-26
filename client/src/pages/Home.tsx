@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, CheckCircle, Star, Users, Briefcase, Shield, Zap, Quote, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowRight, CheckCircle, Star, Users, Briefcase, Shield, Zap, Quote, ChevronLeft, ChevronRight, Bell, MessageSquare, ClipboardList, DollarSign, Building2, UserRound, Search } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import useEmblaCarousel from "embla-carousel-react";
 import Autoplay from "embla-carousel-autoplay";
@@ -54,6 +54,39 @@ const TRUST_BADGES = [
 ];
 
 
+
+function AuthenticatedWorkspacePanel({ user }: { user: NonNullable<ReturnType<typeof useAuth>["user"]> }) {
+  const isAdmin = user.role === "admin" || user.role === "SUPER_ADMIN";
+  const isProfessional = user.userType === "professional";
+  const isEmployer = user.userType === "client" || user.userType === "enterprise";
+  const links = isAdmin
+    ? [
+        { href: "/dashboard/admin", label: "Admin Dashboard", description: "Manage users, verification, jobs, and platform operations.", icon: Shield },
+        { href: "/messages", label: "Messages", description: "Review conversations across active work.", icon: MessageSquare },
+        { href: "/notifications", label: "Notifications", description: "Review important account and marketplace activity.", icon: Bell },
+      ]
+    : isProfessional
+      ? [
+          { href: "/jobs", label: "Find Jobs", description: "Browse open work matched to your vocation.", icon: Search },
+          { href: "/applications", label: "Applications", description: "Track bids and application status.", icon: ClipboardList },
+          { href: "/messages", label: "Messages", description: "Continue project and client conversations.", icon: MessageSquare },
+          { href: "/notifications", label: "Notifications", description: "Review hiring and account updates.", icon: Bell },
+          { href: "/payments", label: "Earnings & Payouts", description: "Review supported payment milestones.", icon: DollarSign },
+          { href: "/profile", label: "Professional Profile", description: "Manage your public profile and verification.", icon: UserRound },
+        ]
+      : isEmployer
+        ? [
+            { href: "/employer/jobs", label: "Job Postings", description: "Create, manage, and review candidates for postings.", icon: Briefcase },
+            { href: "/talent", label: "Find Talent", description: "Search verified professionals by vocation.", icon: Users },
+            { href: "/messages", label: "Messages", description: "Continue project and candidate conversations.", icon: MessageSquare },
+            { href: "/notifications", label: "Notifications", description: "Review hiring, project, and account updates.", icon: Bell },
+            { href: "/payments", label: "Escrow & Funding", description: "Review supported funding workflows.", icon: DollarSign },
+            ...(user.userType === "enterprise" ? [{ href: "/dashboard/enterprise", label: "Enterprise Workspace", description: "Manage organizations, members, projects, and controls.", icon: Building2 }] : []),
+          ]
+        : [{ href: "/onboarding", label: "Complete Setup", description: "Choose your workspace role to unlock the right tools.", icon: UserRound }];
+
+  return <section className="border-y border-violet-500/15 bg-[#111827] py-12" aria-labelledby="workspace-shortcuts-heading"><div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8"><div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-300">Your workspace</p><h2 id="workspace-shortcuts-heading" className="mt-2 text-2xl font-bold text-white">Everything you need, one click away</h2><p className="mt-1 text-sm text-gray-400">Role-aware shortcuts to the existing ZYLOBRIDGE workflows available to your account.</p></div><span className="text-xs text-gray-500">Signed in as {user.name || "workspace member"}</span></div><div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{links.map(({ href, label, description, icon: Icon }) => <Link key={href} href={href} className="group rounded-2xl border border-white/10 bg-[#131a26] p-4 transition hover:border-violet-400/40 hover:bg-violet-500/10"><div className="flex items-start gap-3"><span className="rounded-xl bg-violet-500/10 p-2 text-violet-300"><Icon className="h-4 w-4" /></span><span><span className="block font-semibold text-white group-hover:text-violet-200">{label}</span><span className="mt-1 block text-xs leading-5 text-gray-400">{description}</span></span></div></Link>)}</div></div></section>;
+}
 
 function StarRating({ count }: { count: number }) {
   return <div className="flex gap-0.5" aria-label={`${count} out of 5 stars`}>
@@ -221,6 +254,8 @@ export default function Home() {
                 </>
               )}
             </div>
+
+            {isAuthenticated && user && <AuthenticatedWorkspacePanel user={user} />}
 
             {/* Trust line */}
             <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-gray-500">
