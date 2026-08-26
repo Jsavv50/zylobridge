@@ -3,7 +3,8 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 
 // Railway backend base URL — must be set in Vercel env vars as VITE_API_URL
-const API_URL = ((import.meta.env.VITE_API_URL as string | undefined) ?? "").replace(/\/$/, "");
+const configuredApiUrl = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
+const API_URL = (configuredApiUrl || (import.meta.env.PROD ? "https://api.zylobridge.com" : "")).replace(/\/$/, "");
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

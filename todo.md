@@ -1002,3 +1002,10 @@
 - [x] Restore enterprise workspace access cards for marketplace, talent, jobs, messaging, payments, and notifications
 - [x] Add real-data enterprise marketplace metrics, average rating, and published reviews with honest empty states
 - [x] Validate and publish the expanded enterprise workspace surface
+
+## Phase 74 — Production Authentication Recovery
+- [x] Trace and fix Google OAuth sign-in on the Vercel frontend and Railway callback/session path
+- [x] Trace and fix email OTP send, verification, session issuance, and post-auth profile completion
+- [x] Restore supported prior authentication options and redirects without changing the split deployment architecture
+- [ ] Validate authentication fixes with regression tests, production builds, and safe live checks
+- [ ] Publish the authentication recovery release and document any user-authorized live-test limitations
