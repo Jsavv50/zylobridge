@@ -63,8 +63,24 @@ export function clampOffset(offset: number | undefined) {
 export async function getUserByEmail(email: string) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(users).where(sql`LOWER(${users.email}) = LOWER(${email})`).limit(1);
-  return result[0];
+
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail) return undefined;
+
+  // Email-auth and Google-auth inputs are normalized before persistence. Use a
+  // direct equality predicate for the primary lookup so the pooler can use the
+  // email index and avoid database-specific LOWER(parameter) failures.
+  const exactResult = await db.select().from(users).where(eq(users.email, normalizedEmail)).limit(1);
+  if (exactResult[0]) return exactResult[0];
+
+  // Preserve compatibility with legacy rows that predate normalization.
+  try {
+    const legacyResult = await db.select().from(users).where(sql`LOWER(${users.email}) = ${normalizedEmail}`).limit(1);
+    return legacyResult[0];
+  } catch (error) {
+    console.warn("[Database] Legacy case-insensitive email lookup failed; exact lookup completed", error);
+    return undefined;
+  }
 }
 
 let _db: ReturnType<typeof drizzle> | null = null;

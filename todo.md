@@ -1015,3 +1015,9 @@
 - [x] Restore role-correct navigation and feature panels using existing procedures and pages
 - [ ] Validate authenticated feature visibility, authorization, tests, builds, and responsive behavior
 - [ ] Publish the workspace feature restoration and document verified coverage
+
+## Phase 76 — Enterprise Sign-in Database Lookup Repair
+- [x] Diagnose the PostgreSQL/Drizzle email lookup failure for Enterprise sign-in and record production evidence
+- [x] Apply a compatible query or schema repair without changing roles, sessions, or enterprise authorization
+- [x] Add regression coverage and run tests, type checks, and production builds
+- [ ] Perform a safe live authentication check and publish the repair
