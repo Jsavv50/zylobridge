@@ -1,4 +1,4 @@
-import { and, or, desc, asc, eq, like, gte, lte, sql } from "drizzle-orm";
+import { and, or, desc, asc, eq, ne, like, gte, lte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import {
   InsertUser,
@@ -27,6 +27,27 @@ import {
   Order,
   InsertOrder,
   InsertProduct,
+  organizations,
+  organizationMembers,
+  organizationInvitations,
+  organizationProjects,
+  organizationVerificationRequests,
+  workforceAssignments,
+  notifications,
+  auditLogs,
+  InsertOrganization,
+  InsertOrganizationMember,
+  InsertOrganizationInvitation,
+  InsertOrganizationProject,
+  InsertOrganizationVerificationRequest,
+  InsertWorkforceAssignment,
+  InsertNotification,
+  InsertAuditLog,
+  Organization,
+  OrganizationMember,
+  OrganizationInvitation,
+  OrganizationProject,
+  WorkforceAssignment,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -106,13 +127,13 @@ export async function getUserById(id: number) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function updateUserType(userId: number, userType: "client" | "professional") {
+export async function updateUserType(userId: number, userType: "client" | "professional" | "enterprise") {
   const db = await getDb();
   if (!db) return;
   await db.update(users).set({ userType }).where(eq(users.id, userId));
 }
 
-export async function updateUserRole(userId: number, role: "user" | "admin" | "super_admin") {
+export async function updateUserRole(userId: number, role: "user" | "admin" | "SUPER_ADMIN") {
   const db = await getDb();
   if (!db) return;
   await db.update(users).set({ role }).where(eq(users.id, userId));
@@ -232,6 +253,15 @@ export async function getApplicationsByProfessionalId(professionalId: number) {
   return db.select().from(applications).where(eq(applications.professionalId, professionalId)).orderBy(desc(applications.createdAt));
 }
 
+export async function getApplicationForJobAndProfessional(jobId: number, professionalId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(applications).where(
+    and(eq(applications.jobId, jobId), eq(applications.professionalId, professionalId))
+  ).limit(1);
+  return result[0];
+}
+
 export async function updateApplicationStatus(
   id: number,
   status: "pending" | "accepted" | "rejected" | "withdrawn"
@@ -266,6 +296,220 @@ export async function updateProfile(userId: number, data: Partial<InsertProfile>
   const db = await getDb();
   if (!db) return;
   await db.update(profiles).set(data).where(eq(profiles.userId, userId));
+}
+
+// ─── Enterprise organizations ─────────────────────────────────────────────────
+export async function getOrganizationById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(organizations).where(eq(organizations.id, id)).limit(1);
+  return result[0];
+}
+
+export async function getOrganizationMembership(organizationId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(organizationMembers).where(
+    and(eq(organizationMembers.organizationId, organizationId), eq(organizationMembers.userId, userId))
+  ).limit(1);
+  return result[0];
+}
+
+export async function getOrganizationsForUser(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({ organization: organizations, membership: organizationMembers })
+    .from(organizationMembers)
+    .innerJoin(organizations, eq(organizationMembers.organizationId, organizations.id))
+    .where(and(eq(organizationMembers.userId, userId), eq(organizationMembers.status, "active")))
+    .orderBy(desc(organizations.createdAt));
+}
+
+export async function createOrganizationWithOwner(data: InsertOrganization, ownerId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const [organization] = await db.insert(organizations).values(data).returning();
+  if (!organization) throw new Error("Organization could not be created");
+  await db.insert(organizationMembers).values({
+    organizationId: organization.id,
+    userId: ownerId,
+    role: "OWNER",
+    status: "active",
+  }).onConflictDoNothing();
+  return organization;
+}
+
+export async function updateOrganization(id: number, data: Partial<InsertOrganization>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const [organization] = await db.update(organizations).set({ ...data, updatedAt: new Date() }).where(eq(organizations.id, id)).returning();
+  return organization;
+}
+
+export async function listOrganizationMembers(organizationId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({ member: organizationMembers, user: users })
+    .from(organizationMembers)
+    .innerJoin(users, eq(organizationMembers.userId, users.id))
+    .where(eq(organizationMembers.organizationId, organizationId))
+    .orderBy(asc(organizationMembers.createdAt));
+}
+
+export async function updateOrganizationMember(id: number, data: Partial<InsertOrganizationMember>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const [member] = await db.update(organizationMembers).set({ ...data, updatedAt: new Date() }).where(eq(organizationMembers.id, id)).returning();
+  return member;
+}
+
+export async function createOrganizationInvitation(data: InsertOrganizationInvitation) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const [invitation] = await db.insert(organizationInvitations).values(data).returning();
+  return invitation;
+}
+
+export async function getOrganizationInvitationByTokenHash(tokenHash: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(organizationInvitations).where(eq(organizationInvitations.tokenHash, tokenHash)).limit(1);
+  return result[0];
+}
+
+export async function listOrganizationInvitations(organizationId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(organizationInvitations).where(eq(organizationInvitations.organizationId, organizationId)).orderBy(desc(organizationInvitations.createdAt));
+}
+
+export async function updateOrganizationInvitation(id: number, data: Partial<InsertOrganizationInvitation>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const [invitation] = await db.update(organizationInvitations).set({ ...data, updatedAt: new Date() }).where(eq(organizationInvitations.id, id)).returning();
+  return invitation;
+}
+
+export async function createOrganizationVerificationRequest(data: InsertOrganizationVerificationRequest) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const [request] = await db.insert(organizationVerificationRequests).values(data).returning();
+  return request;
+}
+
+export async function listOrganizationVerificationRequests(organizationId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(organizationVerificationRequests).where(eq(organizationVerificationRequests.organizationId, organizationId)).orderBy(desc(organizationVerificationRequests.createdAt));
+}
+
+export async function getOrganizationVerificationRequestById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(organizationVerificationRequests).where(eq(organizationVerificationRequests.id, id)).limit(1);
+  return result[0];
+}
+
+export async function updateOrganizationVerificationRequest(id: number, data: Partial<InsertOrganizationVerificationRequest>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const [request] = await db.update(organizationVerificationRequests).set({ ...data, updatedAt: new Date() }).where(eq(organizationVerificationRequests.id, id)).returning();
+  return request;
+}
+
+export async function activateOrganizationMember(organizationId: number, userId: number, role: OrganizationMember["role"]) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const [member] = await db.insert(organizationMembers).values({ organizationId, userId, role, status: "active" })
+    .onConflictDoUpdate({
+      target: [organizationMembers.organizationId, organizationMembers.userId],
+      set: { role, status: "active", updatedAt: new Date() },
+    })
+    .returning();
+  return member;
+}
+
+export async function createOrganizationProject(data: InsertOrganizationProject) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const [project] = await db.insert(organizationProjects).values(data).returning();
+  return project;
+}
+
+export async function listOrganizationProjects(organizationId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(organizationProjects).where(eq(organizationProjects.organizationId, organizationId)).orderBy(desc(organizationProjects.createdAt));
+}
+
+export async function updateOrganizationProject(id: number, data: Partial<InsertOrganizationProject>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const [project] = await db.update(organizationProjects).set({ ...data, updatedAt: new Date() }).where(eq(organizationProjects.id, id)).returning();
+  return project;
+}
+
+export async function getOrganizationProjectById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(organizationProjects).where(eq(organizationProjects.id, id)).limit(1);
+  return result[0];
+}
+
+export async function getOrganizationJobs(organizationId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(jobs).where(eq(jobs.organizationId, organizationId)).orderBy(desc(jobs.createdAt));
+}
+
+export async function createWorkforceAssignment(data: InsertWorkforceAssignment) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const [assignment] = await db.insert(workforceAssignments).values(data).returning();
+  return assignment;
+}
+
+export async function listWorkforceAssignments(organizationId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({ assignment: workforceAssignments, user: users, profile: profiles })
+    .from(workforceAssignments)
+    .innerJoin(users, eq(workforceAssignments.professionalId, users.id))
+    .leftJoin(profiles, eq(profiles.userId, users.id))
+    .where(eq(workforceAssignments.organizationId, organizationId))
+    .orderBy(desc(workforceAssignments.createdAt));
+}
+
+export async function updateWorkforceAssignment(id: number, data: Partial<InsertWorkforceAssignment>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const [assignment] = await db.update(workforceAssignments).set({ ...data, updatedAt: new Date() }).where(eq(workforceAssignments.id, id)).returning();
+  return assignment;
+}
+
+export async function createNotification(data: InsertNotification) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const [notification] = await db.insert(notifications).values(data).returning();
+  return notification;
+}
+
+export async function listNotificationsForUser(userId: number, limit = 30) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(notifications).where(eq(notifications.userId, userId)).orderBy(desc(notifications.createdAt)).limit(limit);
+}
+
+export async function markNotificationRead(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(notifications).set({ isRead: true }).where(and(eq(notifications.id, id), eq(notifications.userId, userId)));
+}
+
+export async function createAuditLog(data: InsertAuditLog) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.insert(auditLogs).values(data);
 }
 
 // ─── Reviews ──────────────────────────────────────────────────────────────────
@@ -359,10 +603,25 @@ export async function getConversationsByUserId(userId: number) {
   ).orderBy(desc(conversations.lastMessageAt));
 }
 
+export async function getConversationById(conversationId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(conversations).where(eq(conversations.id, conversationId)).limit(1);
+  return result[0];
+}
+
 export async function getMessagesByConversationId(conversationId: number, limit = 50) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(messages).where(eq(messages.conversationId, conversationId)).orderBy(asc(messages.createdAt)).limit(limit);
+}
+
+export async function markMessagesReadByParticipant(conversationId: number, readerId: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(messages).set({ isRead: true }).where(
+    and(eq(messages.conversationId, conversationId), eq(messages.isRead, false), ne(messages.senderId, readerId))
+  );
 }
 
 export async function getUnreadMessageCount(userId: number) {
@@ -400,6 +659,13 @@ export async function getEscrowByJobId(jobId: number) {
   return result[0] ?? null;
 }
 
+export async function getEscrowByReference(reference: string) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(escrowPayments).where(eq(escrowPayments.paystackReference, reference)).limit(1);
+  return result[0] ?? null;
+}
+
 export async function updateEscrowStatus(id: number, status: EscrowPayment["status"], extra?: Partial<EscrowPayment>) {
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");
@@ -424,6 +690,13 @@ export async function getVerificationRequestsByUserId(userId: number) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(verificationRequests).where(eq(verificationRequests.userId, userId)).orderBy(desc(verificationRequests.createdAt));
+}
+
+export async function getVerificationRequestById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(verificationRequests).where(eq(verificationRequests.id, id)).limit(1);
+  return result[0];
 }
 
 export async function getAllVerificationRequests() {

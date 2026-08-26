@@ -58,7 +58,7 @@ export default function Marketplace() {
             Job Marketplace
           </h1>
           <p className="text-gray-400 text-sm">
-            Browse open jobs across 12 skilled trade vocations
+            Browse open jobs across construction, property, logistics, household, and business service categories.
           </p>
         </div>
       </div>
@@ -134,7 +134,7 @@ export default function Marketplace() {
           {showFilters && (
             <div className="flex gap-3 flex-wrap">
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₦</span>
                 <Input
                   type="number"
                   placeholder="Min budget"
@@ -144,7 +144,7 @@ export default function Marketplace() {
                 />
               </div>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₦</span>
                 <Input
                   type="number"
                   placeholder="Max budget"
@@ -211,7 +211,7 @@ export default function Marketplace() {
           </>
         ) : (
           <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="text-5xl mb-4">🔍</div>
+            <Search className="h-10 w-10 mb-4 text-gray-500" />
             <h3 className="text-lg font-semibold text-white mb-2">No jobs found</h3>
             <p className="text-gray-500 text-sm mb-6">
               {hasActiveFilters

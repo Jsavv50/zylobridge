@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { appRouter } from "./routers";
+import * as db from "./db";
 import { COOKIE_NAME } from "../shared/const";
 import type { TrpcContext } from "./_core/context";
 import { vi } from "vitest";
@@ -69,6 +70,32 @@ vi.mock("./db", () => ({
   markEmailOtpVerified: vi.fn().mockResolvedValue(undefined),
   getUserByEmail: vi.fn().mockResolvedValue(null),
   upsertUserByEmail: vi.fn().mockResolvedValue({ id: 1, openId: "email:test@example.com" }),
+  getOrganizationById: vi.fn().mockResolvedValue({ id: 1, name: "Test Organization", slug: "test-organization" }),
+  getOrganizationMembership: vi.fn().mockResolvedValue({ id: 1, organizationId: 1, userId: 1, role: "VIEWER", status: "active" }),
+  getOrganizationsForUser: vi.fn().mockResolvedValue([]),
+  createOrganizationWithOwner: vi.fn().mockResolvedValue({ id: 1, name: "Test Organization" }),
+  updateOrganization: vi.fn().mockResolvedValue({ id: 1 }),
+  listOrganizationMembers: vi.fn().mockResolvedValue([]),
+  updateOrganizationMember: vi.fn().mockResolvedValue({ id: 1 }),
+  createOrganizationInvitation: vi.fn().mockResolvedValue({ id: 1 }),
+  getOrganizationInvitationByTokenHash: vi.fn().mockResolvedValue(undefined),
+  listOrganizationInvitations: vi.fn().mockResolvedValue([]),
+  updateOrganizationInvitation: vi.fn().mockResolvedValue({ id: 1 }),
+  createOrganizationVerificationRequest: vi.fn().mockResolvedValue({ id: 1 }),
+  listOrganizationVerificationRequests: vi.fn().mockResolvedValue([]),
+  getOrganizationVerificationRequestById: vi.fn().mockResolvedValue(undefined),
+  updateOrganizationVerificationRequest: vi.fn().mockResolvedValue({ id: 1 }),
+  activateOrganizationMember: vi.fn().mockResolvedValue({ id: 1 }),
+  createOrganizationProject: vi.fn().mockResolvedValue({ id: 1 }),
+  listOrganizationProjects: vi.fn().mockResolvedValue([]),
+  updateOrganizationProject: vi.fn().mockResolvedValue({ id: 1 }),
+  getOrganizationProjectById: vi.fn().mockResolvedValue(undefined),
+  getOrganizationJobs: vi.fn().mockResolvedValue([]),
+  createWorkforceAssignment: vi.fn().mockResolvedValue({ id: 1 }),
+  listWorkforceAssignments: vi.fn().mockResolvedValue([]),
+  updateWorkforceAssignment: vi.fn().mockResolvedValue({ id: 1 }),
+  createNotification: vi.fn().mockResolvedValue({ id: 1 }),
+  createAuditLog: vi.fn().mockResolvedValue(undefined),
 }));
 
 // Mock Paystack to avoid live HTTP calls in tests
@@ -391,5 +418,28 @@ describe("verification.adminList RBAC", () => {
     const caller = appRouter.createCaller(ctx);
     const result = await caller.verification.adminList();
     expect(Array.isArray(result)).toBe(true);
+  });
+});
+
+// ── Enterprise authorization tests ─────────────────────────────────────────────
+describe("enterprise RBAC", () => {
+  it("blocks a user without organization membership", async () => {
+    vi.mocked(db.getOrganizationMembership).mockResolvedValueOnce(undefined);
+    const { ctx } = createCtx({ id: 7, userType: "enterprise" });
+    const caller = appRouter.createCaller(ctx);
+    await expect(caller.enterprise.getOrganization({ organizationId: 1 })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("blocks a viewer from inviting organization members", async () => {
+    vi.mocked(db.getOrganizationMembership).mockResolvedValueOnce({ id: 1, organizationId: 1, userId: 1, role: "VIEWER", status: "active" } as any);
+    const { ctx } = createCtx({ id: 1, userType: "enterprise" });
+    const caller = appRouter.createCaller(ctx);
+    await expect(caller.enterprise.members.invite({ organizationId: 1, email: "new.member@example.com", role: "MEMBER" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("allows the recovered SUPER_ADMIN role through platform administration", async () => {
+    const { ctx } = createCtx({ id: 77, role: "SUPER_ADMIN", userType: "enterprise" });
+    const caller = appRouter.createCaller(ctx);
+    await expect(caller.admin.stats()).resolves.toMatchObject({ totalUsers: 0 });
   });
 });

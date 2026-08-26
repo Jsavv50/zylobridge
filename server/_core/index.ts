@@ -67,10 +67,15 @@ async function startServer() {
       origin: (origin, callback) => {
         // Allow same-origin requests (no Origin header) and local development
         if (!origin) return callback(null, true);
+        const isManagedDevelopmentPreview =
+          process.env.NODE_ENV === "development" &&
+          /^https:\/\/3000-[a-z0-9-]+\.manus\.computer$/.test(origin);
         if (
           allowedOrigins.length === 0 ||
           allowedOrigins.includes(origin) ||
-          origin.startsWith("http://localhost")
+          origin.startsWith("http://localhost") ||
+          origin.startsWith("http://127.0.0.1") ||
+          isManagedDevelopmentPreview
         ) {
           return callback(null, true);
         }
@@ -101,9 +106,11 @@ async function startServer() {
   registerGoogleAuthRoutes(app);
 
   // ── Root endpoint (API diagnostics) ──────────────────────────────────────
-  app.get("/", (_req, res) => {
-    res.json({ status: "ok", service: "Zylobridge API" });
-  });
+  if (process.env.NODE_ENV !== "development") {
+    app.get("/", (_req, res) => {
+      res.json({ status: "ok", service: "Zylobridge API" });
+    });
+  }
 
   // ── Health check ──────────────────────────────────────────────────────────
   app.get("/api/health", (_req, res) => {

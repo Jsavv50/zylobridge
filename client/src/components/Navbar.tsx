@@ -29,9 +29,10 @@ export default function Navbar() {
     },
   });
 
-  const isAdmin = user?.role === "admin";
+  const isAdmin = user?.role === "admin" || user?.role === "SUPER_ADMIN";
   const isClient = user?.userType === "client";
   const isProfessional = user?.userType === "professional";
+  const isEnterprise = user?.userType === "enterprise";
 
   const { data: unreadData } = trpc.messaging.unreadCount.useQuery(undefined, {
     enabled: isAuthenticated,
@@ -117,6 +118,14 @@ export default function Navbar() {
                     <Button variant="ghost" size="sm" className="text-gray-300 hover:text-white hover:bg-white/5">
                       <LayoutDashboard className="h-4 w-4 mr-1.5" />
                       Dashboard
+                    </Button>
+                  </Link>
+                )}
+                {isEnterprise && (
+                  <Link href="/dashboard/enterprise">
+                    <Button variant="ghost" size="sm" className="text-emerald-300 hover:text-emerald-200 hover:bg-emerald-500/10">
+                      <Briefcase className="h-4 w-4 mr-1.5" />
+                      Enterprise
                     </Button>
                   </Link>
                 )}
@@ -258,6 +267,13 @@ export default function Navbar() {
                   <Link href="/dashboard/professional" onClick={() => setMobileOpen(false)}>
                     <Button variant="outline" size="sm" className="w-full border-white/10 text-gray-300">
                       Professional Dashboard
+                    </Button>
+                  </Link>
+                )}
+                {isEnterprise && (
+                  <Link href="/dashboard/enterprise" onClick={() => setMobileOpen(false)}>
+                    <Button variant="outline" size="sm" className="w-full border-emerald-500/30 text-emerald-300">
+                      Enterprise Workspace
                     </Button>
                   </Link>
                 )}

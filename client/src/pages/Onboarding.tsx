@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Briefcase, HardHat, ArrowRight, Loader2 } from "lucide-react";
+import { Briefcase, HardHat, Building2, ArrowRight, Loader2 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 
 const LOGO_URL = "/ZYLO.png";
@@ -12,7 +12,7 @@ const LOGO_URL = "/ZYLO.png";
 export default function Onboarding() {
   const [, navigate] = useLocation();
   const { user } = useAuth();
-  const [selected, setSelected] = useState<"client" | "professional" | null>(null);
+  const [selected, setSelected] = useState<"client" | "professional" | "enterprise" | null>(null);
   const utils = trpc.useUtils();
 
   const { mutate: setUserType, isPending } = trpc.auth.setUserType.useMutation({
@@ -20,7 +20,8 @@ export default function Onboarding() {
       utils.auth.me.invalidate();
       toast.success("Profile type set successfully!");
       if (selected === "client") navigate("/dashboard/client");
-      else navigate("/dashboard/professional");
+      else if (selected === "professional") navigate("/dashboard/professional");
+      else navigate("/dashboard/enterprise");
     },
     onError: (err) => toast.error(err.message),
   });
@@ -33,11 +34,13 @@ export default function Onboarding() {
     );
   }
 
-  if (user.userType !== "unset") {
+  useEffect(() => {
     if (user.userType === "client") navigate("/dashboard/client");
     else if (user.userType === "professional") navigate("/dashboard/professional");
-    return null;
-  }
+    else if (user.userType === "enterprise") navigate("/dashboard/enterprise");
+  }, [navigate, user.userType]);
+
+  if (user.userType !== "unset") return null;
 
   return (
     <div className="min-h-screen bg-[#0d1117] text-white">
@@ -57,7 +60,7 @@ export default function Onboarding() {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-8">
           {/* Client / Contractor */}
           <button
             onClick={() => setSelected("client")}
@@ -125,6 +128,29 @@ export default function Onboarding() {
               ))}
             </div>
           </button>
+
+          <button
+            onClick={() => setSelected("enterprise")}
+            className={`group relative flex flex-col items-center gap-4 p-8 rounded-2xl border-2 transition-all duration-200 text-center ${
+              selected === "enterprise"
+                ? "border-emerald-500 bg-emerald-500/10"
+                : "border-white/10 bg-[#131a26] hover:border-emerald-500/40 hover:bg-[#1c2740]"
+            }`}
+          >
+            {selected === "enterprise" && (
+              <div className="absolute top-3 right-3 h-5 w-5 rounded-full bg-emerald-500 flex items-center justify-center">
+                <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+              </div>
+            )}
+            <div className="h-14 w-14 rounded-2xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center"><Building2 className="h-7 w-7 text-emerald-400" /></div>
+            <div>
+              <h3 className="text-lg font-bold text-white mb-1">Enterprise Organization</h3>
+              <p className="text-sm text-gray-400 leading-relaxed">Create a company profile, manage team permissions, organize projects, and hire workforce at scale.</p>
+            </div>
+            <div className="flex flex-wrap gap-2 justify-center">
+              {["Company Profile", "Team Access", "Workforce"].map((tag) => <span key={tag} className="text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2.5 py-0.5">{tag}</span>)}
+            </div>
+          </button>
         </div>
 
         <div className="flex justify-center">
@@ -138,7 +164,7 @@ export default function Onboarding() {
             {isPending ? (
               <Loader2 className="h-4 w-4 animate-spin mr-2" />
             ) : null}
-            Continue as {selected === "client" ? "Contractor" : selected === "professional" ? "Professional" : "..."}
+            Continue as {selected === "client" ? "Contractor" : selected === "professional" ? "Professional" : selected === "enterprise" ? "Enterprise" : "..."}
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </div>

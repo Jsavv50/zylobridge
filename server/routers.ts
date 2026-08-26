@@ -1,11 +1,15 @@
 import { getSupabaseAdmin, getSupabasePublic } from "./_core/supabase";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { createHash, randomBytes } from "crypto";
 import { COOKIE_NAME } from "../shared/const";
+import { VOCATION_KEYS } from "../shared/vocations";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { storagePut } from "./storage";
+import { storageGetSignedUrl, storagePut } from "./storage";
+import { sendOrganizationInviteEmail } from "./email";
+import { getFrontendUrl } from "./_core/env";
 import {
   upsertUser,
   getUserByOpenId,
@@ -26,6 +30,7 @@ import {
   getApplicationById,
   getApplicationsByJobId,
   getApplicationsByProfessionalId,
+  getApplicationForJobAndProfessional,
   updateApplicationStatus,
   getApplicationCount,
   createProfile,
@@ -36,14 +41,18 @@ import {
   getAdminStats,
   getOrCreateConversation,
   getConversationsByUserId,
+  getConversationById,
   getMessagesByConversationId,
+  markMessagesReadByParticipant,
   getUnreadMessageCount,
   createEscrowPayment,
   getEscrowByJobId,
+  getEscrowByReference,
   updateEscrowStatus,
   getAllEscrowPayments,
   createVerificationRequest,
   getVerificationRequestsByUserId,
+  getVerificationRequestById,
   getAllVerificationRequests,
   updateVerificationRequest,
   listProducts,
@@ -62,6 +71,32 @@ import {
   markOtpVerified,
   upsertUserByPhone,
   upsertUserByEmail,
+  getOrganizationById,
+  getOrganizationMembership,
+  getOrganizationsForUser,
+  createOrganizationWithOwner,
+  updateOrganization,
+  listOrganizationMembers,
+  updateOrganizationMember,
+  createOrganizationInvitation,
+  getOrganizationInvitationByTokenHash,
+  listOrganizationInvitations,
+  updateOrganizationInvitation,
+  createOrganizationVerificationRequest,
+  listOrganizationVerificationRequests,
+  getOrganizationVerificationRequestById,
+  updateOrganizationVerificationRequest,
+  activateOrganizationMember,
+  createOrganizationProject,
+  listOrganizationProjects,
+  updateOrganizationProject,
+  getOrganizationProjectById,
+  getOrganizationJobs,
+  createWorkforceAssignment,
+  listWorkforceAssignments,
+  updateWorkforceAssignment,
+  createNotification,
+  createAuditLog,
 } from "./db";
 import {
   initializePaystackTransaction,
@@ -73,17 +108,42 @@ import {
 
 // ── Admin guard ────────────────────────────────────────────────────────────────
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== "admin" && ctx.user.role !== "super_admin") {
+  if (ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") {
     throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required." });
   }
   return next({ ctx });
 });
 
+const isPlatformAdmin = (role: string) => role === "admin" || role === "SUPER_ADMIN";
+const organizationRoleSchema = z.enum(["OWNER", "ADMIN", "HIRING_MANAGER", "RECRUITER", "PROJECT_MANAGER", "FINANCE_MANAGER", "VIEWER", "MEMBER"]);
+const organizationManagerRoles = ["OWNER", "ADMIN"] as const;
+const organizationHiringRoles = ["OWNER", "ADMIN", "HIRING_MANAGER", "RECRUITER", "PROJECT_MANAGER"] as const;
+const vocationSchema = z.string().refine(
+  (value) => VOCATION_KEYS.includes(value as (typeof VOCATION_KEYS)[number]),
+  "Select a supported vocation.",
+);
+
+async function requireOrganizationAccess(
+  ctx: { user: { id: number; role: string } },
+  organizationId: number,
+  allowedRoles?: readonly string[],
+) {
+  const organization = await getOrganizationById(organizationId);
+  if (!organization) throw new TRPCError({ code: "NOT_FOUND", message: "Organization not found." });
+  if (isPlatformAdmin(ctx.user.role)) return { organization, membership: null };
+  const membership = await getOrganizationMembership(organizationId, ctx.user.id);
+  if (!membership || membership.status !== "active") throw new TRPCError({ code: "FORBIDDEN", message: "Organization access is required." });
+  if (allowedRoles && !allowedRoles.includes(membership.role)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Your organization role does not permit this action." });
+  }
+  return { organization, membership };
+}
+
 // ── Input schemas ──────────────────────────────────────────────────────────────
 const jobFilterSchema = z.object({
-  vocation: z.string().max(64).optional(),
+  vocation: vocationSchema.optional(),
   location: z.string().max(128).optional(),
-  status: z.enum(["open", "in_progress", "completed", "cancelled"]).optional(),
+  status: z.enum(["draft", "open", "paused", "in_progress", "completed", "cancelled", "closed"]).optional(),
   minBudget: z.number().nonnegative().optional(),
   maxBudget: z.number().nonnegative().optional(),
   limit: z.number().int().min(1).max(200).optional().default(20),
@@ -93,7 +153,7 @@ const jobFilterSchema = z.object({
 const jobCreateSchema = z.object({
   title: z.string().min(3).max(200).trim(),
   description: z.string().min(10).max(5000).trim(),
-  vocation: z.string().max(64),
+  vocation: vocationSchema,
   budget: z.number().positive(),
   location: z.string().min(2).max(200).trim(),
   deadline: z.string().optional(),
@@ -101,7 +161,7 @@ const jobCreateSchema = z.object({
 });
 
 const profileUpdateSchema = z.object({
-  vocation: z.string().max(64).optional(),
+  vocation: vocationSchema.optional(),
   bio: z.string().max(2000).trim().optional(),
   skills: z.string().max(1000).trim().optional(),
   certifications: z.string().max(1000).trim().optional(),
@@ -131,7 +191,7 @@ export const appRouter = router({
       return { success: true } as const;
     }),
     setUserType: protectedProcedure
-      .input(z.object({ userType: z.enum(["client", "professional"]) }))
+    .input(z.object({ userType: z.enum(["client", "professional", "enterprise"]) }))
       .mutation(async ({ ctx, input }) => {
         await updateUserType(ctx.user.id, input.userType);
         return { success: true };
@@ -142,6 +202,302 @@ export const appRouter = router({
         await updateUserName(ctx.user.id, input.name);
         return { success: true };
       }),
+  }),
+
+  // ── Enterprise organizations ──────────────────────────────────────────────
+  enterprise: router({
+    myOrganizations: protectedProcedure.query(async ({ ctx }) => getOrganizationsForUser(ctx.user.id)),
+
+    createOrganization: protectedProcedure
+      .input(z.object({
+        name: z.string().min(2).max(255).trim(),
+        description: z.string().max(4000).trim().optional(),
+        industry: z.string().max(160).trim().optional(),
+        companySize: z.string().max(80).trim().optional(),
+        yearEstablished: z.number().int().min(1800).max(new Date().getFullYear()).optional(),
+        website: z.string().url().max(500).optional().or(z.literal("")),
+        businessEmail: z.string().email().max(320).optional().or(z.literal("")),
+        businessPhone: z.string().max(40).trim().optional(),
+        location: z.string().max(255).trim().optional(),
+        operatingRegions: z.array(z.string().min(2).max(120)).max(40).optional().default([]),
+        socialLinks: z.record(z.string().max(40), z.string().url().max(500)).optional().default({}),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const slugBase = input.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 90) || "organization";
+        const slug = `${slugBase}-${randomBytes(4).toString("hex")}`;
+        const organization = await createOrganizationWithOwner({
+          ownerId: ctx.user.id,
+          name: input.name,
+          slug,
+          description: input.description,
+          industry: input.industry,
+          companySize: input.companySize,
+          yearEstablished: input.yearEstablished,
+          website: input.website || null,
+          businessEmail: input.businessEmail || null,
+          businessPhone: input.businessPhone,
+          location: input.location,
+          operatingRegions: input.operatingRegions,
+          socialLinks: input.socialLinks,
+          verificationStatus: "pending",
+        }, ctx.user.id);
+        await updateUserType(ctx.user.id, "enterprise");
+        await createAuditLog({ actorUserId: ctx.user.id, actorRole: ctx.user.role, action: "organization.created", resourceType: "organization", resourceId: String(organization.id), metadata: { name: organization.name } });
+        return organization;
+      }),
+
+    getOrganization: protectedProcedure
+      .input(z.object({ organizationId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => (await requireOrganizationAccess(ctx, input.organizationId)).organization),
+
+    updateOrganization: protectedProcedure
+      .input(z.object({
+        organizationId: z.number().int().positive(),
+        name: z.string().min(2).max(255).trim().optional(),
+        description: z.string().max(4000).trim().optional(),
+        industry: z.string().max(160).trim().optional(),
+        companySize: z.string().max(80).trim().optional(),
+        yearEstablished: z.number().int().min(1800).max(new Date().getFullYear()).optional(),
+        website: z.string().url().max(500).optional().or(z.literal("")),
+        businessEmail: z.string().email().max(320).optional().or(z.literal("")),
+        businessPhone: z.string().max(40).trim().optional(),
+        location: z.string().max(255).trim().optional(),
+        operatingRegions: z.array(z.string().min(2).max(120)).max(40).optional(),
+        socialLinks: z.record(z.string().max(40), z.string().url().max(500)).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await requireOrganizationAccess(ctx, input.organizationId, organizationManagerRoles);
+        const { organizationId, website, businessEmail, ...changes } = input;
+        const organization = await updateOrganization(organizationId, {
+          ...changes,
+          ...(website !== undefined ? { website: website || null } : {}),
+          ...(businessEmail !== undefined ? { businessEmail: businessEmail || null } : {}),
+        });
+        await createAuditLog({ actorUserId: ctx.user.id, actorRole: ctx.user.role, action: "organization.updated", resourceType: "organization", resourceId: String(organizationId) });
+        return organization;
+      }),
+
+    dashboard: protectedProcedure
+      .input(z.object({ organizationId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const { organization, membership } = await requireOrganizationAccess(ctx, input.organizationId);
+        const [members, invitations, projects, jobs, workforce] = await Promise.all([
+          listOrganizationMembers(input.organizationId),
+          listOrganizationInvitations(input.organizationId),
+          listOrganizationProjects(input.organizationId),
+          getOrganizationJobs(input.organizationId),
+          listWorkforceAssignments(input.organizationId),
+        ]);
+        return {
+          organization,
+          membership,
+          metrics: {
+            activeMembers: members.filter((entry) => entry.member.status === "active").length,
+            pendingInvitations: invitations.filter((invite) => invite.status === "pending" && invite.expiresAt > new Date()).length,
+            activeProjects: projects.filter((project) => project.status === "active").length,
+            openJobs: jobs.filter((job) => job.status === "open").length,
+            activeWorkforce: workforce.filter((entry) => entry.assignment.status === "active" || entry.assignment.status === "assigned").length,
+          },
+        };
+      }),
+
+    members: router({
+      list: protectedProcedure.input(z.object({ organizationId: z.number().int().positive() })).query(async ({ ctx, input }) => {
+        await requireOrganizationAccess(ctx, input.organizationId);
+        return listOrganizationMembers(input.organizationId);
+      }),
+      invite: protectedProcedure
+        .input(z.object({ organizationId: z.number().int().positive(), email: z.string().email().max(320), role: organizationRoleSchema }))
+        .mutation(async ({ ctx, input }) => {
+          const { organization } = await requireOrganizationAccess(ctx, input.organizationId, organizationManagerRoles);
+          if (input.role === "OWNER") throw new TRPCError({ code: "BAD_REQUEST", message: "Ownership cannot be assigned by invitation." });
+          const rawToken = randomBytes(32).toString("base64url");
+          const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+          const invitation = await createOrganizationInvitation({
+            organizationId: input.organizationId,
+            inviterUserId: ctx.user.id,
+            email: input.email.toLowerCase(),
+            role: input.role,
+            tokenHash,
+            status: "pending",
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          });
+          const inviteUrl = `${getFrontendUrl()}/enterprise/invitations/${rawToken}`;
+          let emailDelivered = true;
+          try {
+            await sendOrganizationInviteEmail({ to: input.email, organizationName: organization.name, role: input.role, inviteUrl });
+          } catch (error) {
+            emailDelivered = false;
+            console.error("[Enterprise] invitation email delivery failed", error instanceof Error ? error.message : "unknown error");
+          }
+          await createAuditLog({ actorUserId: ctx.user.id, actorRole: ctx.user.role, action: "organization.member_invited", resourceType: "organization_invitation", resourceId: String(invitation?.id ?? ""), metadata: { organizationId: input.organizationId, role: input.role } });
+          return { invitation, emailDelivered };
+        }),
+      acceptInvitation: protectedProcedure
+        .input(z.object({ token: z.string().min(32).max(200) }))
+        .mutation(async ({ ctx, input }) => {
+          if (!ctx.user.email) throw new TRPCError({ code: "BAD_REQUEST", message: "An email address is required to accept an organization invitation." });
+          const tokenHash = createHash("sha256").update(input.token).digest("hex");
+          const invitation = await getOrganizationInvitationByTokenHash(tokenHash);
+          if (!invitation || invitation.status !== "pending" || invitation.expiresAt < new Date()) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "This invitation is invalid or expired." });
+          }
+          if (invitation.email.toLowerCase() !== ctx.user.email.toLowerCase()) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Sign in with the email address that received this invitation." });
+          }
+          await activateOrganizationMember(invitation.organizationId, ctx.user.id, invitation.role);
+          await updateOrganizationInvitation(invitation.id, { status: "accepted", acceptedByUserId: ctx.user.id, acceptedAt: new Date() });
+          await updateUserType(ctx.user.id, "enterprise");
+          await createNotification({ userId: invitation.inviterUserId, title: "Invitation accepted", content: "A team invitation has been accepted.", category: "organization", referenceType: "organization", referenceId: String(invitation.organizationId) });
+          await createAuditLog({ actorUserId: ctx.user.id, actorRole: ctx.user.role, action: "organization.invitation_accepted", resourceType: "organization_invitation", resourceId: String(invitation.id), metadata: { organizationId: invitation.organizationId } });
+          return { success: true, organizationId: invitation.organizationId };
+        }),
+      updateMember: protectedProcedure
+        .input(z.object({ organizationId: z.number().int().positive(), memberId: z.number().int().positive(), role: organizationRoleSchema.optional(), status: z.enum(["active", "suspended", "removed"]).optional() }))
+        .mutation(async ({ ctx, input }) => {
+          await requireOrganizationAccess(ctx, input.organizationId, organizationManagerRoles);
+          const members = await listOrganizationMembers(input.organizationId);
+          const target = members.find((entry) => entry.member.id === input.memberId)?.member;
+          if (!target) throw new TRPCError({ code: "NOT_FOUND", message: "Organization member not found." });
+          if (target.role === "OWNER") throw new TRPCError({ code: "BAD_REQUEST", message: "The organization owner cannot be changed here." });
+          if (input.role === "OWNER") throw new TRPCError({ code: "BAD_REQUEST", message: "Ownership transfer requires a dedicated review workflow." });
+          const member = await updateOrganizationMember(input.memberId, { ...(input.role ? { role: input.role } : {}), ...(input.status ? { status: input.status } : {}) });
+          await createAuditLog({ actorUserId: ctx.user.id, actorRole: ctx.user.role, action: "organization.member_updated", resourceType: "organization_member", resourceId: String(input.memberId), metadata: { organizationId: input.organizationId } });
+          return member;
+        }),
+    }),
+
+    verification: router({
+      submit: protectedProcedure
+        .input(z.object({
+          organizationId: z.number().int().positive(),
+          documentType: z.enum(["business_registration", "tax_certificate", "insurance_certificate", "trade_licence", "other"]),
+          fileBase64: z.string().min(1),
+          fileName: z.string().min(1).max(255),
+          mimeType: z.enum(["application/pdf", "image/jpeg", "image/png"]),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          await requireOrganizationAccess(ctx, input.organizationId, organizationManagerRoles);
+          const buffer = Buffer.from(input.fileBase64, "base64");
+          if (!buffer.length || buffer.length > 10 * 1024 * 1024) {
+            throw new TRPCError({ code: "PAYLOAD_TOO_LARGE", message: "Verification documents must be between 1 byte and 10 MB." });
+          }
+          const safeName = input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+          const key = `organization-verification/${input.organizationId}/${Date.now()}-${safeName}`;
+          await storagePut(key, buffer, input.mimeType);
+          const request = await createOrganizationVerificationRequest({ organizationId: input.organizationId, submittedByUserId: ctx.user.id, documentType: input.documentType, documentKey: key, status: "pending" });
+          await updateOrganization(input.organizationId, { verificationStatus: "pending", verificationNote: null, verificationReviewedAt: null, verificationReviewedBy: null });
+          await createAuditLog({ actorUserId: ctx.user.id, actorRole: ctx.user.role, action: "organization.verification_submitted", resourceType: "organization_verification_request", resourceId: String(request?.id ?? ""), metadata: { organizationId: input.organizationId, documentType: input.documentType } });
+          return { success: true, requestId: request?.id };
+        }),
+      myRequests: protectedProcedure
+        .input(z.object({ organizationId: z.number().int().positive() }))
+        .query(async ({ ctx, input }) => {
+          await requireOrganizationAccess(ctx, input.organizationId, organizationManagerRoles);
+          return listOrganizationVerificationRequests(input.organizationId);
+        }),
+      getDocumentAccessUrl: protectedProcedure
+        .input(z.object({ organizationId: z.number().int().positive(), requestId: z.number().int().positive() }))
+        .query(async ({ ctx, input }) => {
+          await requireOrganizationAccess(ctx, input.organizationId, organizationManagerRoles);
+          const request = await getOrganizationVerificationRequestById(input.requestId);
+          if (!request || request.organizationId !== input.organizationId) throw new TRPCError({ code: "NOT_FOUND" });
+          return { url: await storageGetSignedUrl(request.documentKey) };
+        }),
+      adminReview: adminProcedure
+        .input(z.object({ requestId: z.number().int().positive(), status: z.enum(["approved", "rejected"]), adminNote: z.string().max(1000).trim().optional() }))
+        .mutation(async ({ ctx, input }) => {
+          const request = await getOrganizationVerificationRequestById(input.requestId);
+          if (!request) throw new TRPCError({ code: "NOT_FOUND" });
+          await updateOrganizationVerificationRequest(input.requestId, { status: input.status, adminNote: input.adminNote, reviewedAt: new Date(), reviewedBy: ctx.user.id });
+          await updateOrganization(request.organizationId, { verificationStatus: input.status, verificationNote: input.adminNote, verificationReviewedAt: new Date(), verificationReviewedBy: ctx.user.id });
+          await createAuditLog({ actorUserId: ctx.user.id, actorRole: ctx.user.role, action: "organization.verification_reviewed", resourceType: "organization_verification_request", resourceId: String(input.requestId), metadata: { organizationId: request.organizationId, status: input.status } });
+          return { success: true };
+        }),
+    }),
+
+    projects: router({
+      list: protectedProcedure.input(z.object({ organizationId: z.number().int().positive() })).query(async ({ ctx, input }) => {
+        await requireOrganizationAccess(ctx, input.organizationId);
+        return listOrganizationProjects(input.organizationId);
+      }),
+      create: protectedProcedure
+        .input(z.object({ organizationId: z.number().int().positive(), name: z.string().min(2).max(255).trim(), description: z.string().max(4000).trim().optional(), location: z.string().max(255).trim().optional(), budget: z.number().nonnegative().optional(), startDate: z.string().datetime().optional(), endDate: z.string().datetime().optional() }))
+        .mutation(async ({ ctx, input }) => {
+          await requireOrganizationAccess(ctx, input.organizationId, organizationHiringRoles);
+          const project = await createOrganizationProject({ organizationId: input.organizationId, createdById: ctx.user.id, name: input.name, description: input.description, location: input.location, budget: input.budget !== undefined ? String(input.budget) : undefined, startDate: input.startDate ? new Date(input.startDate) : undefined, endDate: input.endDate ? new Date(input.endDate) : undefined, status: "active" });
+          await createAuditLog({ actorUserId: ctx.user.id, actorRole: ctx.user.role, action: "organization.project_created", resourceType: "organization_project", resourceId: String(project?.id ?? ""), metadata: { organizationId: input.organizationId } });
+          return project;
+        }),
+      update: protectedProcedure
+        .input(z.object({ organizationId: z.number().int().positive(), projectId: z.number().int().positive(), name: z.string().min(2).max(255).trim().optional(), description: z.string().max(4000).trim().optional(), location: z.string().max(255).trim().optional(), budget: z.number().nonnegative().optional(), startDate: z.string().datetime().optional(), endDate: z.string().datetime().optional(), status: z.enum(["active", "archived"]).optional() }))
+        .mutation(async ({ ctx, input }) => {
+          await requireOrganizationAccess(ctx, input.organizationId, organizationHiringRoles);
+          const project = await getOrganizationProjectById(input.projectId);
+          if (!project || project.organizationId !== input.organizationId) throw new TRPCError({ code: "NOT_FOUND", message: "Project not found." });
+          const { organizationId, projectId, startDate, endDate, budget, ...changes } = input;
+          return updateOrganizationProject(projectId, { ...changes, ...(budget !== undefined ? { budget: String(budget) } : {}), ...(startDate !== undefined ? { startDate: new Date(startDate) } : {}), ...(endDate !== undefined ? { endDate: new Date(endDate) } : {}) });
+        }),
+    }),
+
+    jobs: router({
+      list: protectedProcedure.input(z.object({ organizationId: z.number().int().positive() })).query(async ({ ctx, input }) => {
+        await requireOrganizationAccess(ctx, input.organizationId);
+        return getOrganizationJobs(input.organizationId);
+      }),
+      create: protectedProcedure
+        .input(jobCreateSchema.extend({ organizationId: z.number().int().positive(), projectId: z.number().int().positive().optional(), status: z.enum(["draft", "open"]).default("draft") }))
+        .mutation(async ({ ctx, input }) => {
+          await requireOrganizationAccess(ctx, input.organizationId, organizationHiringRoles);
+          if (input.projectId) {
+            const project = await getOrganizationProjectById(input.projectId);
+            if (!project || project.organizationId !== input.organizationId) throw new TRPCError({ code: "BAD_REQUEST", message: "The selected project does not belong to this organization." });
+          }
+          await createJob({ clientId: ctx.user.id, organizationId: input.organizationId, projectId: input.projectId, title: input.title, description: input.description, vocation: input.vocation as any, budget: String(input.budget), location: input.location, deadline: input.deadline ? new Date(input.deadline) : undefined, isUrgent: input.isUrgent, status: input.status });
+          await createAuditLog({ actorUserId: ctx.user.id, actorRole: ctx.user.role, action: "organization.job_created", resourceType: "job", metadata: { organizationId: input.organizationId, projectId: input.projectId ?? null } });
+          return { success: true };
+        }),
+    }),
+
+    candidates: router({
+      listForJob: protectedProcedure.input(z.object({ organizationId: z.number().int().positive(), jobId: z.number().int().positive() })).query(async ({ ctx, input }) => {
+        await requireOrganizationAccess(ctx, input.organizationId, organizationHiringRoles);
+        const job = await getJobById(input.jobId);
+        if (!job || job.organizationId !== input.organizationId) throw new TRPCError({ code: "NOT_FOUND", message: "Organization job not found." });
+        return getApplicationsByJobId(input.jobId);
+      }),
+      updateStatus: protectedProcedure
+        .input(z.object({ organizationId: z.number().int().positive(), applicationId: z.number().int().positive(), status: z.enum(["under_review", "shortlisted", "interview", "accepted", "hired", "rejected"]) }))
+        .mutation(async ({ ctx, input }) => {
+          await requireOrganizationAccess(ctx, input.organizationId, organizationHiringRoles);
+          const application = await getApplicationById(input.applicationId);
+          if (!application) throw new TRPCError({ code: "NOT_FOUND", message: "Application not found." });
+          const job = await getJobById(application.jobId);
+          if (!job || job.organizationId !== input.organizationId) throw new TRPCError({ code: "FORBIDDEN" });
+          await updateApplicationStatus(application.id, input.status as any);
+          if (input.status === "hired") {
+            await updateJob(job.id, { status: "in_progress", assignedProfessionalId: application.professionalId });
+            await createWorkforceAssignment({ organizationId: input.organizationId, projectId: job.projectId, jobId: job.id, professionalId: application.professionalId, assignedByUserId: ctx.user.id, status: "assigned" });
+          }
+          await createAuditLog({ actorUserId: ctx.user.id, actorRole: ctx.user.role, action: "organization.candidate_status_updated", resourceType: "application", resourceId: String(application.id), metadata: { organizationId: input.organizationId, status: input.status } });
+          return { success: true };
+        }),
+    }),
+
+    workforce: router({
+      list: protectedProcedure.input(z.object({ organizationId: z.number().int().positive() })).query(async ({ ctx, input }) => {
+        await requireOrganizationAccess(ctx, input.organizationId);
+        return listWorkforceAssignments(input.organizationId);
+      }),
+      update: protectedProcedure
+        .input(z.object({ organizationId: z.number().int().positive(), assignmentId: z.number().int().positive(), status: z.enum(["assigned", "active", "completed", "removed"]), startedAt: z.string().datetime().optional(), endedAt: z.string().datetime().optional() }))
+        .mutation(async ({ ctx, input }) => {
+          await requireOrganizationAccess(ctx, input.organizationId, organizationHiringRoles);
+          const assignment = await updateWorkforceAssignment(input.assignmentId, { status: input.status, ...(input.startedAt ? { startedAt: new Date(input.startedAt) } : {}), ...(input.endedAt ? { endedAt: new Date(input.endedAt) } : {}) });
+          if (!assignment || assignment.organizationId !== input.organizationId) throw new TRPCError({ code: "NOT_FOUND", message: "Workforce assignment not found." });
+          return assignment;
+        }),
+    }),
   }),
 
   // ── Jobs ──────────────────────────────────────────────────────────────────
@@ -163,7 +519,7 @@ export const appRouter = router({
     }),
 
     create: protectedProcedure.input(jobCreateSchema).mutation(async ({ ctx, input }) => {
-      if (ctx.user.userType !== "client" && ctx.user.role !== "admin") {
+      if (ctx.user.userType !== "client" && !isPlatformAdmin(ctx.user.role)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Only contractors can post jobs." });
       }
       await createJob({
@@ -181,11 +537,11 @@ export const appRouter = router({
     }),
 
     updateStatus: protectedProcedure
-      .input(z.object({ id: z.number().int().positive(), status: z.enum(["open", "in_progress", "completed", "cancelled"]) }))
+      .input(z.object({ id: z.number().int().positive(), status: z.enum(["draft", "open", "paused", "in_progress", "completed", "cancelled", "closed"]) }))
       .mutation(async ({ ctx, input }) => {
         const job = await getJobById(input.id);
         if (!job) throw new TRPCError({ code: "NOT_FOUND" });
-        if (job.clientId !== ctx.user.id && ctx.user.role !== "admin") {
+        if (job.clientId !== ctx.user.id && !isPlatformAdmin(ctx.user.role)) {
           throw new TRPCError({ code: "FORBIDDEN" });
         }
         await updateJob(input.id, { status: input.status });
@@ -197,7 +553,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const job = await getJobById(input.id);
         if (!job) throw new TRPCError({ code: "NOT_FOUND" });
-        if (job.clientId !== ctx.user.id && ctx.user.role !== "admin") {
+        if (job.clientId !== ctx.user.id && !isPlatformAdmin(ctx.user.role)) {
           throw new TRPCError({ code: "FORBIDDEN" });
         }
         await deleteJob(input.id);
@@ -235,7 +591,7 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const job = await getJobById(input.jobId);
         if (!job) throw new TRPCError({ code: "NOT_FOUND" });
-        if (job.clientId !== ctx.user.id && ctx.user.role !== "admin") {
+        if (job.clientId !== ctx.user.id && !isPlatformAdmin(ctx.user.role)) {
           throw new TRPCError({ code: "FORBIDDEN" });
         }
         return getApplicationsByJobId(input.jobId);
@@ -258,7 +614,7 @@ export const appRouter = router({
         } else {
           const job = await getJobById(app.jobId);
           if (!job) throw new TRPCError({ code: "NOT_FOUND" });
-          if (job.clientId !== ctx.user.id && ctx.user.role !== "admin") {
+          if (job.clientId !== ctx.user.id && !isPlatformAdmin(ctx.user.role)) {
             throw new TRPCError({ code: "FORBIDDEN" });
           }
           if (input.status === "accepted") {
@@ -310,6 +666,19 @@ export const appRouter = router({
   // ── Reviews ───────────────────────────────────────────────────────────────
   reviews: router({
     create: protectedProcedure.input(reviewCreateSchema).mutation(async ({ ctx, input }) => {
+      const job = await getJobById(input.jobId);
+      if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found." });
+      if (job.status !== "completed") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Reviews are available after a completed job." });
+      }
+      if (input.revieweeId === ctx.user.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "You cannot review yourself." });
+      }
+      const isClientReviewingAssignedProfessional = job.clientId === ctx.user.id && job.assignedProfessionalId === input.revieweeId;
+      const isProfessionalReviewingClient = job.assignedProfessionalId === ctx.user.id && job.clientId === input.revieweeId;
+      if (!isClientReviewingAssignedProfessional && !isProfessionalReviewingClient) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Only completed-job participants can review one another." });
+      }
       await createReview({
         jobId: input.jobId,
         reviewerId: ctx.user.id,
@@ -337,10 +706,21 @@ export const appRouter = router({
         const job = await getJobById(input.jobId);
         if (!job) throw new TRPCError({ code: "NOT_FOUND" });
         const isClient = job.clientId === ctx.user.id;
-        const isProfessional = job.assignedProfessionalId === ctx.user.id || input.otherUserId === job.clientId;
-        const clientId = isClient ? ctx.user.id : input.otherUserId;
-        const professionalId = isClient ? input.otherUserId : ctx.user.id;
-        return getOrCreateConversation(input.jobId, clientId, professionalId);
+        if (isClient) {
+          if (input.otherUserId === ctx.user.id) throw new TRPCError({ code: "BAD_REQUEST" });
+          const application = await getApplicationForJobAndProfessional(input.jobId, input.otherUserId);
+          if (!application && job.assignedProfessionalId !== input.otherUserId) {
+            throw new TRPCError({ code: "FORBIDDEN", message: "Conversations are limited to applicants and assigned professionals." });
+          }
+          return getOrCreateConversation(input.jobId, ctx.user.id, input.otherUserId);
+        }
+
+        const application = await getApplicationForJobAndProfessional(input.jobId, ctx.user.id);
+        const isEligibleProfessional = job.assignedProfessionalId === ctx.user.id || Boolean(application);
+        if (!isEligibleProfessional || input.otherUserId !== job.clientId) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Conversations are limited to the job owner and eligible professionals." });
+        }
+        return getOrCreateConversation(input.jobId, job.clientId, ctx.user.id);
       }),
 
     myConversations: protectedProcedure.query(async ({ ctx }) => {
@@ -353,6 +733,11 @@ export const appRouter = router({
         limit: z.number().int().min(1).max(200).optional().default(50),
       }))
       .query(async ({ ctx, input }) => {
+        const conversation = await getConversationById(input.conversationId);
+        if (!conversation) throw new TRPCError({ code: "NOT_FOUND" });
+        if (conversation.clientId !== ctx.user.id && conversation.professionalId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
         return getMessagesByConversationId(input.conversationId, input.limit);
       }),
 
@@ -372,8 +757,14 @@ export const appRouter = router({
         callbackUrl: z.string().url().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user.userType !== "client" && ctx.user.role !== "admin") {
+        if (ctx.user.userType !== "client" && !isPlatformAdmin(ctx.user.role)) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Only contractors can fund escrow." });
+        }
+        const job = await getJobById(input.jobId);
+        if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found." });
+        if (job.clientId !== ctx.user.id && !isPlatformAdmin(ctx.user.role)) throw new TRPCError({ code: "FORBIDDEN" });
+        if (job.assignedProfessionalId !== input.professionalId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Escrow can only be funded for the job's assigned professional." });
         }
         if (!ctx.user.email) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Account email required for payment." });
@@ -409,14 +800,15 @@ export const appRouter = router({
     verifyPaystack: protectedProcedure
       .input(z.object({ reference: z.string().min(1).max(255) }))
       .mutation(async ({ ctx, input }) => {
+        const escrow = await getEscrowByReference(input.reference);
+        if (!escrow) throw new TRPCError({ code: "NOT_FOUND", message: "Escrow record not found." });
+        if (escrow.clientId !== ctx.user.id && !isPlatformAdmin(ctx.user.role)) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
         const result = await verifyPaystackTransaction(input.reference);
         if (result.status !== "success") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Payment not successful." });
         }
-        // Find escrow by reference
-        const allEscrow = await getAllEscrowPayments();
-        const escrow = allEscrow.find((e) => e.paystackReference === input.reference);
-        if (!escrow) throw new TRPCError({ code: "NOT_FOUND", message: "Escrow record not found." });
         await updateEscrowStatus(escrow.id, "funded", { paidAt: new Date() });
         return { success: true, amount: result.amount / 100 };
       }),
@@ -432,8 +824,20 @@ export const appRouter = router({
         bankName: z.string().min(2).max(255),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user.userType !== "client" && ctx.user.role !== "admin") {
+        if (process.env.NODE_ENV === "production") {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Bank-transfer escrow is not enabled until a verified settlement account is configured.",
+          });
+        }
+        if (ctx.user.userType !== "client" && !isPlatformAdmin(ctx.user.role)) {
           throw new TRPCError({ code: "FORBIDDEN", message: "Only contractors can fund escrow." });
+        }
+        const job = await getJobById(input.jobId);
+        if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found." });
+        if (job.clientId !== ctx.user.id && !isPlatformAdmin(ctx.user.role)) throw new TRPCError({ code: "FORBIDDEN" });
+        if (job.assignedProfessionalId !== input.professionalId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Escrow can only be funded for the job's assigned professional." });
         }
         const existing = await getEscrowByJobId(input.jobId);
         if (existing && existing.status === "funded") {
@@ -482,7 +886,15 @@ export const appRouter = router({
           transferProofUrl: url,
           transferProofKey: key,
         });
-        return { success: true, url };
+        return { success: true };
+      }),
+
+    getTransferProofAccessUrl: adminProcedure
+      .input(z.object({ jobId: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const escrow = await getEscrowByJobId(input.jobId);
+        if (!escrow?.transferProofKey) throw new TRPCError({ code: "NOT_FOUND", message: "Transfer proof not found." });
+        return { url: await storageGetSignedUrl(escrow.transferProofKey) };
       }),
 
     // Get escrow for a job
@@ -491,7 +903,7 @@ export const appRouter = router({
       .query(async ({ ctx, input }) => {
         const escrow = await getEscrowByJobId(input.jobId);
         if (!escrow) return null;
-        if (escrow.clientId !== ctx.user.id && escrow.professionalId !== ctx.user.id && ctx.user.role !== "admin") {
+        if (escrow.clientId !== ctx.user.id && escrow.professionalId !== ctx.user.id && !isPlatformAdmin(ctx.user.role)) {
           throw new TRPCError({ code: "FORBIDDEN" });
         }
         return escrow;
@@ -503,7 +915,7 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => {
         const escrow = await getEscrowByJobId(input.jobId);
         if (!escrow) throw new TRPCError({ code: "NOT_FOUND" });
-        if (escrow.clientId !== ctx.user.id && ctx.user.role !== "admin") {
+        if (escrow.clientId !== ctx.user.id && !isPlatformAdmin(ctx.user.role)) {
           throw new TRPCError({ code: "FORBIDDEN" });
         }
         if (escrow.status !== "funded") {
@@ -567,6 +979,14 @@ export const appRouter = router({
       return getVerificationRequestsByUserId(ctx.user.id);
     }),
 
+    getDocumentAccessUrl: adminProcedure
+      .input(z.object({ requestId: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const request = await getVerificationRequestById(input.requestId);
+        if (!request) throw new TRPCError({ code: "NOT_FOUND", message: "Verification request not found." });
+        return { url: await storageGetSignedUrl(request.documentKey) };
+      }),
+
     // Admin: list all pending
     adminList: adminProcedure.query(async () => {
       return getAllVerificationRequests();
@@ -617,7 +1037,7 @@ export const appRouter = router({
         return getAllUsers(input.limit, input.offset);
       }),
     updateUserRole: adminProcedure
-      .input(z.object({ userId: z.number().int().positive(), role: z.enum(["user", "admin", "super_admin"]) }))
+      .input(z.object({ userId: z.number().int().positive(), role: z.enum(["user", "admin", "SUPER_ADMIN"]) }))
       .mutation(async ({ ctx, input }) => {
         if (input.userId === ctx.user.id) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot change your own role." });
@@ -740,9 +1160,12 @@ export const appRouter = router({
       }),
     verify: protectedProcedure
       .input(z.object({ reference: z.string().min(1) }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         const order = await getOrderByReference(input.reference);
         if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Order not found." });
+        if (order.userId !== ctx.user.id && !isPlatformAdmin(ctx.user.role)) {
+          throw new TRPCError({ code: "FORBIDDEN" });
+        }
         if (order.status === "paid") return { success: true, status: "paid" as const };
         const result = await verifyPaystackTransaction(input.reference);
         if (result.status === "success") {
@@ -783,7 +1206,7 @@ export const appRouter = router({
             message: otpError.message,
           });
         }
-        console.log(`[EmailAuth] OTP email dispatched via Supabase Auth for ${input.email}`);
+        console.log("[EmailAuth] OTP email dispatched via Supabase Auth");
         return { success: true, message: "OTP sent to your email address." };
       }),
     verifyOtp: publicProcedure
@@ -830,12 +1253,16 @@ export const appRouter = router({
         phone: z.string().regex(/^\+?[1-9]\d{7,14}$/, "Invalid phone number format."),
       }))
       .mutation(async ({ input }) => {
+        if (process.env.NODE_ENV === "production") {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "Phone sign-in is not enabled yet. Please use email or Google sign-in.",
+          });
+        }
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
         await createPhoneOtp(input.phone, otp, expiresAt);
-        // In production, integrate Termii/Twilio here. OTP is logged server-side only.
-        console.log(`[PhoneAuth][DEV] OTP for ${input.phone}: ${otp}`);
-        return { success: true, message: "OTP sent to your phone number." };
+        return { success: true, message: "Phone OTP delivery is available only when an approved provider is configured." };
       }),
     verifyOtp: publicProcedure
       .input(z.object({
