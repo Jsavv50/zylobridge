@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { io, Socket } from "socket.io-client";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -10,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Send, MessageSquare, Loader2 } from "lucide-react";
 import { getLoginUrl } from "@/const";
 import { formatDistanceToNow } from "date-fns";
+import { getSupabaseBrowserClient, initSupabaseRealtimeAuth } from "@/lib/supabase";
 
 interface Message {
   id: number;
@@ -29,38 +29,15 @@ interface Conversation {
   createdAt: Date;
 }
 
-
-/**
- * SOCKET_URL — Railway backend WebSocket endpoint.
- * Reads VITE_API_URL (same variable used by tRPC) so both HTTP and WebSocket
- * traffic go to the same Railway service.
- * Falls back to window.location.origin for local development.
- */
-const SOCKET_URL =
-  ((import.meta.env.VITE_API_URL as string | undefined) ?? "").replace(/\/$/, "") ||
-  window.location.origin;
-
-let socketInstance: Socket | null = null;
-
-function getSocket(): Socket {
-  if (!socketInstance) {
-    socketInstance = io(SOCKET_URL, {
-      path: "/socket.io",
-      withCredentials: true,
-      transports: ["websocket", "polling"],
-    });
-  }
-  return socketInstance;
-}
+type RealtimeStatus = "CONNECTING" | "CONNECTED" | "ERROR";
 
 export default function Messaging() {
   const { user, isAuthenticated, loading } = useAuth();
   const [selectedConvId, setSelectedConvId] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
-  const [socketConnected, setSocketConnected] = useState(false);
+  const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>("CONNECTING");
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const socketRef = useRef<Socket | null>(null);
 
   const { data: conversations, refetch: refetchConversations } = trpc.messaging.myConversations.useQuery(
     undefined,
@@ -79,55 +56,136 @@ export default function Messaging() {
     }
   }, [fetchedMessages]);
 
-  // Socket.io setup
+  // Supabase Realtime channel subscription for the active conversation, gated on awaited initSupabaseRealtimeAuth
   useEffect(() => {
-    if (!isAuthenticated) return;
-    const socket = getSocket();
-    socketRef.current = socket;
+    if (!isAuthenticated || !selectedConvId) {
+      setRealtimeStatus("CONNECTING");
+      return;
+    }
 
-    socket.on("connect", () => setSocketConnected(true));
-    socket.on("disconnect", () => setSocketConnected(false));
+    let isMounted = true;
+    setRealtimeStatus("CONNECTING");
 
-    socket.on("new_message", (msg: Message) => {
-      if (msg.conversationId === selectedConvId) {
-        setMessages((prev) => [...prev, { ...msg, createdAt: new Date(msg.createdAt) }]);
+    const setupRealtimeChannel = async () => {
+      try {
+        const authSuccess = await initSupabaseRealtimeAuth();
+        if (!isMounted) return;
+
+        if (!authSuccess) {
+          setRealtimeStatus("ERROR");
+          console.warn("[Messaging] Realtime authentication failed before subscription");
+          return;
+        }
+
+        const supabase = getSupabaseBrowserClient();
+        const channelName = `private-conversation-${selectedConvId}`;
+        const channel = supabase.channel(channelName, {
+          config: {
+            private: true,
+          },
+        });
+
+        channel
+          .on(
+            "postgres_changes",
+            {
+              event: "INSERT",
+              schema: "public",
+              table: "messages",
+              filter: `conversationId=eq.${selectedConvId}`,
+            },
+            (payload) => {
+              if (!isMounted) return;
+              const newMsg = payload.new as any;
+              if (newMsg && newMsg.id && newMsg.conversationId === selectedConvId) {
+                setMessages((prev) => {
+                  if (prev.some((m) => m.id === newMsg.id)) {
+                    return prev;
+                  }
+                  return [
+                    ...prev,
+                    {
+                      id: newMsg.id,
+                      conversationId: newMsg.conversationId,
+                      senderId: newMsg.senderId,
+                      content: newMsg.content,
+                      isRead: newMsg.isRead ?? false,
+                      createdAt: new Date(newMsg.createdAt),
+                    },
+                  ];
+                });
+                refetchConversations();
+              }
+            }
+          )
+          .subscribe((status, err) => {
+            if (!isMounted) return;
+            if (status === "SUBSCRIBED") {
+              setRealtimeStatus("CONNECTED");
+              console.log(`[Messaging] Realtime channel ${channelName} SUBSCRIBED`);
+            } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+              setRealtimeStatus("ERROR");
+              console.warn(`[Messaging] Realtime channel ${channelName} status: ${status}`, err);
+            }
+          });
+
+        return () => {
+          supabase.removeChannel(channel);
+        };
+      } catch (error) {
+        if (!isMounted) return;
+        setRealtimeStatus("ERROR");
+        console.error("[Messaging] Realtime setup error:", String(error));
       }
-      refetchConversations();
-    });
+    };
 
-    socket.on("conversation_updated", () => {
-      refetchConversations();
+    let cleanupFn: (() => void) | undefined;
+    setupRealtimeChannel().then((cleanup) => {
+      cleanupFn = cleanup;
     });
 
     return () => {
-      socket.off("new_message");
-      socket.off("conversation_updated");
-      socket.off("connect");
-      socket.off("disconnect");
+      isMounted = false;
+      if (cleanupFn) {
+        cleanupFn();
+      }
+      setRealtimeStatus("CONNECTING");
     };
   }, [isAuthenticated, selectedConvId, refetchConversations]);
-
-  // Join conversation room when selected
-  useEffect(() => {
-    if (selectedConvId && socketRef.current) {
-      socketRef.current.emit("join_conversation", selectedConvId);
-      socketRef.current.emit("mark_read", selectedConvId);
-    }
-  }, [selectedConvId]);
 
   // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const sendMessageMutation = trpc.messaging.sendMessage.useMutation({
+    onSuccess: (newMsg) => {
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === newMsg.id)) return prev;
+        return [
+          ...prev,
+          {
+            id: newMsg.id,
+            conversationId: newMsg.conversationId,
+            senderId: newMsg.senderId,
+            content: newMsg.content,
+            isRead: newMsg.isRead ?? false,
+            createdAt: new Date(newMsg.createdAt),
+          },
+        ];
+      });
+      setInputValue("");
+      refetchConversations();
+    },
+  });
+
   const sendMessage = useCallback(() => {
-    if (!inputValue.trim() || !selectedConvId || !socketRef.current) return;
-    socketRef.current.emit("send_message", {
+    if (!inputValue.trim() || !selectedConvId || sendMessageMutation.isPending) return;
+    sendMessageMutation.mutate({
       conversationId: selectedConvId,
       content: inputValue.trim(),
     });
-    setInputValue("");
-  }, [inputValue, selectedConvId]);
+  }, [inputValue, selectedConvId, sendMessageMutation]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -164,9 +222,21 @@ export default function Messaging() {
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-bold text-foreground">Messages</h1>
           <div className="flex items-center gap-2">
-            <div className={`h-2 w-2 rounded-full ${socketConnected ? "bg-green-500" : "bg-red-500"}`} />
+            <div
+              className={`h-2 w-2 rounded-full ${
+                realtimeStatus === "CONNECTED"
+                  ? "bg-green-500"
+                  : realtimeStatus === "ERROR"
+                  ? "bg-red-500"
+                  : "bg-amber-500 animate-pulse"
+              }`}
+            />
             <span className="text-sm text-muted-foreground">
-              {socketConnected ? "Connected" : "Connecting..."}
+              {realtimeStatus === "CONNECTED"
+                ? "Connected"
+                : realtimeStatus === "ERROR"
+                ? "Connection error"
+                : "Connecting..."}
             </span>
           </div>
         </div>
@@ -294,16 +364,14 @@ export default function Messaging() {
                       onChange={(e) => setInputValue(e.target.value)}
                       onKeyDown={handleKeyDown}
                       placeholder="Type a message..."
-                      className="flex-1 bg-background border-border"
-                      maxLength={5000}
+                      className="flex-1"
                     />
-                    <Button
-                      onClick={sendMessage}
-                      disabled={!inputValue.trim() || !socketConnected}
-                      size="icon"
-                      className="bg-primary hover:bg-primary/90 shrink-0"
-                    >
-                      <Send className="h-4 w-4" />
+                    <Button onClick={sendMessage} disabled={!inputValue.trim() || sendMessageMutation.isPending}>
+                      {sendMessageMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
                     </Button>
                   </div>
                 </div>

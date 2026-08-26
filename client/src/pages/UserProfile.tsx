@@ -21,6 +21,7 @@ import {
   MessageSquare,
   ShoppingBag,
   LayoutDashboard,
+  Building2,
   Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -236,6 +237,8 @@ export default function UserProfile() {
       ? "Trade Professional"
       : user.userType === "client"
       ? "Client / Contractor"
+      : user.userType === "enterprise"
+      ? "Enterprise"
       : "Account not configured";
   const loginMethodLabel =
     user.loginMethod === "google"
@@ -306,15 +309,16 @@ export default function UserProfile() {
                 </div>
 
                 <div className="flex items-center gap-2 pb-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-white/10 text-gray-300 hover:text-white hover:border-white/20 bg-transparent gap-1.5"
-                    onClick={() => toast.info("Profile editing coming soon")}
-                  >
-                    <Edit3 className="h-3.5 w-3.5" />
-                    Edit Profile
-                  </Button>
+                  <Link href="/profile/edit">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-white/10 text-gray-300 hover:text-white hover:border-white/20 bg-transparent gap-1.5"
+                    >
+                      <Edit3 className="h-3.5 w-3.5" />
+                      Edit Profile
+                    </Button>
+                  </Link>
                   <Button
                     variant="outline"
                     size="sm"
@@ -538,6 +542,15 @@ export default function UserProfile() {
                   title="My Jobs"
                   description="Manage the jobs you have posted on the platform."
                   href="/my-jobs"
+                  accent
+                />
+              )}
+              {user.userType === "enterprise" && (
+                <QuickActionCard
+                  icon={Building2}
+                  title="Enterprise Workspace"
+                  description="Open your organization workspace and account tools."
+                  href="/dashboard/enterprise"
                   accent
                 />
               )}

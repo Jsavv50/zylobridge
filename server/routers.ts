@@ -4,8 +4,11 @@ import { z } from "zod";
 import { COOKIE_NAME } from "../shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
-import { storagePut } from "./storage";
+import { enterpriseProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { storagePut, storageGetSignedUrl } from "./storage";
+import { getDb } from "./db";
+import { conversations } from "../drizzle/schema";
+import { eq } from "drizzle-orm";
 import {
   upsertUser,
   getUserByOpenId,
@@ -13,6 +16,7 @@ import {
   updateUserType,
   updateUserRole,
   updateUserName,
+  updateUserProfile,
   getAllUsers,
   getUserCount,
   createJob,
@@ -38,6 +42,7 @@ import {
   getConversationsByUserId,
   getMessagesByConversationId,
   getUnreadMessageCount,
+  createMessage,
   createEscrowPayment,
   getEscrowByJobId,
   updateEscrowStatus,
@@ -70,10 +75,11 @@ import {
   resolveAccountNumber,
   generatePaystackReference,
 } from "./paystack";
+import { maskPhoneNumber, normalizePhoneNumber, sendPhoneOtpSms, SmsDeliveryError } from "./sms";
 
 // ── Admin guard ────────────────────────────────────────────────────────────────
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== "admin" && ctx.user.role !== "super_admin") {
+  if (ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") {
     throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required." });
   }
   return next({ ctx });
@@ -131,7 +137,7 @@ export const appRouter = router({
       return { success: true } as const;
     }),
     setUserType: protectedProcedure
-      .input(z.object({ userType: z.enum(["client", "professional"]) }))
+      .input(z.object({ userType: z.enum(["client", "professional", "enterprise"]) }))
       .mutation(async ({ ctx, input }) => {
         await updateUserType(ctx.user.id, input.userType);
         return { success: true };
@@ -142,6 +148,32 @@ export const appRouter = router({
         await updateUserName(ctx.user.id, input.name);
         return { success: true };
       }),
+    updateProfile: protectedProcedure
+      .input(
+        z.object({
+          name: z.string().min(2).max(100).trim().optional(),
+          phone: z.string().max(20).trim().optional(),
+          avatarUrl: z.string().url().optional().or(z.literal("")),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        await updateUserProfile(ctx.user.id, {
+          name: input.name,
+          phone: input.phone || undefined,
+          avatarUrl: input.avatarUrl || undefined,
+        });
+        return { success: true };
+      }),
+  }),
+
+  // ── Enterprise workspace ───────────────────────────────────────────────────
+  // Enterprise is recognized as a top-level actor now; organization membership,
+  // team management, and project delegation remain future scoped capabilities.
+  enterprise: router({
+    overview: enterpriseProcedure.query(() => ({
+      workspace: "enterprise" as const,
+      capabilities: ["marketplace_access", "account_management"] as const,
+    })),
   }),
 
   // ── Jobs ──────────────────────────────────────────────────────────────────
@@ -354,6 +386,24 @@ export const appRouter = router({
       }))
       .query(async ({ ctx, input }) => {
         return getMessagesByConversationId(input.conversationId, input.limit);
+      }),
+
+    sendMessage: protectedProcedure
+      .input(z.object({
+        conversationId: z.number().int().positive(),
+        content: z.string().min(1).max(5000),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+        const convs = await db.select().from(conversations).where(eq(conversations.id, input.conversationId)).limit(1);
+        const conv = convs[0];
+        if (!conv) throw new TRPCError({ code: "NOT_FOUND", message: "Conversation not found" });
+        if (conv.clientId !== ctx.user.id && conv.professionalId !== ctx.user.id) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Not a member of this conversation" });
+        }
+        const message = await createMessage(input.conversationId, ctx.user.id, input.content);
+        return message;
       }),
 
     unreadCount: protectedProcedure.query(async ({ ctx }) => {
@@ -572,6 +622,19 @@ export const appRouter = router({
       return getAllVerificationRequests();
     }),
 
+    // Admin: get signed document URL for secure private review
+    adminGetDocumentUrl: adminProcedure
+      .input(z.object({ requestId: z.number().int().positive() }))
+      .query(async ({ input }) => {
+        const requests = await getAllVerificationRequests();
+        const req = requests.find((r) => r.id === input.requestId);
+        if (!req || !req.documentKey) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Verification request or document key not found." });
+        }
+        const signedUrl = await storageGetSignedUrl(req.documentKey);
+        return { signedUrl };
+      }),
+
     // Admin: approve or reject
     adminReview: adminProcedure
       .input(z.object({
@@ -617,10 +680,19 @@ export const appRouter = router({
         return getAllUsers(input.limit, input.offset);
       }),
     updateUserRole: adminProcedure
-      .input(z.object({ userId: z.number().int().positive(), role: z.enum(["user", "admin", "super_admin"]) }))
+      .input(z.object({ userId: z.number().int().positive(), role: z.enum(["user", "admin", "SUPER_ADMIN"]) }))
       .mutation(async ({ ctx, input }) => {
         if (input.userId === ctx.user.id) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot change your own role." });
+        }
+        // Only super_admin can assign admin or super_admin roles
+        if ((input.role === "admin" || input.role === "SUPER_ADMIN") && ctx.user.role !== "SUPER_ADMIN") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Only super administrators can assign admin or super admin roles." });
+        }
+        // Prevent targeting the designated super admin email for demotion/deletion
+        const targetUser = await getUserById(input.userId);
+        if (targetUser && targetUser.email && targetUser.email.trim().toLowerCase() === "minermikee777@gmail.com") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Cannot modify or demote the permanent super administrator." });
         }
         await updateUserRole(input.userId, input.role);
         return { success: true };
@@ -827,31 +899,56 @@ export const appRouter = router({
   phoneAuth: router({
     sendOtp: publicProcedure
       .input(z.object({
-        phone: z.string().regex(/^\+?[1-9]\d{7,14}$/, "Invalid phone number format."),
+        phone: z.string().min(8).max(32),
       }))
       .mutation(async ({ input }) => {
+        let phone: string;
+        try {
+          phone = normalizePhoneNumber(input.phone);
+        } catch (error) {
+          const message = error instanceof SmsDeliveryError ? error.message : "Invalid phone number format.";
+          throw new TRPCError({ code: "BAD_REQUEST", message });
+        }
+
+        console.log(`[PhoneAuth] Generating OTP for ${maskPhoneNumber(phone)}`);
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-        await createPhoneOtp(input.phone, otp, expiresAt);
-        // In production, integrate Termii/Twilio here. OTP is logged server-side only.
-        console.log(`[PhoneAuth][DEV] OTP for ${input.phone}: ${otp}`);
+
+        try {
+          await sendPhoneOtpSms(phone, otp);
+        } catch (error) {
+          const message = error instanceof SmsDeliveryError ? error.message : "SMS delivery could not be completed. Please try again.";
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message });
+        }
+
+        // Store a verification code only after the SMS provider has accepted it.
+        await createPhoneOtp(phone, otp, expiresAt);
+        console.log(`[PhoneAuth] OTP SMS request completed successfully for ${maskPhoneNumber(phone)}`);
         return { success: true, message: "OTP sent to your phone number." };
       }),
     verifyOtp: publicProcedure
       .input(z.object({
-        phone: z.string().regex(/^\+?[1-9]\d{7,14}$/, "Invalid phone number format."),
+        phone: z.string().min(8).max(32),
         otp: z.string().length(6).regex(/^\d{6}$/, "OTP must be 6 digits."),
         name: z.string().min(2).max(100).trim().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const record = await getLatestPhoneOtp(input.phone);
+        let phone: string;
+        try {
+          phone = normalizePhoneNumber(input.phone);
+        } catch (error) {
+          const message = error instanceof SmsDeliveryError ? error.message : "Invalid phone number format.";
+          throw new TRPCError({ code: "BAD_REQUEST", message });
+        }
+
+        const record = await getLatestPhoneOtp(phone);
         if (!record) throw new TRPCError({ code: "NOT_FOUND", message: "No OTP found. Request a new one." });
         if (record.attempts >= 5) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many attempts. Request a new OTP." });
         if (new Date() > record.expiresAt) throw new TRPCError({ code: "BAD_REQUEST", message: "OTP expired. Request a new one." });
         await incrementOtpAttempts(record.id);
         if (record.otp !== input.otp) throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid OTP. Please try again." });
         await markOtpVerified(record.id);
-        const user = await upsertUserByPhone(input.phone, input.name);
+        const user = await upsertUserByPhone(phone, input.name);
         const { sdk } = await import("./_core/sdk");
         const token = await sdk.createSessionToken(user.openId, { name: user.name ?? "" });
         const { COOKIE_NAME: CNAME } = await import("../shared/const");

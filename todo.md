@@ -212,12 +212,12 @@
 - [x] Saved checkpoint and pushed to GitHub
 
 ## Phase 27: Complete Repository Import Audit for Vercel Production
-- [ ] Scan every .ts/.tsx/.js/.mjs file for broken imports and unresolved aliases
-- [ ] Simulate exact Vercel serverless build (esbuild bundle of api/index.ts with alias resolution)
-- [ ] Fix every broken import: @shared/_core, relative paths, missing modules
-- [ ] Run production build with zero ERR_MODULE_NOT_FOUND errors
-- [ ] Verify 0 TypeScript errors and all tests passing
-- [ ] Save checkpoint and push to GitHub
+- [x] Scan every .ts/.tsx/.js/.mjs file for broken imports and unresolved aliases — completed during Phases 29–31
+- [x] Simulate exact Vercel serverless build (esbuild bundle of api/index.ts with alias resolution) — superseded by split Vercel frontend/Railway backend architecture
+- [x] Fix every broken import: @shared/_core, relative paths, missing modules — completed during Phases 29–31
+- [x] Run production build with zero ERR_MODULE_NOT_FOUND errors — completed during Phases 29–31
+- [x] Verify 0 TypeScript errors and all tests passing — completed during Phases 29–31
+- [x] Save checkpoint and push to GitHub — completed during Phase 31
 
 ## Phase 33: Restore Vercel Serverless Architecture
 - [x] Create api/index.ts — Vercel serverless entry point mounting Express app (security, OAuth, Google Auth, storage proxy, tRPC, health check)
@@ -333,3 +333,58 @@
 - [x] Verify build:server 0 errors
 - [x] Verify 42/42 tests passing
 - [x] Checkpoint and deliver full report
+
+## Phase 47: Production Twilio Phone OTP Delivery
+- [x] Audit all phone OTP, DEV/mock, console OTP, and SMS delivery paths
+- [x] Replace production mock OTP delivery with Twilio Messaging Service delivery
+- [x] Validate Twilio environment configuration and normalize phone numbers to E.164
+- [x] Add safe Twilio diagnostics without logging OTPs or credentials in production
+- [x] Ensure sendOtp returns success only after Twilio accepts the message
+- [x] Add or update unit tests for Twilio delivery and production error handling
+- [x] Verify compiled Railway server build and complete test suite
+- [x] Save checkpoint and push the production fix to GitHub
+
+## Phase 48: Phone OTP Resend Experience
+- [x] Add a Resend OTP control on the phone verification screen
+- [x] Show a 60-second countdown and disable resend during cooldown
+- [x] Restart the timer only after a successful resend request
+- [x] Verify client build, server build, and tests before checkpointing
+
+## Phase 49: CookieYes Frontend Integration
+- [x] Confirm the Vite HTML entry point and verify CookieYes is not already present
+- [x] Add the provided CookieYes installation script once in the frontend document head
+- [x] Verify the production Vite output contains one CookieYes script tag
+- [x] Verify the live Vercel site loads the CookieYes script and keeps the frontend functional
+- [x] Save checkpoint and push the frontend-only integration to GitHub
+
+## Phase 50: CookieYes Cookie Policy Page
+- [x] Audit existing public-policy page, routing, footer, and metadata patterns
+- [x] Create or update the public /cookie-policy page with the CookieYes policy script scoped to that route
+- [x] Add the Cookie Policy footer link and document title/description metadata
+- [x] Verify script scope, responsive route behavior, TypeScript, tests, and split production builds
+- [x] Save checkpoint and push the frontend-only change to GitHub
+
+## Phase 51: Static Cookie Policy Replacement
+- [x] Audit the current /cookie-policy implementation and existing global CookieYes consent API
+- [x] Replace the dynamic CookieYes policy loader with the exact supplied static Cookie Policy content
+- [x] Connect the Consent Preferences control to the existing CookieYes consent-management mechanism without creating a second banner
+- [x] Verify script removal, public routing, accessibility, responsive rendering, TypeScript, tests, builds, and production behavior
+- [x] Save checkpoint and push the frontend-only replacement to GitHub
+
+## Phase 52: Enterprise User Role
+- [x] Audit the current role schema, user/profile model, onboarding, sessions, authorization, routes, navigation, and dashboards
+- [x] Design a backward-compatible Enterprise role migration using the existing role architecture
+- [x] Add Enterprise validation, onboarding selection, session recognition, authorization policy support, dashboard routing, and role-aware navigation
+- [x] Create a role-safe Enterprise dashboard without expanding into organization or team-management systems
+- [x] Add regression tests for existing Professional and Contractor roles, Enterprise onboarding and dashboard routing, role-based navigation, and unauthorized access prevention
+- [x] Run and verify TypeScript, full tests, client/server production builds, and the database migration
+- [x] Save checkpoint, push the role expansion to GitHub, and report any manual operational steps
+
+## Phase 53: Supabase Realtime Authentication Bridge
+- [x] Add SUPABASE_JWT_SECRET to server environment configuration (`server/_core/env.ts`) and startup validation
+- [x] Create server-side Realtime JWT generator (`server/_core/realtimeAuth.ts`) using jose, HS256, `SUPABASE_JWT_SECRET`, 30-minute expiration, and claims `{ sub: String(user.id), role: "authenticated", user_id: user.id }`
+- [x] Create authenticated REST endpoint `GET /api/realtime/token` protected by existing session cookie and `sdk.authenticateRequest()`
+- [x] Create browser-side Supabase client & Realtime helper (`client/src/lib/supabase.ts`) using public `SUPABASE_URL` and `SUPABASE_ANON_KEY`, calling `GET /api/realtime/token` with credentials: include, and calling `supabase.realtime.setAuth(token)` with automatic token refresh
+- [x] Add unit tests for Realtime auth token generation, configuration validation, and endpoint security (`server/realtime-auth.test.ts`)
+- [x] Run TypeScript check, test suite, `build:client`, and `build:server` successfully without breaking existing auth, schema, RLS, or messaging
+- [x] Save checkpoint, publish, and report exact implementation details

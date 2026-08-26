@@ -23,8 +23,30 @@ function parseCookies(cookieHeader: string): Record<string, string> {
 }
 
 export function registerSocketIO(httpServer: HttpServer) {
+  const allowedSocketOrigins = [
+    "https://zylobridge.com",
+    "https://www.zylobridge.com",
+    ...(process.env.FRONTEND_URL ?? "")
+      .split(",")
+      .map((o) => o.trim())
+      .filter(Boolean),
+  ];
+
   const io = new SocketIOServer(httpServer, {
-    cors: { origin: "*", credentials: true },
+    cors: {
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        if (
+          allowedSocketOrigins.length === 0 ||
+          allowedSocketOrigins.includes(origin) ||
+          origin.startsWith("http://localhost")
+        ) {
+          return callback(null, true);
+        }
+        return callback(new Error(`CORS: origin ${origin} not allowed for Socket.io`));
+      },
+      credentials: true,
+    },
     path: "/socket.io",
   });
 

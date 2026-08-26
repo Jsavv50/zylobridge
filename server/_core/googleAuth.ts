@@ -337,8 +337,9 @@ export function registerGoogleAuthRoutes(app: Express) {
       );
       res.redirect(302, redirectTo);
     } catch (err) {
-      console.error("[GoogleAuth] Callback error:", err);
-      res.redirect(302, `${frontend}/sign-in?error=google_failed`);
+      console.error("[GoogleAuth] Callback error (detailed):", err);
+      const errMsg = err instanceof Error ? encodeURIComponent(err.message.slice(0, 150)) : "unknown";
+      res.redirect(302, `${frontend}/sign-in?error=google_failed&details=${errMsg}`);
     }
   });
 }

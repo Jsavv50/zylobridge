@@ -9,7 +9,7 @@ import {
   Loader2, Users, Briefcase, Shield, BarChart3,
   CheckCircle, Clock, AlertTriangle, Trash2,
   ChevronRight, Star, TrendingUp, Activity,
-  ShieldCheck, CreditCard, Building2, CheckCircle2, XCircle, Eye
+  ShieldCheck, CreditCard, Building2, CheckCircle2, XCircle, Eye, DollarSign
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { VOCATION_LABELS, type VocationKey } from "@shared/vocations";
@@ -36,25 +36,25 @@ export default function AdminDashboard() {
   const utils = trpc.useUtils();
 
   const { data: adminStats, isLoading: statsLoading } = trpc.admin.stats.useQuery(undefined, {
-    enabled: !!user && (user.role === "admin" || user.role === "super_admin"),
+    enabled: !!user && (user.role === "admin" || user.role === "SUPER_ADMIN"),
   });
   const { data: allUsers, isLoading: usersLoading } = trpc.admin.listUsers.useQuery({}, {
-    enabled: !!user && (user.role === "admin" || user.role === "super_admin") && activeTab === "users",
+    enabled: !!user && (user.role === "admin" || user.role === "SUPER_ADMIN") && activeTab === "users",
   });
   const { data: allJobs, isLoading: jobsLoading } = trpc.admin.listAllJobs.useQuery({ limit: 200 }, {
-    enabled: !!user && (user.role === "admin" || user.role === "super_admin") && activeTab === "jobs",
+    enabled: !!user && (user.role === "admin" || user.role === "SUPER_ADMIN") && activeTab === "jobs",
   });
   const { data: allEscrow, isLoading: escrowLoading, refetch: refetchEscrow } = trpc.admin.listEscrow.useQuery(undefined, {
-    enabled: !!user && (user.role === "admin" || user.role === "super_admin") && activeTab === "escrow",
+    enabled: !!user && (user.role === "admin" || user.role === "SUPER_ADMIN") && activeTab === "escrow",
   });
   const { data: allVerifications, isLoading: verificationLoading, refetch: refetchVerifications } = trpc.verification.adminList.useQuery(undefined, {
-    enabled: !!user && (user.role === "admin" || user.role === "super_admin") && activeTab === "verification",
+    enabled: !!user && (user.role === "admin" || user.role === "SUPER_ADMIN") && activeTab === "verification",
   });
   const { data: allProducts, isLoading: productsLoading, refetch: refetchProducts } = trpc.products.list.useQuery({ activeOnly: false }, {
-    enabled: !!user && (user.role === "admin" || user.role === "super_admin") && activeTab === "products",
+    enabled: !!user && (user.role === "admin" || user.role === "SUPER_ADMIN") && activeTab === "products",
   });
   const { data: allOrders, isLoading: ordersLoading } = trpc.orders.all.useQuery(undefined, {
-    enabled: !!user && (user.role === "admin" || user.role === "super_admin") && activeTab === "orders",
+    enabled: !!user && (user.role === "admin" || user.role === "SUPER_ADMIN") && activeTab === "orders",
   });
 
   const createProductMutation = trpc.products.create.useMutation({
@@ -115,7 +115,7 @@ export default function AdminDashboard() {
     );
   }
 
-  if (user?.role !== "admin" && user?.role !== "super_admin") {
+  if (user?.role !== "admin" && user?.role !== "SUPER_ADMIN") {
     return (
       <div className="min-h-screen bg-[#0d1117] flex flex-col items-center justify-center gap-4 text-center px-4">
         <div className="h-16 w-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-2">
@@ -153,8 +153,12 @@ export default function AdminDashboard() {
             <p className="text-gray-500 text-sm">Platform management — restricted access</p>
           </div>
           <div className="ml-auto">
-            <span className="text-xs font-semibold text-violet-300 bg-violet-500/10 border border-violet-500/20 rounded-full px-3 py-1">
-              ADMIN
+            <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${
+              user?.role === "SUPER_ADMIN"
+                ? "text-red-300 bg-red-500/10 border-red-500/20"
+                : "text-violet-300 bg-violet-500/10 border-violet-500/20"
+            }`}>
+              {user?.role === "SUPER_ADMIN" ? "SUPER ADMIN" : "ADMIN"}
             </span>
           </div>
         </div>
@@ -233,6 +237,7 @@ export default function AdminDashboard() {
                       {[
                         { label: "Contractors / Clients", value: adminStats.clientCount, total: adminStats.totalUsers, color: "violet" },
                         { label: "Skilled Professionals", value: adminStats.professionalCount, total: adminStats.totalUsers, color: "cyan" },
+                        { label: "Enterprise", value: adminStats.enterpriseCount, total: adminStats.totalUsers, color: "amber" },
                         { label: "Admins", value: adminStats.adminCount, total: adminStats.totalUsers, color: "amber" },
                         { label: "Unset / Onboarding", value: adminStats.unsetCount, total: adminStats.totalUsers, color: "gray" },
                       ].map(({ label, value, total, color }) => (
@@ -288,14 +293,15 @@ export default function AdminDashboard() {
                             <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
                               u.userType === "client" ? "bg-violet-500/15 text-violet-400 border-violet-500/25" :
                               u.userType === "professional" ? "bg-cyan-500/15 text-cyan-400 border-cyan-500/25" :
+                              u.userType === "enterprise" ? "bg-amber-500/15 text-amber-400 border-amber-500/25" :
                               "bg-gray-500/15 text-gray-400 border-gray-500/25"
                             }`}>
-                              {u.userType === "client" ? "Contractor" : u.userType === "professional" ? "Professional" : "Unset"}
+                              {u.userType === "client" ? "Contractor" : u.userType === "professional" ? "Professional" : u.userType === "enterprise" ? "Enterprise" : "Unset"}
                             </span>
                           </td>
                           <td className="px-5 py-4">
                             <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
-                              u.role === "super_admin" ? "bg-red-500/15 text-red-400 border-red-500/25" :
+                              u.role === "SUPER_ADMIN" ? "bg-red-500/15 text-red-400 border-red-500/25" :
                               u.role === "admin" ? "bg-amber-500/15 text-amber-400 border-amber-500/25" :
                               "bg-gray-500/15 text-gray-400 border-gray-500/25"
                             }`}>
@@ -306,10 +312,10 @@ export default function AdminDashboard() {
                             {new Date(u.createdAt).toLocaleDateString()}
                           </td>
                           <td className="px-5 py-4">
-                            {u.id !== user?.id && (
+                            {u.id !== user?.id && user?.role === "SUPER_ADMIN" && (
                               <Select
                                 value={u.role}
-                                onValueChange={(role) => updateUserRole({ userId: u.id, role: role as "user" | "admin" | "super_admin" })}
+                                onValueChange={(role) => updateUserRole({ userId: u.id, role: role as "user" | "admin" | "SUPER_ADMIN" })}
                               >
                                 <SelectTrigger className="w-[120px] h-7 text-xs bg-[#1c2740] border-white/10 text-gray-300">
                                   <SelectValue />
@@ -317,7 +323,7 @@ export default function AdminDashboard() {
                                 <SelectContent className="bg-[#1c2740] border-white/10">
                                   <SelectItem value="user" className="text-xs text-gray-300">User</SelectItem>
                                   <SelectItem value="admin" className="text-xs text-gray-300">Admin</SelectItem>
-                                  <SelectItem value="super_admin" className="text-xs text-gray-300">Super Admin</SelectItem>
+                                  <SelectItem value="SUPER_ADMIN" className="text-xs text-gray-300">Super Admin</SelectItem>
                                 </SelectContent>
                               </Select>
                             )}
@@ -528,11 +534,24 @@ export default function AdminDashboard() {
                         )}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <a href={v.documentUrl} target="_blank" rel="noopener noreferrer">
-                          <Button size="sm" variant="ghost" className="h-8 text-xs text-cyan-400 border border-cyan-500/20">
-                            <Eye className="h-3 w-3 mr-1" /> View Doc
-                          </Button>
-                        </a>
+                        <Button
+                          size="sm" variant="ghost"
+                          className="h-8 text-xs text-cyan-400 border border-cyan-500/20"
+                          onClick={async () => {
+                            try {
+                              const res = await utils.client.verification.adminGetDocumentUrl.query({ requestId: v.id });
+                              if (res?.signedUrl) {
+                                window.open(res.signedUrl, "_blank", "noopener,noreferrer");
+                              } else {
+                                toast.error("Could not generate document view URL");
+                              }
+                            } catch (err: any) {
+                              toast.error(err.message || "Failed to load document");
+                            }
+                          }}
+                        >
+                          <Eye className="h-3 w-3 mr-1" /> View Doc
+                        </Button>
                         {v.status === "pending" && (
                           <>
                             <Button
@@ -572,6 +591,42 @@ export default function AdminDashboard() {
               <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-violet-400" /></div>
             ) : adminStats ? (
               <>
+                {/* Platform-wide Overview Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                  <div className="rounded-xl border border-white/8 bg-[#131a26] p-5">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-gray-500 font-medium uppercase tracking-wider">Active Jobs</span>
+                      <Briefcase className="h-4 w-4 text-blue-400" />
+                    </div>
+                    <div className="text-2xl font-bold text-white">{(adminStats.openJobs ?? 0) + (adminStats.inProgressJobs ?? 0)}</div>
+                    <p className="text-xs text-gray-400 mt-1">{adminStats.openJobs} open, {adminStats.inProgressJobs} in progress</p>
+                  </div>
+                  <div className="rounded-xl border border-white/8 bg-[#131a26] p-5">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-gray-500 font-medium uppercase tracking-wider">Platform Revenue</span>
+                      <DollarSign className="h-4 w-4 text-emerald-400" />
+                    </div>
+                    <div className="text-2xl font-bold text-white">${Number((adminStats as any).fundedEscrowAmount ?? 0).toLocaleString()}</div>
+                    <p className="text-xs text-gray-400 mt-1">Total escrow volume: ${(adminStats as any).totalEscrowAmount ?? 0}</p>
+                  </div>
+                  <div className="rounded-xl border border-white/8 bg-[#131a26] p-5">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-gray-500 font-medium uppercase tracking-wider">Verification Queue</span>
+                      <Clock className="h-4 w-4 text-amber-400" />
+                    </div>
+                    <div className="text-2xl font-bold text-white">{(adminStats as any).pendingVerificationCount ?? 0}</div>
+                    <p className="text-xs text-gray-400 mt-1">Pending review submissions</p>
+                  </div>
+                  <div className="rounded-xl border border-white/8 bg-[#131a26] p-5">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-gray-500 font-medium uppercase tracking-wider">Total Users</span>
+                      <Users className="h-4 w-4 text-violet-400" />
+                    </div>
+                    <div className="text-2xl font-bold text-white">{adminStats.totalUsers}</div>
+                    <p className="text-xs text-gray-400 mt-1">{adminStats.professionalCount} pros, {adminStats.clientCount} clients</p>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="rounded-xl border border-white/8 bg-[#131a26] p-5">
                     <div className="flex items-center gap-2 mb-3">

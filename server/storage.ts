@@ -1,8 +1,8 @@
-// Preconfigured storage helpers for Manus WebDev templates
-// Uploads via Forge Server presigned URL to S3 (PUT direct).
-// Downloads return /manus-storage/{key} paths served via 307 redirect.
+// Uploads via Forge Server presigned URL to S3 (PUT direct) or Supabase Storage.
+// Downloads return /manus-storage/{key} paths served via 307 redirect or Supabase signed URLs.
 
 import { ENV } from "./_core/env";
+import { getSupabaseAdmin } from "./_core/supabase";
 
 function getForgeConfig() {
   const forgeUrl = ENV.forgeApiUrl;
@@ -33,6 +33,27 @@ export async function storagePut(
   data: Buffer | Uint8Array | string,
   contentType = "application/octet-stream",
 ): Promise<{ key: string; url: string }> {
+  // If this is a verification document and Supabase Storage is available, store in Supabase private bucket `verification-documents`
+  if (relKey.startsWith("verification-docs/")) {
+    const supabase = getSupabaseAdmin();
+    if (supabase) {
+      const key = appendHashSuffix(normalizeKey(relKey));
+      const buffer = typeof data === "string" ? Buffer.from(data) : data;
+      const { error } = await supabase.storage
+        .from("verification-documents")
+        .upload(key, buffer, {
+          contentType,
+          upsert: false,
+        });
+
+      if (error) {
+        throw new Error(`Supabase verification storage upload failed: ${error.message}`);
+      }
+
+      return { key, url: `supabase://verification-documents/${key}` };
+    }
+  }
+
   const { forgeUrl, forgeKey } = getForgeConfig();
   const key = appendHashSuffix(normalizeKey(relKey));
 
@@ -77,9 +98,26 @@ export async function storageGet(relKey: string): Promise<{ key: string; url: st
 }
 
 export async function storageGetSignedUrl(relKey: string): Promise<string> {
-  const { forgeUrl, forgeKey } = getForgeConfig();
   const key = normalizeKey(relKey);
 
+  // If this is a Supabase Storage object in verification-documents
+  if (key.startsWith("verification-docs/") || key.includes("verification-")) {
+    const supabase = getSupabaseAdmin();
+    if (supabase) {
+      // Extract key relative to verification-documents bucket if stored as supabase://
+      const cleanKey = key.replace(/^verification-documents\//, "");
+      const { data, error } = await supabase.storage
+        .from("verification-documents")
+        .createSignedUrl(cleanKey, 3600); // 1 hour expiration
+
+      if (error || !data?.signedUrl) {
+        throw new Error(`Supabase signed URL generation failed: ${error?.message || "Unknown error"}`);
+      }
+      return data.signedUrl;
+    }
+  }
+
+  const { forgeUrl, forgeKey } = getForgeConfig();
   const getUrl = new URL("v1/storage/presign/get", forgeUrl + "/");
   getUrl.searchParams.set("path", key);
 

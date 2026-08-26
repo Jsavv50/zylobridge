@@ -30,6 +30,13 @@ import {
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
+export async function getUserByEmail(email: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(sql`LOWER(${users.email}) = LOWER(${email})`).limit(1);
+  return result[0];
+}
+
 let _db: ReturnType<typeof drizzle> | null = null;
 
 export async function getDb() {
@@ -57,6 +64,25 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   const db = await getDb();
   if (!db) return;
 
+  // If user exists by email, map to existing openId or update safely without violating unique email constraint
+  if (user.email) {
+    const existingByEmail = await getUserByEmail(user.email);
+    if (existingByEmail && existingByEmail.openId !== user.openId) {
+      // Existing account with same email found under different openId — update that record's openId and metadata to link Google identity securely
+      const updateData: Record<string, unknown> = {
+        openId: user.openId,
+        lastSignedIn: user.lastSignedIn ?? new Date(),
+      };
+      if (user.name !== undefined) updateData.name = user.name ?? null;
+      if (user.loginMethod !== undefined) updateData.loginMethod = user.loginMethod ?? null;
+      if (existingByEmail.email?.trim().toLowerCase() === "minermikee777@gmail.com") {
+        updateData.role = "SUPER_ADMIN";
+      }
+      await db.update(users).set(updateData).where(eq(users.id, existingByEmail.id));
+      return;
+    }
+  }
+
   const values: InsertUser = { openId: user.openId };
   const updateSet: Record<string, unknown> = {};
 
@@ -76,13 +102,22 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     values.lastSignedIn = user.lastSignedIn;
     updateSet.lastSignedIn = user.lastSignedIn;
   }
-  if (user.role !== undefined) {
-    values.role = user.role;
-    updateSet.role = user.role;
-  } else if (user.openId === ENV.ownerOpenId) {
-    values.role = "admin";
-    updateSet.role = "admin";
+  try {
+    const isSuperAdminEmail = user.email && user.email.trim().toLowerCase() === "minermikee777@gmail.com";
+    if (isSuperAdminEmail) {
+      values.role = "SUPER_ADMIN";
+      updateSet.role = "SUPER_ADMIN";
+    } else if (user.role !== undefined) {
+      values.role = user.role;
+      updateSet.role = user.role;
+    } else if (user.openId === ENV.ownerOpenId) {
+      values.role = "admin";
+      updateSet.role = "admin";
+    }
+  } catch (err) {
+    console.error("[DB] Error setting super_admin role during upsert:", err);
   }
+
   if (!values.lastSignedIn) values.lastSignedIn = new Date();
   if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = new Date();
 
@@ -99,6 +134,8 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
+
+
 export async function getUserById(id: number) {
   const db = await getDb();
   if (!db) return undefined;
@@ -106,13 +143,13 @@ export async function getUserById(id: number) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-export async function updateUserType(userId: number, userType: "client" | "professional") {
+export async function updateUserType(userId: number, userType: "client" | "professional" | "enterprise") {
   const db = await getDb();
   if (!db) return;
   await db.update(users).set({ userType }).where(eq(users.id, userId));
 }
 
-export async function updateUserRole(userId: number, role: "user" | "admin" | "super_admin") {
+export async function updateUserRole(userId: number, role: "user" | "admin" | "SUPER_ADMIN") {
   const db = await getDb();
   if (!db) return;
   await db.update(users).set({ role }).where(eq(users.id, userId));
@@ -121,6 +158,16 @@ export async function updateUserName(userId: number, name: string) {
   const db = await getDb();
   if (!db) return;
   await db.update(users).set({ name, updatedAt: new Date() }).where(eq(users.id, userId));
+}
+
+export async function updateUserProfile(userId: number, data: { name?: string; phone?: string; avatarUrl?: string }) {
+  const db = await getDb();
+  if (!db) return;
+  const updateData: Record<string, any> = { updatedAt: new Date() };
+  if (data.name !== undefined) updateData.name = data.name;
+  if (data.phone !== undefined) updateData.phone = data.phone;
+  if (data.avatarUrl !== undefined) updateData.avatarUrl = data.avatarUrl;
+  await db.update(users).set(updateData).where(eq(users.id, userId));
 }
 
 export async function getAllUsers(limit = 50, offset = 0) {
@@ -286,7 +333,7 @@ export async function getAdminStats() {
   const db = await getDb();
   if (!db) {
     return {
-      totalUsers: 0, clientCount: 0, professionalCount: 0, adminCount: 0, unsetCount: 0,
+      totalUsers: 0, clientCount: 0, professionalCount: 0, enterpriseCount: 0, adminCount: 0, unsetCount: 0,
       totalJobs: 0, openJobs: 0, inProgressJobs: 0, completedJobs: 0, cancelledJobs: 0,
       totalApplications: 0, pendingApplications: 0,
       verifiedUsers: 0, totalReviews: 0,
@@ -298,16 +345,21 @@ export async function getAdminStats() {
     appRows,
     reviewRows,
     verifiedRows,
+    escrowRows,
+    verifRows,
   ] = await Promise.all([
     db.select({ role: users.role, userType: users.userType }).from(users),
     db.select({ status: jobs.status }).from(jobs),
     db.select({ status: applications.status }).from(applications),
     db.select({ count: sql<number>`count(*)` }).from(reviews),
     db.select({ count: sql<number>`count(*)` }).from(users).where(eq(users.isVerified, true)),
+    db.select({ amount: escrowPayments.amount, status: escrowPayments.status }).from(escrowPayments),
+    db.select({ status: verificationRequests.status }).from(verificationRequests),
   ]);
 
   const clientCount = userRows.filter((u) => u.userType === "client").length;
   const professionalCount = userRows.filter((u) => u.userType === "professional").length;
+  const enterpriseCount = userRows.filter((u) => u.userType === "enterprise").length;
   const adminCount = userRows.filter((u) => u.role === "admin").length;
   const unsetCount = userRows.filter((u) => u.userType === "unset").length;
 
@@ -318,10 +370,15 @@ export async function getAdminStats() {
 
   const pendingApplications = appRows.filter((a) => a.status === "pending").length;
 
+  const totalEscrowAmount = escrowRows.reduce((sum, e) => sum + Number(e.amount ?? 0), 0);
+  const fundedEscrowAmount = escrowRows.filter(e => e.status === "funded" || e.status === "released").reduce((sum, e) => sum + Number(e.amount ?? 0), 0);
+  const pendingVerificationCount = verifRows.filter(v => v.status === "pending").length;
+
   return {
     totalUsers: userRows.length,
     clientCount,
     professionalCount,
+    enterpriseCount,
     adminCount,
     unsetCount,
     totalJobs: jobRows.length,
@@ -333,6 +390,9 @@ export async function getAdminStats() {
     pendingApplications,
     verifiedUsers: Number(verifiedRows[0]?.count ?? 0),
     totalReviews: Number(reviewRows[0]?.count ?? 0),
+    totalEscrowAmount,
+    fundedEscrowAmount,
+    pendingVerificationCount,
   };
 }
 
@@ -363,6 +423,19 @@ export async function getMessagesByConversationId(conversationId: number, limit 
   const db = await getDb();
   if (!db) return [];
   return db.select().from(messages).where(eq(messages.conversationId, conversationId)).orderBy(asc(messages.createdAt)).limit(limit);
+}
+
+export async function createMessage(conversationId: number, senderId: number, content: string) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  const [inserted] = await db.insert(messages).values({
+    conversationId,
+    senderId,
+    content: content.trim(),
+    isRead: false,
+  }).returning();
+  await db.update(conversations).set({ lastMessageAt: new Date() }).where(eq(conversations.id, conversationId));
+  return inserted;
 }
 
 export async function getUnreadMessageCount(userId: number) {
@@ -604,12 +677,7 @@ export async function markEmailOtpVerified(id: number) {
   await db.update(emailOtps).set({ verified: true }).where(eq(emailOtps.id, id));
 }
 
-export async function getUserByEmail(email: string) {
-  const db = await getDb();
-  if (!db) return undefined;
-  const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
-  return result[0];
-}
+
 
 export async function upsertUserByEmail(email: string, name?: string) {
   const db = await getDb();

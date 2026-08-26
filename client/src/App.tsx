@@ -10,6 +10,7 @@ import JobDetail from "./pages/JobDetail";
 import Onboarding from "./pages/Onboarding";
 import ClientDashboard from "./pages/ClientDashboard";
 import ProfessionalDashboard from "./pages/ProfessionalDashboard";
+import EnterpriseDashboard from "./pages/EnterpriseDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import Messaging from "./pages/Messaging";
 import VerificationRequest from "./pages/VerificationRequest";
@@ -21,6 +22,8 @@ import SignIn from "./pages/SignIn";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import UserProfile from "./pages/UserProfile";
+import EditProfile from "./pages/EditProfile";
+import CookiePolicy from "./pages/CookiePolicy";
 
 function Router() {
   return (
@@ -32,6 +35,7 @@ function Router() {
       <Route path="/dashboard/contractor" component={ClientDashboard} />
       <Route path="/dashboard/client" component={ClientDashboard} />
       <Route path="/dashboard/professional" component={ProfessionalDashboard} />
+      <Route path="/dashboard/enterprise" component={EnterpriseDashboard} />
       <Route path="/dashboard/admin" component={AdminDashboard} />
       <Route path="/messages" component={Messaging} />
       <Route path="/verification" component={VerificationRequest} />
@@ -43,7 +47,9 @@ function Router() {
       <Route path="/sign-in" component={SignIn} />
       <Route path="/privacy-policy" component={PrivacyPolicy} />
       <Route path="/terms" component={TermsOfService} />
+      <Route path="/cookie-policy" component={CookiePolicy} />
       <Route path="/profile" component={UserProfile} />
+      <Route path="/profile/edit" component={EditProfile} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

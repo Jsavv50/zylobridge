@@ -1,3 +1,4 @@
+import "./supabase-mock";
 import { describe, expect, it } from "vitest";
 import { appRouter } from "./routers";
 import { COOKIE_NAME } from "../shared/const";
