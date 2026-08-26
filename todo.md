@@ -1001,4 +1001,4 @@
 ## Phase 73 — Enterprise Workspace Surface Expansion
 - [x] Restore enterprise workspace access cards for marketplace, talent, jobs, messaging, payments, and notifications
 - [x] Add real-data enterprise marketplace metrics, average rating, and published reviews with honest empty states
-- [ ] Validate and publish the expanded enterprise workspace surface
+- [x] Validate and publish the expanded enterprise workspace surface
