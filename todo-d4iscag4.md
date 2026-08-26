@@ -14,6 +14,6 @@
 - Current architecture: React 19, Tailwind 4, Express 4, tRPC 11, Drizzle ORM, Manus OAuth, and database-backed server features.
 - User direction: Maintain a professional Silicon Valley standard and professional structure throughout.
 - [x] Review the homepage’s testimonial section: it previously presented named Trustpilot/Google reviews and ratings that required verified source data or removal before production use.
-- [ ] Review homepage asset references such as `/ZYLO.png` against the project’s managed asset-storage rules.
-- [ ] Review and resolve the existing realtime-auth warning if realtime features are part of the requested scope.
+- [x] Review homepage asset references such as `/ZYLO.png` against the project’s managed asset-storage rules. The official small brand asset is intentionally served from `client/public/ZYLO.png` and centralized through `ZylobridgeLogo`.
+- [x] Review and resolve the existing realtime-auth warning if realtime features are part of the requested scope. Reviewed as out of scope for this homepage-only cleanup; the warning remains documented for a future realtime configuration pass.
 - [x] Remove unverified homepage testimonials, third-party review badges, rating aggregates, and related fabricated social-proof claims while preserving the page’s visual hierarchy.
