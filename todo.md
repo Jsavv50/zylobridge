@@ -976,3 +976,10 @@
 - [ ] Commit, push, deploy, and perform safe production acceptance for live notifications without creating unintended financial charges (code validation complete; production database Realtime policy/publication and authenticated live acceptance remain pending).
 - [x] Produce a complete live-notifications implementation and deployment report with evidence, limitations, and final status.
 - [ ] Diagnose and resolve the reported production case where a freshly sent message persists but no recipient notification appears; verify persistence, dispatcher, Realtime subscription, and recipient isolation end to end.
+
+## Phase 69 — Enterprise Reconciliation and Concurrent Release Merge
+- [x] Reconcile restored enterprise, security, vocation, and database work against the newer GitHub notification-delivery baseline without discarding either stream
+- [x] Preserve the newer notification dispatcher, routing, enterprise invitation, monitoring, SMS, and test infrastructure while retaining additive migration and security work
+- [x] Install the merged lockfile dependencies and verify TypeScript, full tests, and production client/server builds
+- [x] Restore granular route and vendor chunking after merge to remove the oversized client bundle warning
+- [ ] Deploy the combined GitHub revision to Vercel and Railway, then perform authorized live validation of enterprise verification, notifications, OAuth, and payment flows
