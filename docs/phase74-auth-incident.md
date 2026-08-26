@@ -21,3 +21,11 @@ The Railway deployment page for the latest GitHub revision showed the production
 ## Startup log evidence
 
 The latest Railway deployment log shows the container starting with `NODE_ENV=production node dist/index.js`, but the service remains crashed and no application startup line is present in the visible log rows. This narrows the failure to process startup or the deployment/runtime environment before the application emits its normal listening/health messages. No Railway restart was triggered from the dashboard.
+
+## Restart attempt status
+
+The authenticated Railway service page did not reload into the service controls after navigation; the browser ended at `about:blank`. No restart, variable edit, deployment change, or other Railway operation was performed. The production API therefore remains unverified after the authentication recovery checkpoint.
+
+## Post-release recovery check
+
+After checkpoint `33f686f0`, `https://api.zylobridge.com/api/health` returned HTTP 200 with `{"status":"ok",...}`. The published Vercel sign-in route rendered after its intentional loading state and the public home route rendered with the restored navigation and live-data metric placeholders. The Google and email choices were present in the sign-in surface. No Google consent screen was opened and no email OTP was requested.

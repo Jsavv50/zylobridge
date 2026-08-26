@@ -1007,5 +1007,5 @@
 - [x] Trace and fix Google OAuth sign-in on the Vercel frontend and Railway callback/session path
 - [x] Trace and fix email OTP send, verification, session issuance, and post-auth profile completion
 - [x] Restore supported prior authentication options and redirects without changing the split deployment architecture
-- [ ] Validate authentication fixes with regression tests, production builds, and safe live checks
-- [ ] Publish the authentication recovery release and document any user-authorized live-test limitations
+- [x] Validate authentication fixes with regression tests, production builds, and safe live checks
+- [x] Publish the authentication recovery release and document any user-authorized live-test limitations
