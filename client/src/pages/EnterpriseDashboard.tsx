@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Building2, CheckCircle2, Compass, FolderKanban, LockKeyhole, MailPlus, MoreHorizontal, ShieldCheck, Trash2, UserRound, UsersRound } from "lucide-react";
+import { Bell, BriefcaseBusiness, Building2, CheckCircle2, Compass, CreditCard, FolderKanban, LockKeyhole, MailPlus, MessageSquare, MoreHorizontal, Search, ShieldCheck, Star, Trash2, UserRound, UsersRound } from "lucide-react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -12,8 +12,28 @@ import { trpc } from "@/lib/trpc";
 
 const workspaceCapabilities = [
   { icon: Compass, title: "Marketplace access", description: "Review the public marketplace and source qualified professionals for your organization.", href: "/marketplace", action: "Browse marketplace" },
-  { icon: UserRound, title: "Account management", description: "Review your enterprise account information and security settings.", href: "/profile", action: "View account" },
+  { icon: Search, title: "Find talent", description: "Search professional profiles by vocation, availability, verification, and experience.", href: "/talent", action: "Browse talent" },
+  { icon: BriefcaseBusiness, title: "Job postings", description: "Publish and manage opportunities for your enterprise hiring workflow.", href: "/employer/jobs", action: "Manage postings" },
+  { icon: MessageSquare, title: "Messages", description: "Keep project and candidate conversations in one documented workspace.", href: "/messages", action: "Open messages" },
+  { icon: CreditCard, title: "Escrow and funding", description: "Review supported payment milestones and funding workflows without leaving the workspace.", href: "/payments", action: "Review payments" },
+  { icon: Bell, title: "Notifications", description: "Review account, hiring, project, verification, and marketplace activity.", href: "/notifications", action: "View notifications" },
 ];
+
+type MarketplaceSummary = {
+  activeProfessionals: number;
+  openJobs: number;
+  verifiedProfessionals: number;
+  totalReviews: number;
+  averageRating: number;
+  reviews: Array<{ rating: number; comment: string | null; createdAt: string | Date }>;
+};
+
+function StarRating({ rating }: { rating: number }) {
+  const filled = Math.round(Math.max(0, Math.min(5, rating)));
+  return <div className="flex gap-0.5" aria-label={`${rating.toFixed(1)} out of 5 stars`}>
+    {Array.from({ length: 5 }).map((_, index) => <Star key={index} className={`h-3.5 w-3.5 ${index < filled ? "fill-amber-400 text-amber-400" : "text-gray-600"}`} />)}
+  </div>;
+}
 
 function formatDate(value: string | Date | null | undefined) {
   if (!value) return "—";
@@ -24,6 +44,7 @@ export default function EnterpriseDashboard() {
   const { user, isAuthenticated } = useAuth();
   const isEnterprise = user?.userType === "enterprise";
   const utils = trpc.useUtils();
+  const { data: marketplaceSummary } = trpc.publicSummary.useQuery(undefined, { enabled: isEnterprise, staleTime: 60_000 });
   const { data: workspace, isLoading: workspaceLoading } = trpc.enterprise.overview.useQuery(undefined, { enabled: isEnterprise });
   const organizations = workspace?.organizations ?? [];
   const [selectedOrganizationId, setSelectedOrganizationId] = useState<number | null>(null);
@@ -136,8 +157,19 @@ export default function EnterpriseDashboard() {
           </div>
         </header>
 
-        <section className="mt-8 grid gap-5 md:grid-cols-2" aria-label="Enterprise capabilities">
+        <section className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3" aria-label="Enterprise capabilities">
           {workspaceCapabilities.map(({ icon: Icon, title, description, href, action }) => <article key={title} className="rounded-2xl border border-white/10 bg-[#131a26] p-6"><Icon className="h-5 w-5 text-amber-300" /><h2 className="mt-4 text-lg font-bold">{title}</h2><p className="mt-2 min-h-12 text-sm leading-relaxed text-gray-400">{description}</p><Link href={href} className="mt-5 inline-flex"><Button variant="outline" size="sm" className="border-amber-500/25 bg-transparent text-amber-200 hover:bg-amber-500/10 hover:text-white">{action}</Button></Link></article>)}
+        </section>
+
+        <section className="mt-8 rounded-2xl border border-white/10 bg-[#131a26] p-6" aria-labelledby="marketplace-snapshot-heading">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-200">Marketplace snapshot</p><h2 id="marketplace-snapshot-heading" className="mt-2 text-2xl font-bold">Verified activity and reputation</h2><p className="mt-1 max-w-2xl text-sm text-gray-400">Live counts and ratings from persisted ZYLOBRIDGE records. No review or activity figures are estimated.</p></div><Link href="/talent" className="text-sm text-amber-200 hover:text-white">Explore talent →</Link></div>
+          <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-5">{[
+            { label: "Active professionals", value: marketplaceSummary?.activeProfessionals },
+            { label: "Open jobs", value: marketplaceSummary?.openJobs },
+            { label: "Verified professionals", value: marketplaceSummary?.verifiedProfessionals },
+            { label: "Published reviews", value: marketplaceSummary?.totalReviews },
+          ].map(({ label, value }) => <div key={label} className="rounded-xl border border-white/10 bg-white/[0.03] p-4"><p className="text-2xl font-bold text-white">{value ?? "—"}</p><p className="mt-1 text-xs leading-5 text-gray-500">{label}</p></div>)}<div className="rounded-xl border border-white/10 bg-white/[0.03] p-4"><p className="text-2xl font-bold text-white">{marketplaceSummary && marketplaceSummary.totalReviews > 0 ? marketplaceSummary.averageRating.toFixed(1) : "—"}</p><div className="mt-1">{marketplaceSummary && marketplaceSummary.totalReviews > 0 ? <StarRating rating={marketplaceSummary.averageRating} /> : <p className="text-xs leading-5 text-gray-500">No ratings yet</p>}</div><p className="mt-1 text-xs leading-5 text-gray-500">Average rating</p></div></div>
+          <div className="mt-6 grid gap-4 md:grid-cols-3">{marketplaceSummary?.reviews.length ? marketplaceSummary.reviews.slice(0, 3).map((review, index) => <article key={`${review.createdAt}-${index}`} className="rounded-xl border border-white/10 bg-black/10 p-4"><div className="flex items-center justify-between gap-3"><span className="text-[11px] font-semibold uppercase tracking-wider text-amber-300">Published review</span><StarRating rating={review.rating} /></div><p className="mt-3 line-clamp-4 text-sm leading-6 text-gray-300">{review.comment}</p><p className="mt-3 text-xs text-gray-500">Completed-work review · {new Date(review.createdAt).toLocaleDateString()}</p></article>) : <div className="rounded-xl border border-dashed border-white/15 p-5 text-sm text-gray-500 md:col-span-3">{marketplaceSummary ? "No reviews have been published yet. Completed-work reviews will appear here when participants share them." : "Loading verified marketplace activity…"}</div>}</div>
         </section>
 
         <section className="mt-8 rounded-2xl border border-white/10 bg-[#131a26] p-6" aria-labelledby="organization-heading">
