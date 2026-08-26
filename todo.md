@@ -991,3 +991,9 @@
 
 ## Phase 71 — Public Content Compliance
 - [x] Remove unsupported customer reviews, ratings, review-platform claims, and fabricated marketplace metrics from the public home page
+
+## Phase 72 — Previous Interface Restoration
+- [x] Compare the current enterprise-facing interface with the previous release and identify removed supported features
+- [x] Restore supported previous interface features without fabricating user-generated content
+- [x] Restore review, rating, and marketplace-metric presentation only from real persisted data with honest empty states
+- [x] Validate and publish the restored enterprise-facing interface

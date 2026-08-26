@@ -502,6 +502,41 @@ export async function getPublicOrganizationBySlug(slug: string) {
   };
 }
 
+export async function getPublicMarketplaceSummary() {
+  const db = await getDb();
+  if (!db) {
+    return {
+      activeProfessionals: 0,
+      openJobs: 0,
+      verifiedProfessionals: 0,
+      totalReviews: 0,
+      averageRating: 0,
+      reviews: [],
+    };
+  }
+
+  const [professionalCount, openJobCount, verifiedProfessionalCount, reviewAggregate, recentReviews] = await Promise.all([
+    db.select({ count: sql<number>`count(*)` }).from(users).where(eq(users.userType, "professional")),
+    db.select({ count: sql<number>`count(*)` }).from(jobs).where(eq(jobs.status, "open")),
+    db.select({ count: sql<number>`count(*)` }).from(users).where(and(eq(users.userType, "professional"), eq(users.isVerified, true))),
+    db.select({ count: sql<number>`count(*)`, average: sql<number>`coalesce(avg(${reviews.rating}), 0)` }).from(reviews),
+    db.select({ rating: reviews.rating, comment: reviews.comment, createdAt: reviews.createdAt })
+      .from(reviews)
+      .where(sql`${reviews.comment} is not null and length(trim(${reviews.comment})) > 0`)
+      .orderBy(desc(reviews.createdAt))
+      .limit(9),
+  ]);
+
+  return {
+    activeProfessionals: Number(professionalCount[0]?.count ?? 0),
+    openJobs: Number(openJobCount[0]?.count ?? 0),
+    verifiedProfessionals: Number(verifiedProfessionalCount[0]?.count ?? 0),
+    totalReviews: Number(reviewAggregate[0]?.count ?? 0),
+    averageRating: Number(reviewAggregate[0]?.average ?? 0),
+    reviews: recentReviews,
+  };
+}
+
 export async function updateOrganizationProfile(organizationId: number, data: { name?: string; description?: string }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");

@@ -46,6 +46,7 @@ import {
   createReview,
   getReviewsByRevieweeId,
   getAdminStats,
+  getPublicMarketplaceSummary,
   getOrCreateConversation,
   getConversationsByUserId,
   getMessagesByConversationId,
@@ -234,6 +235,8 @@ const reviewCreateSchema = z.object({
 });
 
 export const appRouter = router({
+  publicSummary: publicProcedure.query(async () => getPublicMarketplaceSummary()),
+
   system: systemRouter,
 
   // ── Auth ──────────────────────────────────────────────────────────────────

@@ -1,99 +1,422 @@
-import { useAuth } from "@/_core/hooks/useAuth";
-import Footer from "@/components/Footer";
-import Navbar from "@/components/Navbar";
-import { Button } from "@/components/ui/button";
-import { VOCATION_ICONS, VOCATION_KEYS, VOCATION_LABELS, type VocationKey } from "@shared/vocations";
-import { ArrowRight, Briefcase, CheckCircle, Shield, Users, Zap } from "lucide-react";
 import { Link } from "wouter";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { Button } from "@/components/ui/button";
+import { ArrowRight, CheckCircle, Star, Users, Briefcase, Shield, Zap, Quote, ChevronLeft, ChevronRight } from "lucide-react";
+import { trpc } from "@/lib/trpc";
+import useEmblaCarousel from "embla-carousel-react";
+import Autoplay from "embla-carousel-autoplay";
+import { useCallback, useEffect, useState } from "react";
+import { VOCATION_LABELS, VOCATION_ICONS, VOCATION_KEYS, type VocationKey } from "@shared/vocations";
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
+
 
 const LOGO_URL = "/ZYLO.png";
 
-const CAPABILITIES = [
-  { icon: Briefcase, title: "Marketplace workflows", description: "Create opportunities, discover services, and manage work in one place." },
-  { icon: Users, title: "Role-safe workspaces", description: "Purpose-built journeys for clients, professionals, enterprises, and administrators." },
-  { icon: Shield, title: "Verification controls", description: "Structured verification requests and protected document-review workflows." },
-  { icon: Zap, title: "Connected operations", description: "Messaging, notifications, hiring, and project activity designed to stay connected." },
+
+type PublicMarketplaceSummary = {
+  activeProfessionals: number;
+  openJobs: number;
+  verifiedProfessionals: number;
+  totalReviews: number;
+  averageRating: number;
+  reviews: Array<{ rating: number; comment: string | null; createdAt: string | Date }>;
+};
+
+const HOW_IT_WORKS = [
+  {
+    step: "01",
+    title: "Post Your Job",
+    description: "Describe your project, set your budget, choose a vocation, and publish it to the marketplace in minutes.",
+    forRole: "Contractors",
+  },
+  {
+    step: "02",
+    title: "Receive Bids",
+    description: "Qualified professionals review your job and submit competitive bids with cover letters and pricing.",
+    forRole: "Contractors",
+  },
+  {
+    step: "03",
+    title: "Hire & Track",
+    description: "Accept the best bid, manage the project lifecycle, and leave a review when the work is done.",
+    forRole: "Contractors",
+  },
 ];
 
-const CLIENT_STEPS = [
-  { step: "01", title: "Post your need", description: "Describe the work, set the budget, select a vocation, and publish when ready." },
-  { step: "02", title: "Review qualified interest", description: "Compare applications, profiles, and proposal details in a controlled workflow." },
-  { step: "03", title: "Hire and coordinate", description: "Manage communication, project activity, and payment milestones from the platform." },
+const TRUST_BADGES = [
+  "SSL-encrypted platform",
+  "Identity-verified professionals",
+  "Escrow-ready payment system",
+  "GDPR compliant",
+  "Rate-limited API",
+  "24/7 dispute resolution",
 ];
 
-const PROFESSIONAL_STEPS = [
-  { step: "01", title: "Build your profile", description: "Present your vocation, work history, qualifications, portfolio, and availability." },
-  { step: "02", title: "Discover relevant work", description: "Browse marketplace opportunities by vocation, location, budget, and project context." },
-  { step: "03", title: "Apply with confidence", description: "Submit your proposal, communicate securely, and track the hiring journey." },
-];
 
-function PrimaryCallToAction() {
-  const { isAuthenticated, user } = useAuth();
-  const buttonStyle = { background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)" };
 
-  if (!isAuthenticated) {
-    return (
-      <div className="flex flex-col gap-4 sm:flex-row">
-        <Link href="/sign-in"><Button size="lg" className="h-12 px-8 text-base font-bold" style={buttonStyle}>Post a Job <ArrowRight className="ml-2 h-4 w-4" /></Button></Link>
-        <Link href="/marketplace"><Button variant="outline" size="lg" className="h-12 border-white/15 bg-transparent px-8 text-base font-bold text-gray-300 hover:border-violet-500/40 hover:text-white">Browse Jobs</Button></Link>
-      </div>
-    );
-  }
-  if (user?.role === "SUPER_ADMIN" || user?.role === "admin") return <Link href="/dashboard/admin"><Button size="lg" className="h-12 px-8 text-base font-bold" style={buttonStyle}>Admin Dashboard <ArrowRight className="ml-2 h-4 w-4" /></Button></Link>;
-  if (user?.userType === "client") return <Link href="/dashboard/client"><Button size="lg" className="h-12 px-8 text-base font-bold" style={buttonStyle}>Post a Job <ArrowRight className="ml-2 h-4 w-4" /></Button></Link>;
-  if (user?.userType === "professional") return <Link href="/marketplace"><Button size="lg" className="h-12 px-8 text-base font-bold" style={buttonStyle}>Find Work <ArrowRight className="ml-2 h-4 w-4" /></Button></Link>;
-  if (user?.userType === "enterprise") return <Link href="/dashboard/enterprise"><Button size="lg" className="h-12 px-8 text-base font-bold" style={buttonStyle}>Open Workspace <ArrowRight className="ml-2 h-4 w-4" /></Button></Link>;
-  return <Link href="/onboarding"><Button size="lg" className="h-12 px-8 text-base font-bold" style={buttonStyle}>Complete Setup <ArrowRight className="ml-2 h-4 w-4" /></Button></Link>;
+function StarRating({ count }: { count: number }) {
+  return <div className="flex gap-0.5" aria-label={`${count} out of 5 stars`}>
+    {Array.from({ length: 5 }).map((_, index) => <Star key={index} className={`h-3.5 w-3.5 ${index < count ? "fill-amber-400 text-amber-400" : "text-gray-600"}`} />)}
+  </div>;
 }
 
-function JourneyColumn({ accent, label, icon: Icon, steps }: {
-  accent: "violet" | "cyan";
-  label: string;
-  icon: typeof Briefcase;
-  steps: typeof CLIENT_STEPS;
-}) {
-  const theme = accent === "violet" ? "border-violet-500/25 bg-violet-500/10 text-violet-300" : "border-cyan-500/25 bg-cyan-500/10 text-cyan-300";
+function TestimonialsSection({ summary }: { summary: PublicMarketplaceSummary | undefined }) {
+  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true, align: "start", slidesToScroll: 1 }, [Autoplay({ delay: 4000, stopOnInteraction: false })]);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const reviews = summary?.reviews ?? [];
+  const scrollPrev = useCallback(() => emblaApi?.scrollPrev(), [emblaApi]);
+  const scrollNext = useCallback(() => emblaApi?.scrollNext(), [emblaApi]);
+
+  useEffect(() => {
+    if (!emblaApi) return;
+    const onSelect = () => setSelectedIndex(emblaApi.selectedScrollSnap());
+    emblaApi.on("select", onSelect);
+    return () => { emblaApi.off("select", onSelect); };
+  }, [emblaApi]);
+
   return (
-    <div>
-      <div className={`mb-6 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${theme}`}><Icon className="h-3.5 w-3.5" />{label}</div>
-      <div className="space-y-6">
-        {steps.map((item) => <div key={item.step} className="flex gap-4"><div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border text-xs font-bold ${theme}`}>{item.step}</div><div><h3 className="mb-1 font-semibold text-white">{item.title}</h3><p className="text-sm leading-relaxed text-gray-400">{item.description}</p></div></div>)}
+    <section className="overflow-hidden bg-[#0d1117] py-20">
+      <div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="mb-12 text-center">
+          <span className="mb-4 inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-amber-400"><Star className="h-3.5 w-3.5 fill-amber-400" />Community reviews</span>
+          <h2 className="mb-3 text-3xl font-extrabold text-white sm:text-4xl" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>What the community says</h2>
+          <p className="mx-auto max-w-lg text-sm text-gray-400">Ratings and reviews shown here are published by participants after completed work on ZYLOBRIDGE.</p>
+          <div className="mt-5 flex items-center justify-center gap-2 text-sm text-gray-300"><Star className="h-4 w-4 fill-amber-400 text-amber-400" /><span>{summary && summary.totalReviews > 0 ? `${summary.averageRating.toFixed(1)} average rating from ${summary.totalReviews} published review${summary.totalReviews === 1 ? "" : "s"}` : "No reviews have been published yet"}</span></div>
+        </div>
+        {reviews.length ? <div className="relative"><div className="overflow-hidden" ref={emblaRef}><div className="flex gap-5">{reviews.map((review, index) => <article key={`${review.createdAt}-${index}`} className="flex w-[90%] flex-none flex-col gap-4 rounded-2xl border border-white/8 bg-[#131a26] p-6 sm:w-[48%] lg:w-[31%]"><div className="flex items-center justify-between"><span className="text-[11px] font-bold uppercase tracking-wider text-amber-400">Published review</span><StarRating count={review.rating} /></div><div><Quote className="mb-2 h-5 w-5 text-violet-500/40" /><p className="line-clamp-5 text-sm leading-relaxed text-gray-300">{review.comment}</p></div><footer className="mt-auto border-t border-white/6 pt-3 text-xs text-gray-500">Completed-work review · {new Date(review.createdAt).toLocaleDateString()}</footer></article>)}</div></div>{reviews.length > 1 && <div className="mt-8 flex items-center justify-center gap-3"><button type="button" onClick={scrollPrev} aria-label="Previous review" className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 transition-colors hover:border-violet-500/40 hover:bg-violet-600/20"><ChevronLeft className="h-4 w-4 text-gray-300" /></button><div className="flex gap-1.5">{reviews.map((_, index) => <button type="button" key={index} onClick={() => emblaApi?.scrollTo(index)} aria-label={`Go to review ${index + 1}`} className={`h-1.5 rounded-full transition-all duration-300 ${index === selectedIndex ? "w-6 bg-violet-500" : "w-1.5 bg-white/20"}`} />)}</div><button type="button" onClick={scrollNext} aria-label="Next review" className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 transition-colors hover:border-violet-500/40 hover:bg-violet-600/20"><ChevronRight className="h-4 w-4 text-gray-300" /></button></div>}</div> : <div className="rounded-2xl border border-dashed border-white/15 bg-[#131a26] p-10 text-center"><p className="font-semibold text-white">No reviews have been published yet.</p><p className="mt-2 text-sm text-gray-500">Completed-work reviews will appear here when participants share them.</p></div>}
       </div>
-    </div>
+    </section>
   );
 }
 
 export default function Home() {
+  const { isAuthenticated, user } = useAuth();
+  const summaryQuery = trpc.publicSummary.useQuery(undefined, { staleTime: 60_000 });
+
   return (
     <div className="min-h-screen bg-[#0d1117] text-white">
       <Navbar />
-      <main>
-        <section className="relative overflow-hidden">
-          <div className="pointer-events-none absolute inset-0"><div className="absolute left-1/2 top-0 h-[500px] w-[800px] -translate-x-1/2 rounded-full bg-violet-600/10 blur-3xl" /><div className="absolute right-0 top-20 h-[400px] w-[400px] rounded-full bg-cyan-500/5 blur-3xl" /></div>
-          <div className="container relative mx-auto max-w-7xl px-4 pb-24 pt-20 sm:px-6 lg:px-8"><div className="mx-auto flex max-w-4xl flex-col items-center text-center">
-            <div className="mb-8 flex items-center gap-3 rounded-full border border-violet-500/20 bg-violet-500/5 px-4 py-2"><img src={LOGO_URL} alt="ZYLOBRIDGE" className="h-7 w-7 object-contain" /><span className="text-sm font-semibold tracking-wide text-violet-300">ZYLOBRIDGE MARKETPLACE</span></div>
-            <h1 className="mb-6 text-5xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Connect with <span style={{ background: "linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>skilled professionals</span></h1>
-            <p className="mb-10 max-w-2xl text-lg leading-relaxed text-gray-400 sm:text-xl">A structured marketplace for contractors, clients, enterprises, and skilled professionals to discover opportunities and coordinate work.</p>
-            <PrimaryCallToAction />
-            <div className="mt-12 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-gray-500">{["Free to browse", "Role-based workspaces", "Protected workflows"].map((item) => <span key={item} className="flex items-center gap-1.5"><CheckCircle className="h-3.5 w-3.5 text-emerald-500" />{item}</span>)}</div>
-          </div></div>
-        </section>
 
-        <section className="border-y border-white/5 bg-[#131a26]"><div className="container mx-auto grid max-w-7xl gap-6 px-4 py-8 sm:grid-cols-2 sm:px-6 lg:grid-cols-4 lg:px-8">
-          {CAPABILITIES.map(({ icon: Icon, title, description }) => <article key={title} className="text-center"><Icon className="mx-auto h-5 w-5 text-violet-400" /><h2 className="mt-3 font-bold text-white">{title}</h2><p className="mx-auto mt-1 max-w-48 text-xs leading-relaxed text-gray-500">{description}</p></article>)}
-        </div></section>
+      {/* ── Hero Section ──────────────────────────────────────────────────── */}
+      <section className="relative overflow-hidden">
+        {/* Background glow */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-violet-600/10 rounded-full blur-3xl" />
+          <div className="absolute top-20 right-0 w-[400px] h-[400px] bg-cyan-500/5 rounded-full blur-3xl" />
+        </div>
 
-        <section className="py-20"><div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="mb-12 text-center"><span className="text-xs font-semibold uppercase tracking-widest text-violet-400">Specializations</span><h2 className="mt-2 text-3xl font-extrabold text-white sm:text-4xl" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Explore the vocation catalog</h2><p className="mx-auto mt-4 max-w-xl text-gray-400">Find and post work across an expanding selection of trade, field-service, logistics, creative, and professional services.</p></div>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">{VOCATION_KEYS.map((key) => <Link key={key} href={`/marketplace?vocation=${key}`}><div className="group flex cursor-pointer flex-col items-center gap-3 rounded-xl border border-white/8 bg-[#131a26] p-5 text-center transition-all duration-200 hover:border-violet-500/30 hover:bg-[#1c2740]"><span className="text-3xl">{VOCATION_ICONS[key as VocationKey]}</span><span className="text-sm font-medium leading-tight text-gray-300 transition-colors group-hover:text-white">{VOCATION_LABELS[key as VocationKey]}</span></div></Link>)}</div>
-        </div></section>
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl relative pt-20 pb-24">
+          <div className="flex flex-col items-center text-center max-w-4xl mx-auto">
+            {/* Logo badge */}
+            <div className="flex items-center gap-3 mb-8 px-4 py-2 rounded-full border border-violet-500/20 bg-violet-500/5">
+              <img src={LOGO_URL} alt="ZYLOBRIDGE" className="h-7 w-7 object-contain" />
+              <span className="text-sm font-semibold text-violet-300 tracking-wide">ZYLOBRIDGE MARKETPLACE</span>
+            </div>
 
-        <section className="bg-[#131a26] py-20"><div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8"><div className="mb-12 text-center"><span className="text-xs font-semibold uppercase tracking-widest text-violet-400">Process</span><h2 className="mt-2 text-3xl font-extrabold text-white sm:text-4xl" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>How ZYLOBRIDGE works</h2></div><div className="grid gap-12 md:grid-cols-2"><JourneyColumn accent="violet" label="For contractors and clients" icon={Briefcase} steps={CLIENT_STEPS} /><JourneyColumn accent="cyan" label="For skilled professionals" icon={Zap} steps={PROFESSIONAL_STEPS} /></div></div></section>
+            {/* Headline */}
+            <h1
+              className="text-5xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight mb-6 leading-[1.05]"
+              style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+            >
+              Connect with{" "}
+              <span
+                style={{
+                  background: "linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                }}
+              >
+                Elite Trade
+              </span>
+              <br />
+              Professionals
+            </h1>
 
-        <section className="py-16"><div className="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8"><div className="rounded-2xl border border-violet-500/15 bg-gradient-to-br from-[#131a26] to-[#1c2740] p-8 sm:p-10"><div className="flex flex-col items-center justify-between gap-8 md:flex-row md:items-start"><div><h2 className="mb-2 text-2xl font-extrabold text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Built for controlled collaboration</h2><p className="max-w-md text-sm leading-relaxed text-gray-400">Zylobridge combines role-aware access, protected workflows, and structured marketplace operations for work that requires accountability.</p></div><div className="grid grid-cols-2 gap-3">{["Protected account sessions", "Verification workflows", "Escrow-ready payment flow", "Rate-limited API access"].map((item) => <div key={item} className="flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2 text-xs text-gray-300"><CheckCircle className="h-3.5 w-3.5 shrink-0 text-emerald-400" />{item}</div>)}</div></div></div></div></section>
+            <p className="text-lg sm:text-xl text-gray-400 max-w-2xl mb-10 leading-relaxed">
+              ZYLOBRIDGE is the premier two-sided marketplace connecting contractors and clients with verified skilled trade professionals across 12 specialized vocations.
+            </p>
 
-        <section className="bg-[#131a26] py-20"><div className="container mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8"><img src={LOGO_URL} alt="ZYLOBRIDGE" className="mx-auto mb-6 h-16 w-16 object-contain" /><h2 className="mb-4 text-3xl font-extrabold text-white sm:text-4xl" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>Ready to get started?</h2><p className="mx-auto mb-8 max-w-md text-gray-400">Create an account to post work, build a professional presence, or set up an enterprise workspace.</p><div className="flex flex-col justify-center gap-4 sm:flex-row"><Link href="/sign-in"><Button size="lg" className="h-12 px-10 font-bold" style={{ background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)" }}>Join as Contractor <ArrowRight className="ml-2 h-4 w-4" /></Button></Link><Link href="/sign-in"><Button variant="outline" size="lg" className="h-12 border-white/15 bg-transparent px-10 font-bold text-gray-300 hover:border-violet-500/40 hover:text-white">Join as Professional</Button></Link></div></div></section>
-      </main>
+            {/* CTA Buttons */}
+            <div className="flex flex-col sm:flex-row gap-4 mb-12">
+              {isAuthenticated ? (
+                <>
+                  {(user?.role === "SUPER_ADMIN" || user?.role === "admin") && (
+                    <Link href="/dashboard/admin">
+                      <Button
+                        size="lg"
+                        className="font-bold px-8 h-12 text-base"
+                        style={{ background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)" }}
+                      >
+                        Admin Dashboard <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </Link>
+                  )}
+                  {user?.userType === "client" && (
+                    <Link href="/dashboard/client">
+                      <Button
+                        size="lg"
+                        className="font-bold px-8 h-12 text-base"
+                        style={{ background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)" }}
+                      >
+                        Post a Job <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </Link>
+                  )}
+                  {user?.userType === "enterprise" && (
+                    <Link href="/dashboard/enterprise">
+                      <Button
+                        size="lg"
+                        className="font-bold px-8 h-12 text-base"
+                        style={{ background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)" }}
+                      >
+                        Open Workspace <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </Link>
+                  )}
+                  {user?.userType === "professional" && (
+                    <Link href="/marketplace">
+                      <Button
+                        size="lg"
+                        className="font-bold px-8 h-12 text-base"
+                        style={{ background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)" }}
+                      >
+                        Find Work <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </Link>
+                  )}
+                  {user?.userType === "unset" && (
+                    <Link href="/onboarding">
+                      <Button
+                        size="lg"
+                        className="font-bold px-8 h-12 text-base"
+                        style={{ background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)" }}
+                      >
+                        Complete Setup <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </Link>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Link href="/sign-in">
+                    <Button
+                      size="lg"
+                      className="font-bold px-8 h-12 text-base"
+                      style={{ background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)" }}
+                    >
+                      Post a Job <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </Link>
+                  <Link href="/marketplace">
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      className="font-bold px-8 h-12 text-base border-white/15 text-gray-300 hover:text-white hover:border-violet-500/40 bg-transparent"
+                    >
+                      Browse Jobs
+                    </Button>
+                  </Link>
+                </>
+              )}
+            </div>
+
+            {/* Trust line */}
+            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-gray-500">
+              {["No subscription fees", "Free to browse", "Verified professionals"].map((t) => (
+                <span key={t} className="flex items-center gap-1.5">
+                  <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
+                  {t}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Stats Bar ─────────────────────────────────────────────────────── */}
+      <section className="border-y border-white/5 bg-[#131a26]">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl py-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {[
+              { label: "Active Professionals", value: summaryQuery.data?.activeProfessionals, icon: Users },
+              { label: "Open Jobs", value: summaryQuery.data?.openJobs, icon: Briefcase },
+              { label: "Verified Professionals", value: summaryQuery.data?.verifiedProfessionals, icon: Shield },
+              { label: "Published Reviews", value: summaryQuery.data?.totalReviews, icon: Star },
+            ].map(({ label, value, icon: Icon }) => (
+              <div key={label} className="flex flex-col items-center gap-2 text-center">
+                <Icon className="h-5 w-5 text-violet-400" />
+                <span className="text-2xl font-extrabold text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{value ?? "—"}</span>
+                <span className="text-xs text-gray-500">{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Vocations Grid ────────────────────────────────────────────────── */}
+      <section className="py-20">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
+          <div className="text-center mb-12">
+            <span className="text-xs font-semibold text-violet-400 uppercase tracking-widest">Specializations</span>
+            <h2
+              className="text-3xl sm:text-4xl font-extrabold text-white mt-2 mb-4"
+              style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+            >
+              12 Featured Vocations
+            </h2>
+            <p className="text-gray-400 max-w-xl mx-auto">
+              Find or post work across the most in-demand skilled trade specializations in construction and infrastructure.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {VOCATION_KEYS.map((key) => (
+              <Link key={key} href={`/marketplace?vocation=${key}`}>
+                <div className="group flex flex-col items-center gap-3 p-5 rounded-xl border border-white/8 bg-[#131a26] hover:border-violet-500/30 hover:bg-[#1c2740] transition-all duration-200 cursor-pointer text-center">
+                  <span className="text-3xl">{VOCATION_ICONS[key as VocationKey]}</span>
+                  <span className="text-sm font-medium text-gray-300 group-hover:text-white transition-colors leading-tight">
+                    {VOCATION_LABELS[key as VocationKey]}
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── How It Works ──────────────────────────────────────────────────── */}
+      <section className="py-20 bg-[#131a26]">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
+          <div className="text-center mb-12">
+            <span className="text-xs font-semibold text-violet-400 uppercase tracking-widest">Process</span>
+            <h2
+              className="text-3xl sm:text-4xl font-extrabold text-white mt-2 mb-4"
+              style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+            >
+              How ZYLOBRIDGE Works
+            </h2>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            {/* For Contractors */}
+            <div>
+              <div className="inline-flex items-center gap-2 text-xs font-semibold text-violet-400 bg-violet-500/10 border border-violet-500/20 rounded-full px-3 py-1 mb-6">
+                <Briefcase className="h-3.5 w-3.5" />
+                For Contractors & Clients
+              </div>
+              <div className="space-y-6">
+                {HOW_IT_WORKS.map((step) => (
+                  <div key={step.step} className="flex gap-4">
+                    <div className="shrink-0 w-10 h-10 rounded-full bg-violet-500/15 border border-violet-500/25 flex items-center justify-center">
+                      <span className="text-xs font-bold text-violet-400">{step.step}</span>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-white mb-1">{step.title}</h3>
+                      <p className="text-sm text-gray-400 leading-relaxed">{step.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* For Professionals */}
+            <div>
+              <div className="inline-flex items-center gap-2 text-xs font-semibold text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 rounded-full px-3 py-1 mb-6">
+                <Zap className="h-3.5 w-3.5" />
+                For Skilled Professionals
+              </div>
+              <div className="space-y-6">
+                {[
+                  { step: "01", title: "Build Your Profile", description: "Create a professional profile showcasing your vocation, certifications, portfolio, and hourly rate." },
+                  { step: "02", title: "Browse & Apply", description: "Filter jobs by vocation, location, and budget. Submit competitive bids with your cover letter." },
+                  { step: "03", title: "Get Hired & Grow", description: "Complete projects, earn 5-star reviews, and build your reputation on the platform." },
+                ].map((step) => (
+                  <div key={step.step} className="flex gap-4">
+                    <div className="shrink-0 w-10 h-10 rounded-full bg-cyan-500/15 border border-cyan-500/25 flex items-center justify-center">
+                      <span className="text-xs font-bold text-cyan-400">{step.step}</span>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-white mb-1">{step.title}</h3>
+                      <p className="text-sm text-gray-400 leading-relaxed">{step.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Trust & Compliance ────────────────────────────────────────────── */}
+      <section className="py-16">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
+          <div className="rounded-2xl border border-violet-500/15 bg-gradient-to-br from-[#131a26] to-[#1c2740] p-8 sm:p-10">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-8">
+              <div>
+                <h3
+                  className="text-2xl font-extrabold text-white mb-2"
+                  style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+                >
+                  Built for Trust & Compliance
+                </h3>
+                <p className="text-gray-400 text-sm max-w-md">
+                  ZYLOBRIDGE is engineered with enterprise-grade security, transparent processes, and full regulatory compliance.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {TRUST_BADGES.map((badge) => (
+                  <div key={badge} className="flex items-center gap-2 text-xs text-gray-300 bg-white/5 rounded-lg px-3 py-2">
+                    <CheckCircle className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                    {badge}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Testimonials ─────────────────────────────────────────────────── */}
+      <TestimonialsSection summary={summaryQuery.data} />
+
+      {/* ── Final CTA ─────────────────────────────────────────────────────── */}
+      <section className="py-20 bg-[#131a26]">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl text-center">
+          <img src={LOGO_URL} alt="ZYLOBRIDGE" className="h-16 w-16 object-contain mx-auto mb-6" />
+          <h2
+            className="text-3xl sm:text-4xl font-extrabold text-white mb-4"
+            style={{ fontFamily: "'Space Grotesk', sans-serif" }}
+          >
+            Ready to get started?
+          </h2>
+          <p className="text-gray-400 mb-8 max-w-md mx-auto">
+            Join thousands of contractors and professionals already building the future with ZYLOBRIDGE.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link href="/sign-in">
+              <Button
+                size="lg"
+                className="font-bold px-10 h-12"
+                style={{ background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)" }}
+              >
+                Join as Contractor <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+            <Link href="/sign-in">
+              <Button
+                variant="outline"
+                size="lg"
+                className="font-bold px-10 h-12 border-white/15 text-gray-300 hover:text-white hover:border-violet-500/40 bg-transparent"
+              >
+                Join as Professional
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </section>
+
       <Footer />
     </div>
   );
