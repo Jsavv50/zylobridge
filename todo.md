@@ -393,4 +393,4 @@
 - [x] Identify all changes attributable to `pasted_content_11.txt` and choose the last stable checkpoint before those changes
 - [x] Restore the prior stable authentication and deployment behavior without changing unrelated application functionality
 - [x] Validate TypeScript, tests, client build, server build, and production startup after rollback
-- [ ] Publish the rollback and document the resulting release version
+- [x] Publish the rollback and document the resulting release version
