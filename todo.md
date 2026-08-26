@@ -835,3 +835,13 @@
 - [x] Replace the slow case-folded-only email lookup with normalized indexed lookup and a legacy fallback
 - [x] Add focused regression coverage and validate TypeScript, tests, builds, production startup, and live health endpoints
 - [x] Publish the Super Admin sign-in reliability repair
+
+## Phase 86 — Full Recovery, Reconciliation, and Launch Restoration (`pasted_content_12.txt`)
+- [ ] Create and preserve a recovery branch and immutable baseline of the current restored project
+- [ ] Inventory GitHub branches, commits, reflog, stashes, pull requests, project checkpoints, deployed versions, and Supabase schema/configuration sources
+- [ ] Build a missing-changes inventory and reconcile recovered code with the current restored codebase
+- [ ] Reconcile `drizzle/schema.ts`, migration files, migration history, and production Supabase schema without destructive data operations
+- [ ] Audit authentication, profiles, employer workflows, enterprise, messaging, notifications, payments, verification, routing, responsiveness, security, observability, and deployment configuration
+- [ ] Repair or recover meaningful missing functionality and add regression coverage only where evidence requires it
+- [ ] Run complete automated validation and safe read-only live smoke checks
+- [ ] Produce the recovery and launch-readiness report, back up to GitHub, publish, and document concrete remaining blockers if any
