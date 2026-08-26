@@ -6,11 +6,8 @@ import cors from "cors";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerGoogleAuthRoutes } from "./googleAuth";
-import { registerRealtimeAuthRoutes } from "./realtimeAuth";
 import { registerStorageProxy } from "./storageProxy";
-import { registerPaystackWebhook } from "../webhook";
 import { appRouter } from "../routers";
-import { sdk } from "./sdk";
 import { createContext } from "./context";
 import { setupVite } from "./vite";
 import { registerSocketIO } from "../socket";
@@ -70,12 +67,10 @@ async function startServer() {
       origin: (origin, callback) => {
         // Allow same-origin requests (no Origin header) and local development
         if (!origin) return callback(null, true);
-        const isManagedPreviewOrigin = process.env.NODE_ENV !== "production" && /^https:\/\/3000-[a-z0-9-]+\.us\d+\.manus\.computer$/.test(origin);
         if (
           allowedOrigins.length === 0 ||
           allowedOrigins.includes(origin) ||
-          origin.startsWith("http://localhost") ||
-          isManagedPreviewOrigin
+          origin.startsWith("http://localhost")
         ) {
           return callback(null, true);
         }
@@ -104,16 +99,11 @@ async function startServer() {
   registerStorageProxy(app);
   registerOAuthRoutes(app);
   registerGoogleAuthRoutes(app);
-  registerRealtimeAuthRoutes(app);
-  registerPaystackWebhook(app);
 
-  // ── Root endpoint (production API diagnostics) ───────────────────────────
-  // In development Vite owns `/` so the local preview renders the client app.
-  if (process.env.NODE_ENV !== "development") {
-    app.get("/", (_req, res) => {
-      res.json({ status: "ok", service: "Zylobridge API" });
-    });
-  }
+  // ── Root endpoint (API diagnostics) ──────────────────────────────────────
+  app.get("/", (_req, res) => {
+    res.json({ status: "ok", service: "Zylobridge API" });
+  });
 
   // ── Health check ──────────────────────────────────────────────────────────
   app.get("/api/health", (_req, res) => {
@@ -131,27 +121,6 @@ async function startServer() {
 
   // ── Socket.io real-time messaging ──────────────────────────────────────────
   registerSocketIO(server);
-
-  // ── Scheduled Cron: Audit Log Retention (30 Days) ──────────────────────────
-  app.post("/api/scheduled/cleanupAuditLogs", async (req, res) => {
-    try {
-      const user = await sdk.authenticateRequest(req);
-      if (!user.isCron) {
-        return res.status(403).json({ error: "Unauthorized cron execution" });
-      }
-      const { deleteOldAuditLogs } = await import("../db");
-      const result = await deleteOldAuditLogs(30);
-      return res.json({ ok: true, cleanedAt: new Date().toISOString(), result });
-    } catch (err: any) {
-      console.error("[Cron] cleanupAuditLogs failed:", err);
-      return res.status(500).json({
-        error: err.message,
-        stack: err.stack,
-        context: { url: req.originalUrl },
-        timestamp: new Date().toISOString(),
-      });
-    }
-  });
 
   // ── Local development — Vite dev server (not used on Railway) ─────────────
   if (process.env.NODE_ENV === "development") {

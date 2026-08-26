@@ -149,7 +149,7 @@ function buildSections(q: string): Section[] {
             <H t="To access certain features of the Platform, you must create an account. You agree to provide accurate, current, and complete information during registration and to update such information to keep it accurate, current, and complete." />
           </p>
           <p className="text-gray-300 leading-relaxed mt-4">
-            <H t="You are responsible for safeguarding your account credentials and for all activities that occur under your account. You must notify us immediately at Support@zylobridge.com of any unauthorized use of your account or any other breach of security." />
+            <H t="You are responsible for safeguarding your account credentials and for all activities that occur under your account. You must notify us immediately at Minermikee777@gmail.com of any unauthorized use of your account or any other breach of security." />
           </p>
           <p className="text-gray-300 leading-relaxed mt-4">
             <H t="ZYLOBRIDGE reserves the right to suspend or terminate accounts that:" />
@@ -381,7 +381,7 @@ function buildSections(q: string): Section[] {
             <Link href="/privacy-policy" className="text-violet-400 hover:text-violet-300 underline">
               zylobridge.com/privacy-policy
             </Link>
-            . Contact us at Support@zylobridge.com with any data protection
+            . Contact us at Minermikee777@gmail.com with any data protection
             inquiries.
           </Callout>
         </>
@@ -394,7 +394,7 @@ function buildSections(q: string): Section[] {
       content: (
         <>
           <p className="text-gray-300 leading-relaxed">
-            <H t="Either party may terminate this agreement at any time. You may terminate your account by contacting us at Support@zylobridge.com or through the account settings on the Platform." />
+            <H t="Either party may terminate this agreement at any time. You may terminate your account by contacting us at Minermikee777@gmail.com or through the account settings on the Platform." />
           </p>
           <p className="text-gray-300 leading-relaxed mt-4">
             <H t="ZYLOBRIDGE may suspend or terminate your access to the Platform immediately, without prior notice or liability, for any reason, including but not limited to a breach of these Terms." />
@@ -425,7 +425,7 @@ function buildSections(q: string): Section[] {
           </p>
           <Callout type="info">
             For any legal inquiries or notices, please contact Zylobridge Global
-            Company LTD at Support@zylobridge.com.
+            Company LTD at Minermikee777@gmail.com.
           </Callout>
         </>
       ),
@@ -447,19 +447,19 @@ function buildSections(q: string): Section[] {
             <div>
               <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Email</p>
               <a
-                href="mailto:Support@zylobridge.com"
+                href="mailto:Minermikee777@gmail.com"
                 className="text-sm text-violet-400 hover:text-violet-300 transition-colors mt-0.5 block"
               >
-                Support@zylobridge.com
+                Minermikee777@gmail.com
               </a>
             </div>
             <div>
               <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Platform</p>
               <a
-                href="https://zylobridge.com"
+                href="https://zylobridge.manus.space"
                 className="text-sm text-violet-400 hover:text-violet-300 transition-colors mt-0.5 block"
               >
-                zylobridge.com
+                zylobridge.manus.space
               </a>
             </div>
           </div>
@@ -752,10 +752,10 @@ export default function TermsOfService() {
                         Contact
                       </p>
                       <a
-                        href="mailto:Support@zylobridge.com"
+                        href="mailto:Minermikee777@gmail.com"
                         className="text-violet-400 hover:text-violet-300 transition-colors mt-0.5 block"
                       >
-                        Support@zylobridge.com
+                        Minermikee777@gmail.com
                       </a>
                     </div>
                     <div>

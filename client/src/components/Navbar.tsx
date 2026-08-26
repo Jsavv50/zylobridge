@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { ZylobridgeLogo } from "./ZylobridgeLogo";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { Button } from "@/components/ui/button";
@@ -12,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Menu, X, ChevronDown, Briefcase, LayoutDashboard, Building2, Shield, MessageSquare, Bell, ClipboardList, ShieldCheck, ShoppingBag, User } from "lucide-react";
+import { Menu, X, ChevronDown, Briefcase, LayoutDashboard, Shield, MessageSquare, ShieldCheck, ShoppingBag, User } from "lucide-react";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { trpc } from "@/lib/trpc";
 
@@ -21,20 +20,18 @@ const LOGO_URL = "/ZYLO.png";
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user, isAuthenticated, logout } = useAuth();
-  const [location, navigate] = useLocation();
+  const [location] = useLocation();
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-    } finally {
-      navigate("/");
-    }
-  };
+  const { mutate: doLogout } = trpc.auth.logout.useMutation({
+    onSuccess: () => {
+      logout();
+      window.location.href = "/";
+    },
+  });
 
-  const isAdmin = user?.role === "admin" || user?.role === "SUPER_ADMIN";
+  const isAdmin = user?.role === "admin";
   const isClient = user?.userType === "client";
   const isProfessional = user?.userType === "professional";
-  const isEnterprise = user?.userType === "enterprise";
 
   const { data: unreadData } = trpc.messaging.unreadCount.useQuery(undefined, {
     enabled: isAuthenticated,
@@ -48,15 +45,6 @@ export default function Navbar() {
     { href: "/how-it-works", label: "How It Works" },
   ];
 
-  const workspaceLinks = isAuthenticated
-    ? [
-        ...(isProfessional ? [{ href: "/applications", label: "Applications", icon: ClipboardList }] : []),
-        ...(isClient || isEnterprise ? [{ href: "/employer/jobs", label: "Job Postings", icon: Briefcase }] : []),
-        { href: "/messages", label: "Messages", icon: MessageSquare },
-        { href: "/notifications", label: "Notifications", icon: Bell },
-      ]
-    : [];
-
   const initials = user?.name
     ? user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
     : "U";
@@ -66,7 +54,25 @@ export default function Navbar() {
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
-          <ZylobridgeLogo />
+          <Link href="/" className="flex items-center gap-3 shrink-0">
+            <img
+              src={LOGO_URL}
+              alt="ZYLOBRIDGE"
+              className="h-9 w-9 object-contain"
+            />
+            <span
+              className="text-xl font-extrabold tracking-tight"
+              style={{
+                fontFamily: "'Space Grotesk', sans-serif",
+                background: "linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
+              }}
+            >
+              ZYLOBRIDGE
+            </span>
+          </Link>
 
           {/* Desktop Nav */}
           <div className="hidden md:flex items-center gap-6">
@@ -86,15 +92,7 @@ export default function Navbar() {
           </div>
 
           {/* Desktop Auth */}
-          <div className="hidden md:flex items-center gap-2">
-            {isAuthenticated && workspaceLinks.map(({ href, label, icon: Icon }) => (
-              <Link key={href} href={href}>
-                <Button variant="ghost" size="sm" className="text-gray-300 hover:text-white hover:bg-white/5" title={label}>
-                  <Icon className="h-4 w-4 mr-1.5" />{label}
-                  {label === "Messages" && unreadCount > 0 && <span className="ml-1 rounded-full bg-violet-600 px-1.5 py-0.5 text-[10px] font-bold text-white">{unreadCount > 99 ? "99+" : unreadCount}</span>}
-                </Button>
-              </Link>
-            ))}
+          <div className="hidden md:flex items-center gap-3">
             {isAuthenticated ? (
               <>
                 {/* Dashboard link based on role */}
@@ -119,14 +117,6 @@ export default function Navbar() {
                     <Button variant="ghost" size="sm" className="text-gray-300 hover:text-white hover:bg-white/5">
                       <LayoutDashboard className="h-4 w-4 mr-1.5" />
                       Dashboard
-                    </Button>
-                  </Link>
-                )}
-                {isEnterprise && (
-                  <Link href="/dashboard/enterprise">
-                    <Button variant="ghost" size="sm" className="text-amber-300 hover:text-amber-200 hover:bg-amber-500/10">
-                      <Building2 className="h-4 w-4 mr-1.5" />
-                      Workspace
                     </Button>
                   </Link>
                 )}
@@ -192,7 +182,7 @@ export default function Navbar() {
                     </DropdownMenuItem>
                     <DropdownMenuSeparator className="bg-white/10" />
                     <DropdownMenuItem
-                      onClick={() => void handleLogout()}
+                      onClick={() => doLogout()}
                       className="text-red-400 hover:text-red-300 cursor-pointer"
                     >
                       Sign Out
@@ -271,21 +261,11 @@ export default function Navbar() {
                     </Button>
                   </Link>
                 )}
-                {isEnterprise && (
-                  <Link href="/dashboard/enterprise" onClick={() => setMobileOpen(false)}>
-                    <Button variant="outline" size="sm" className="w-full border-amber-500/30 text-amber-300">
-                      <Building2 className="h-4 w-4 mr-2" /> Enterprise Workspace
-                    </Button>
-                  </Link>
-                )}
-                {workspaceLinks.map(({ href, label, icon: Icon }) => (
-                  <Link key={href} href={href} onClick={() => setMobileOpen(false)}>
-                    <Button variant="outline" size="sm" className="w-full border-white/10 text-gray-300">
-                      <Icon className="h-4 w-4 mr-2" /> {label}
-                      {label === "Messages" && unreadCount > 0 && <span className="ml-auto rounded-full bg-violet-600 px-1.5 py-0.5 text-[10px] font-bold text-white">{unreadCount > 99 ? "99+" : unreadCount}</span>}
-                    </Button>
-                  </Link>
-                ))}
+                <Link href="/messages" onClick={() => setMobileOpen(false)}>
+                  <Button variant="outline" size="sm" className="w-full border-white/10 text-gray-300">
+                    <MessageSquare className="h-4 w-4 mr-2" /> Messages
+                  </Button>
+                </Link>
                 {isProfessional && (
                   <Link href="/verification" onClick={() => setMobileOpen(false)}>
                     <Button variant="outline" size="sm" className="w-full border-emerald-500/30 text-emerald-400">
@@ -297,7 +277,7 @@ export default function Navbar() {
                   variant="ghost"
                   size="sm"
                   className="w-full text-red-400 hover:text-red-300"
-                  onClick={() => { void handleLogout(); setMobileOpen(false); }}
+                  onClick={() => { doLogout(); setMobileOpen(false); }}
                 >
                   Sign Out
                 </Button>

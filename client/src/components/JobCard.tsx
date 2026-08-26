@@ -16,8 +16,6 @@ interface JobCardProps {
   description?: string;
   clientVerified?: boolean;
   clientName?: string;
-  organizationName?: string;
-  organizationSlug?: string;
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -46,7 +44,6 @@ export default function JobCard({
   description,
   clientVerified,
   clientName,
-  organizationName,
 }: JobCardProps) {
   const vKey = vocation as VocationKey;
   const icon = VOCATION_ICONS[vKey] ?? "🔧";
@@ -70,7 +67,7 @@ export default function JobCard({
                 <h3 className="font-semibold text-white group-hover:text-violet-300 transition-colors line-clamp-1 text-sm">
                   {title}
                 </h3>
-                <p className="text-xs text-gray-500 mt-0.5">{label} · Job #{id}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{label}</p>
               </div>
             </div>
             <div className="flex flex-col items-end gap-1.5 shrink-0">
@@ -107,10 +104,12 @@ export default function JobCard({
             </span>
           </div>
 
-          {/* Poster and organization context */}
-          {(clientName || organizationName) && (
-            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 mt-3 pt-3 border-t border-white/5">
-              {organizationName ? <><span className="text-xs text-gray-600">Organization</span><span className="text-xs text-gray-400 font-medium">{organizationName}</span></> : <><span className="text-xs text-gray-600">Posted by</span><span className="text-xs text-gray-400 font-medium">{clientName}</span>{clientVerified && <VerificationBadge isVerified size="sm" />}</>}
+          {/* Client info with verification badge */}
+          {clientName && (
+            <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-white/5">
+              <span className="text-xs text-gray-600">Posted by</span>
+              <span className="text-xs text-gray-400 font-medium">{clientName}</span>
+              {clientVerified && <VerificationBadge isVerified size="sm" />}
             </div>
           )}
         </div>

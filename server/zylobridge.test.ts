@@ -1,14 +1,11 @@
 import { describe, expect, it } from "vitest";
-import "./supabase-mock";
 import { appRouter } from "./routers";
 import { COOKIE_NAME } from "../shared/const";
 import type { TrpcContext } from "./_core/context";
 import { vi } from "vitest";
-import * as db from "./db";
 
 // Mock database to avoid live DB connections in tests
 vi.mock("./db", () => ({
-  MAX_PAGE_SIZE: 100,
   getDb: vi.fn().mockResolvedValue(null),
   upsertUser: vi.fn().mockResolvedValue(undefined),
   getUserByOpenId: vi.fn().mockResolvedValue(null),
@@ -16,13 +13,6 @@ vi.mock("./db", () => ({
   createJob: vi.fn().mockResolvedValue({ id: 1 }),
   getJobById: vi.fn().mockResolvedValue(null),
   listJobs: vi.fn().mockResolvedValue([]),
-  searchJobs: vi.fn().mockResolvedValue({ items: [], nextOffset: null, hasMore: false }),
-  searchProfessionals: vi.fn().mockResolvedValue({ items: [], nextOffset: null, hasMore: false }),
-  getPublicProfessionalProfile: vi.fn().mockResolvedValue(null),
-  getPublicOrganizationBySlug: vi.fn().mockResolvedValue(null),
-  updateOrganizationProfile: vi.fn().mockResolvedValue(undefined),
-  getOrganizationProjectById: vi.fn().mockResolvedValue(null),
-  getManagedJobsByUserId: vi.fn().mockResolvedValue([]),
   getJobsByClientId: vi.fn().mockResolvedValue([]),
   updateJob: vi.fn().mockResolvedValue(undefined),
   deleteJob: vi.fn().mockResolvedValue(undefined),
@@ -38,7 +28,7 @@ vi.mock("./db", () => ({
   updateProfile: vi.fn().mockResolvedValue(undefined),
   createReview: vi.fn().mockResolvedValue({ id: 1 }),
   getReviewsByRevieweeId: vi.fn().mockResolvedValue([]),
-  getAdminStats: vi.fn().mockResolvedValue({ totalUsers: 0, clientCount: 0, professionalCount: 0, enterpriseCount: 0, adminCount: 0, unsetCount: 0, totalJobs: 0, openJobs: 0, inProgressJobs: 0, completedJobs: 0, cancelledJobs: 0, totalApplications: 0, pendingApplications: 0, verifiedUsers: 0, totalReviews: 0 }),
+  getAdminStats: vi.fn().mockResolvedValue({ totalUsers: 0, clientCount: 0, professionalCount: 0, adminCount: 0, unsetCount: 0, totalJobs: 0, openJobs: 0, inProgressJobs: 0, completedJobs: 0, cancelledJobs: 0, totalApplications: 0, pendingApplications: 0, verifiedUsers: 0, totalReviews: 0 }),
   getAllUsers: vi.fn().mockResolvedValue([]),
   getUserCount: vi.fn().mockResolvedValue(0),
   updateUserType: vi.fn().mockResolvedValue(undefined),
@@ -135,10 +125,6 @@ function createProfessionalCtx() {
   return createCtx({ id: 3, openId: "pro-001", role: "user", userType: "professional" });
 }
 
-function createEnterpriseCtx() {
-  return createCtx({ id: 4, openId: "enterprise-001", role: "user", userType: "enterprise" });
-}
-
 function createUnauthCtx(): TrpcContext {
   return {
     user: null,
@@ -157,7 +143,7 @@ describe("auth.logout", () => {
     expect(result).toEqual({ success: true });
     expect(clearedCookies).toHaveLength(1);
     expect(clearedCookies[0]?.name).toBe(COOKIE_NAME);
-    expect(clearedCookies[0]?.options).toMatchObject({ httpOnly: true });
+    expect(clearedCookies[0]?.options).toMatchObject({ maxAge: -1, httpOnly: true });
   });
 
   it("auth.me returns null for unauthenticated user", async () => {
@@ -206,7 +192,7 @@ describe("admin RBAC", () => {
   it("blocks unauthenticated user from admin routes", async () => {
     const ctx = createUnauthCtx();
     const caller = appRouter.createCaller(ctx);
-    await expect(caller.admin.stats()).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(caller.admin.stats()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
 });
 
@@ -334,49 +320,6 @@ describe("auth.setUserType", () => {
     const caller = appRouter.createCaller(ctx);
     await expect(caller.auth.setUserType({ userType: "client" })).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
-
-  it("accepts Enterprise as a first-class account type", async () => {
-    const { ctx } = createCtx();
-    const caller = appRouter.createCaller(ctx);
-    await expect(caller.auth.setUserType({ userType: "enterprise" })).resolves.toEqual({ success: true });
-  });
-});
-
-describe("Enterprise role authorization", () => {
-  it("returns a workspace overview for Enterprise accounts", async () => {
-    const { ctx } = createEnterpriseCtx();
-    const caller = appRouter.createCaller(ctx);
-    await expect(caller.enterprise.overview()).resolves.toMatchObject({ workspace: "enterprise" });
-  });
-
-  it("blocks contractor and professional accounts from the Enterprise workspace endpoint", async () => {
-    const contractorCaller = appRouter.createCaller(createClientCtx().ctx);
-    const professionalCaller = appRouter.createCaller(createProfessionalCtx().ctx);
-    await expect(contractorCaller.enterprise.overview()).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await expect(professionalCaller.enterprise.overview()).rejects.toMatchObject({ code: "FORBIDDEN" });
-  });
-
-  it("does not grant Enterprise accounts contractor-only job posting", async () => {
-    const { ctx } = createEnterpriseCtx();
-    const caller = appRouter.createCaller(ctx);
-    await expect(caller.jobs.create({
-      title: "Enterprise Job",
-      description: "This description is long enough for validation.",
-      vocation: "electrician",
-      budget: 1000,
-      location: "Houston, TX",
-    })).rejects.toMatchObject({ code: "FORBIDDEN" });
-  });
-
-  it("does not grant Enterprise accounts professional-only job applications", async () => {
-    const { ctx } = createEnterpriseCtx();
-    const caller = appRouter.createCaller(ctx);
-    await expect(caller.applications.submitApplication({
-      jobId: 1,
-      coverLetter: "This cover letter is long enough for validation.",
-      bidAmount: 500,
-    })).rejects.toMatchObject({ code: "FORBIDDEN" });
-  });
 });
 
 // ── Messaging Tests ──────────────────────────────────────────────────────────
@@ -448,31 +391,5 @@ describe("verification.adminList RBAC", () => {
     const caller = appRouter.createCaller(ctx);
     const result = await caller.verification.adminList();
     expect(Array.isArray(result)).toBe(true);
-  });
-});
-
-
-describe("Phase 2 marketplace authorization and discovery", () => {
-  it("keeps unpublished job details private to the owner or administrator", async () => {
-    vi.mocked(db.getJobById).mockResolvedValueOnce({ id: 44, clientId: 99, status: "completed" } as never);
-    const caller = appRouter.createCaller(createClientCtx().ctx);
-    await expect(caller.jobs.getById({ id: 44 })).rejects.toMatchObject({ code: "NOT_FOUND" });
-  });
-
-  it("enforces the server-side discovery page size ceiling", async () => {
-    const caller = appRouter.createCaller(createUnauthCtx());
-    await expect(caller.jobs.search({ limit: 101 })).rejects.toMatchObject({ code: "BAD_REQUEST" });
-  });
-
-  it("keeps job discovery public while returning the bounded service envelope", async () => {
-    vi.mocked(db.searchJobs).mockResolvedValueOnce({ items: [{ id: 7, title: "Verified repair", status: "open" }], nextOffset: null, hasMore: false } as never);
-    const caller = appRouter.createCaller(createUnauthCtx());
-    await expect(caller.jobs.search({ limit: 12 })).resolves.toMatchObject({ hasMore: false, nextOffset: null, items: [{ id: 7 }] });
-  });
-
-  it("exposes company lookup through the public slug contract without requiring a session", async () => {
-    vi.mocked(db.getPublicOrganizationBySlug).mockResolvedValueOnce({ organization: { id: 3, name: "Northstar Works", description: null }, activeJobs: [], stats: { activeJobs: 0, activeMembers: 0 } } as never);
-    const caller = appRouter.createCaller(createUnauthCtx());
-    await expect(caller.companies.getBySlug({ slug: "northstar-works" })).resolves.toMatchObject({ organization: { name: "Northstar Works" } });
   });
 });

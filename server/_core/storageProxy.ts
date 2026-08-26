@@ -9,14 +9,6 @@ export function registerStorageProxy(app: Express) {
       return;
     }
 
-    // Verification and payment-proof records contain sensitive identity and
-    // financial material. They are available only through scoped tRPC actions
-    // that create a short-lived signed URL after authorization succeeds.
-    if (key.startsWith("verification-docs/") || key.startsWith("escrow-proofs/") || key.startsWith("organization-verification/")) {
-      res.status(403).send("Sensitive file access requires authorization");
-      return;
-    }
-
     if (!ENV.forgeApiUrl || !ENV.forgeApiKey) {
       res.status(500).send("Storage proxy not configured");
       return;

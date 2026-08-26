@@ -5,7 +5,6 @@ import type { TrpcContext } from "./_core/context";
 
 // Mock database to avoid live DB connections in tests
 vi.mock("./db", () => ({
-  MAX_PAGE_SIZE: 100,
   getDb: vi.fn().mockResolvedValue(null),
   getUserByEmail: vi.fn().mockResolvedValue(null),
   upsertUserByEmail: vi.fn().mockResolvedValue({

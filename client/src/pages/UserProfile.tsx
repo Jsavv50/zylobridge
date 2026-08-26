@@ -21,7 +21,6 @@ import {
   MessageSquare,
   ShoppingBag,
   LayoutDashboard,
-  Building2,
   Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -190,19 +189,23 @@ function QuickActionCard({
 
 export default function UserProfile() {
   const [, navigate] = useLocation();
-  const { user, loading, isLoggingOut, isAuthenticated, logout } = useAuth({
+  const { user, loading, isAuthenticated, logout } = useAuth({
     redirectOnUnauthenticated: true,
     redirectPath: "/sign-in",
   });
 
-  const handleSignOut = async () => {
-    try {
-      await logout();
-      toast.success("You have been signed out.");
+  const logoutMutation = trpc.auth.logout.useMutation({
+    onSuccess: () => {
       navigate("/");
-    } catch {
+      toast.success("You have been signed out.");
+    },
+    onError: () => {
       toast.error("Sign out failed. Please try again.");
-    }
+    },
+  });
+
+  const handleSignOut = () => {
+    logoutMutation.mutate();
   };
 
   // ── Loading state ──────────────────────────────────────────────────────────
@@ -227,16 +230,12 @@ export default function UserProfile() {
   }
 
   const initials = getInitials(user.name);
-  const roleLabel = user.role === "SUPER_ADMIN" ? "Super Administrator" : user.role === "admin" ? "Administrator" : "Member";
+  const roleLabel = user.role === "admin" ? "Administrator" : "Member";
   const userTypeLabel =
-    user.role === "SUPER_ADMIN"
-      ? "Super Admin"
-      : user.userType === "professional"
+    user.userType === "professional"
       ? "Trade Professional"
       : user.userType === "client"
       ? "Client / Contractor"
-      : user.userType === "enterprise"
-      ? "Enterprise"
       : "Account not configured";
   const loginMethodLabel =
     user.loginMethod === "google"
@@ -296,11 +295,6 @@ export default function UserProfile() {
                           <ShieldCheck className="h-3 w-3" /> Verified
                         </span>
                       )}
-                      {user.role === "SUPER_ADMIN" && (
-                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-400 bg-red-500/10 border border-red-500/20 rounded-full px-2 py-0.5">
-                          <Shield className="h-3 w-3" /> Super Admin
-                        </span>
-                      )}
                       {user.role === "admin" && (
                         <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-full px-2 py-0.5">
                           <Shield className="h-3 w-3" /> Admin
@@ -312,25 +306,24 @@ export default function UserProfile() {
                 </div>
 
                 <div className="flex items-center gap-2 pb-1">
-                  <Link href="/profile/edit">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-white/10 text-gray-300 hover:text-white hover:border-white/20 bg-transparent gap-1.5"
-                    >
-                      <Edit3 className="h-3.5 w-3.5" />
-                      Edit Profile
-                    </Button>
-                  </Link>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-white/10 text-gray-300 hover:text-white hover:border-white/20 bg-transparent gap-1.5"
+                    onClick={() => toast.info("Profile editing coming soon")}
+                  >
+                    <Edit3 className="h-3.5 w-3.5" />
+                    Edit Profile
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"
                     className="border-red-500/20 text-red-400 hover:text-red-300 hover:border-red-500/40 bg-transparent gap-1.5"
                     onClick={handleSignOut}
-                    disabled={isLoggingOut}
+                    disabled={logoutMutation.isPending}
                   >
                     <LogOut className="h-3.5 w-3.5" />
-                    {isLoggingOut ? "Signing out…" : "Sign Out"}
+                    {logoutMutation.isPending ? "Signing out…" : "Sign Out"}
                   </Button>
                 </div>
               </div>
@@ -548,21 +541,12 @@ export default function UserProfile() {
                   accent
                 />
               )}
-              {user.userType === "enterprise" && (
-                <QuickActionCard
-                  icon={Building2}
-                  title="Enterprise Workspace"
-                  description="Open your organization workspace and account tools."
-                  href="/dashboard/enterprise"
-                  accent
-                />
-              )}
-              {(user.role === "admin" || user.role === "SUPER_ADMIN") && (
+              {user.role === "admin" && (
                 <QuickActionCard
                   icon={Shield}
-                  title="Admin Dashboard"
-                  description="Access super administrator controls, verification queues, and platform management."
-                  href="/dashboard/admin"
+                  title="Admin Panel"
+                  description="Manage users, jobs, and platform settings."
+                  href="/admin"
                   accent
                 />
               )}
@@ -595,10 +579,10 @@ export default function UserProfile() {
                 variant="outline"
                 className="w-full border-red-500/20 text-red-400 hover:text-red-300 hover:border-red-500/40 bg-transparent gap-2"
                 onClick={handleSignOut}
-                disabled={isLoggingOut}
+                disabled={logoutMutation.isPending}
               >
                 <LogOut className="h-4 w-4" />
-                {isLoggingOut ? "Signing out…" : "Sign Out"}
+                {logoutMutation.isPending ? "Signing out…" : "Sign Out"}
               </Button>
             </div>
           </div>

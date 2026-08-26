@@ -2,7 +2,6 @@
 <html lang="en">
 
   <head>
-    <script id="cookieyes" type="text/javascript" src="https://cdn-cookieyes.com/client_data/5359e7ba4efa5b47cf588ec435fc930f/script.js"></script>
     <meta charset="UTF-8" />
     <meta
       name="viewport"
@@ -16,7 +15,10 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <!-- Analytics placeholder removed to prevent unresolved environment variable requests -->
+    <script
+      defer
+      src="%VITE_ANALYTICS_ENDPOINT%/umami"
+      data-website-id="%VITE_ANALYTICS_WEBSITE_ID%"></script>
   </body>
 
 </html>

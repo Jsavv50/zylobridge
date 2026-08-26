@@ -1,17 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { io, Socket } from "socket.io-client";
 import { trpc } from "@/lib/trpc";
-import { ZylobridgeLogo } from "@/components/ZylobridgeLogo";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Send, MessageSquare, Loader2, ArrowLeft, ChevronLeft } from "lucide-react";
+import { Send, MessageSquare, Loader2 } from "lucide-react";
 import { getLoginUrl } from "@/const";
 import { formatDistanceToNow } from "date-fns";
-import { getSupabaseBrowserClient, initSupabaseRealtimeAuth } from "@/lib/supabase";
-import { Link } from "wouter";
 
 interface Message {
   id: number;
@@ -31,19 +29,38 @@ interface Conversation {
   createdAt: Date;
 }
 
-type RealtimeStatus = "CONNECTING" | "CONNECTED" | "ERROR";
+
+/**
+ * SOCKET_URL — Railway backend WebSocket endpoint.
+ * Reads VITE_API_URL (same variable used by tRPC) so both HTTP and WebSocket
+ * traffic go to the same Railway service.
+ * Falls back to window.location.origin for local development.
+ */
+const SOCKET_URL =
+  ((import.meta.env.VITE_API_URL as string | undefined) ?? "").replace(/\/$/, "") ||
+  window.location.origin;
+
+let socketInstance: Socket | null = null;
+
+function getSocket(): Socket {
+  if (!socketInstance) {
+    socketInstance = io(SOCKET_URL, {
+      path: "/socket.io",
+      withCredentials: true,
+      transports: ["websocket", "polling"],
+    });
+  }
+  return socketInstance;
+}
 
 export default function Messaging() {
   const { user, isAuthenticated, loading } = useAuth();
-  const [initialConversationId] = useState(() => {
-    const value = Number(new URLSearchParams(window.location.search).get("conv") ?? 0);
-    return Number.isInteger(value) && value > 0 ? value : null;
-  });
   const [selectedConvId, setSelectedConvId] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
-  const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>("CONNECTING");
+  const [socketConnected, setSocketConnected] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const socketRef = useRef<Socket | null>(null);
 
   const { data: conversations, refetch: refetchConversations } = trpc.messaging.myConversations.useQuery(
     undefined,
@@ -55,142 +72,62 @@ export default function Messaging() {
     { enabled: !!selectedConvId }
   );
 
-  useEffect(() => {
-    if (!conversations?.length) return;
-    setSelectedConvId((currentId) => {
-      if (currentId && conversations.some((conversation) => conversation.id === currentId)) return currentId;
-      if (initialConversationId && conversations.some((conversation) => conversation.id === initialConversationId)) return initialConversationId;
-      return conversations[0]?.id ?? null;
-    });
-  }, [conversations, initialConversationId]);
-
+  // Sync fetched messages into local state
   useEffect(() => {
     if (fetchedMessages) {
       setMessages(fetchedMessages.map((m) => ({ ...m, createdAt: new Date(m.createdAt) })));
     }
   }, [fetchedMessages]);
 
-  const refetchConversationsRef = useRef(refetchConversations);
+  // Socket.io setup
   useEffect(() => {
-    refetchConversationsRef.current = refetchConversations;
-  }, [refetchConversations]);
+    if (!isAuthenticated) return;
+    const socket = getSocket();
+    socketRef.current = socket;
 
-  useEffect(() => {
-    if (!isAuthenticated || !selectedConvId) {
-      setRealtimeStatus("CONNECTING");
-      return;
-    }
+    socket.on("connect", () => setSocketConnected(true));
+    socket.on("disconnect", () => setSocketConnected(false));
 
-    let isActive = true;
-    let channel: ReturnType<ReturnType<typeof getSupabaseBrowserClient>["channel"]> | null = null;
-    const conversationId = selectedConvId;
-    const channelName = `private-conversation-${conversationId}`;
-    setRealtimeStatus("CONNECTING");
-
-    const setupRealtimeChannel = async () => {
-      try {
-        const authSuccess = await initSupabaseRealtimeAuth();
-        if (!isActive) return;
-
-        if (!authSuccess) {
-          setRealtimeStatus("ERROR");
-          return;
-        }
-
-        const supabase = getSupabaseBrowserClient();
-        channel = supabase.channel(channelName, {
-          config: { private: true },
-        });
-
-        channel
-          .on(
-            "postgres_changes",
-            {
-              event: "INSERT",
-              schema: "public",
-              table: "messages",
-              filter: `conversationId=eq.${conversationId}`,
-            },
-            (payload) => {
-              if (!isActive) return;
-              const newMsg = payload.new as any;
-              if (newMsg && newMsg.id && newMsg.conversationId === conversationId) {
-                setMessages((prev) => {
-                  if (prev.some((m) => m.id === newMsg.id)) return prev;
-                  return [
-                    ...prev,
-                    {
-                      id: newMsg.id,
-                      conversationId: newMsg.conversationId,
-                      senderId: newMsg.senderId,
-                      content: newMsg.content,
-                      isRead: newMsg.isRead ?? false,
-                      createdAt: new Date(newMsg.createdAt),
-                    },
-                  ];
-                });
-                void refetchConversationsRef.current();
-              }
-            },
-          )
-          .subscribe((status) => {
-            if (!isActive) return;
-            if (status === "SUBSCRIBED") {
-              setRealtimeStatus("CONNECTED");
-            } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-              setRealtimeStatus("ERROR");
-            }
-          });
-      } catch (error) {
-        if (!isActive) return;
-        setRealtimeStatus("ERROR");
+    socket.on("new_message", (msg: Message) => {
+      if (msg.conversationId === selectedConvId) {
+        setMessages((prev) => [...prev, { ...msg, createdAt: new Date(msg.createdAt) }]);
       }
-    };
+      refetchConversations();
+    });
 
-    void setupRealtimeChannel();
+    socket.on("conversation_updated", () => {
+      refetchConversations();
+    });
 
     return () => {
-      isActive = false;
-      if (channel) {
-        const supabase = getSupabaseBrowserClient();
-        void supabase.removeChannel(channel);
-      }
-      setRealtimeStatus("CONNECTING");
+      socket.off("new_message");
+      socket.off("conversation_updated");
+      socket.off("connect");
+      socket.off("disconnect");
     };
-  }, [isAuthenticated, selectedConvId]);
+  }, [isAuthenticated, selectedConvId, refetchConversations]);
 
+  // Join conversation room when selected
+  useEffect(() => {
+    if (selectedConvId && socketRef.current) {
+      socketRef.current.emit("join_conversation", selectedConvId);
+      socketRef.current.emit("mark_read", selectedConvId);
+    }
+  }, [selectedConvId]);
+
+  // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const sendMessageMutation = trpc.messaging.sendMessage.useMutation({
-    onSuccess: (newMsg) => {
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === newMsg.id)) return prev;
-        return [
-          ...prev,
-          {
-            id: newMsg.id,
-            conversationId: newMsg.conversationId,
-            senderId: newMsg.senderId,
-            content: newMsg.content,
-            isRead: newMsg.isRead ?? false,
-            createdAt: new Date(newMsg.createdAt),
-          },
-        ];
-      });
-      setInputValue("");
-      refetchConversations();
-    },
-  });
-
   const sendMessage = useCallback(() => {
-    if (!inputValue.trim() || !selectedConvId || sendMessageMutation.isPending) return;
-    sendMessageMutation.mutate({
+    if (!inputValue.trim() || !selectedConvId || !socketRef.current) return;
+    socketRef.current.emit("send_message", {
       conversationId: selectedConvId,
       content: inputValue.trim(),
     });
-  }, [inputValue, selectedConvId, sendMessageMutation]);
+    setInputValue("");
+  }, [inputValue, selectedConvId]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -209,11 +146,11 @@ export default function Messaging() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <div className="text-center space-y-4 max-w-md w-full">
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center space-y-4">
           <MessageSquare className="h-16 w-16 text-primary mx-auto" />
           <h2 className="text-2xl font-bold text-foreground">Sign in to access messages</h2>
-          <Button asChild className="w-full">
+          <Button asChild>
             <a href={getLoginUrl()}>Sign In</a>
           </Button>
         </div>
@@ -222,174 +159,122 @@ export default function Messaging() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {/* Top Header */}
-      <header className="sticky top-0 z-50 bg-card border-b border-border h-16 px-4 md:px-8 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
-          <Link href="/">
-            <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground pl-0 pr-2">
-              <ArrowLeft className="h-4 w-4" />
-              <span className="hidden sm:inline">Back</span>
-            </Button>
-          </Link>
-          <div className="h-5 w-[1px] bg-border" />
-          <ZylobridgeLogo imageClassName="h-7 w-7 object-contain" textSizeClass="text-lg font-extrabold tracking-tight" />
-        </div>
-        <div className="flex items-center gap-2">
-          <div
-            className={`h-2.5 w-2.5 rounded-full ${
-              realtimeStatus === "CONNECTED"
-                ? "bg-emerald-500"
-                : realtimeStatus === "ERROR"
-                ? "bg-rose-500"
-                : "bg-amber-500 animate-pulse"
-            }`}
-          />
-          <span className="text-xs md:text-sm text-muted-foreground">
-            {realtimeStatus === "CONNECTED"
-              ? "Live"
-              : realtimeStatus === "ERROR"
-              ? "Connection error"
-              : "Connecting..."}
-          </span>
-        </div>
-      </header>
-
-      {/* Main Messaging Viewport Container */}
-      <main className="flex-1 container mx-auto px-2 sm:px-4 lg:px-8 max-w-7xl py-4 sm:py-6 flex flex-col min-h-0">
-        <div className="flex items-center justify-between mb-4 px-2">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Project Messages</h1>
-            <p className="text-xs sm:text-sm text-muted-foreground">Secure real-time communication between clients and verified professionals.</p>
+    <div className="min-h-screen bg-background pt-16">
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-3xl font-bold text-foreground">Messages</h1>
+          <div className="flex items-center gap-2">
+            <div className={`h-2 w-2 rounded-full ${socketConnected ? "bg-green-500" : "bg-red-500"}`} />
+            <span className="text-sm text-muted-foreground">
+              {socketConnected ? "Connected" : "Connecting..."}
+            </span>
           </div>
         </div>
 
-        {/* Responsive Messaging Split Layout */}
-        <div className="flex-1 border border-border rounded-2xl bg-card overflow-hidden grid grid-cols-1 md:grid-cols-12 min-h-[550px] max-h-[calc(100vh-10rem)] shadow-lg">
-          {/* Conversation Sidebar (Collapsible / Full-width on mobile when no conv selected) */}
-          <div className={`md:col-span-4 lg:col-span-4 border-r border-border flex flex-col bg-card/50 ${selectedConvId ? "hidden md:flex" : "flex"}`}>
-            <div className="p-4 border-b border-border flex items-center justify-between">
-              <h2 className="font-semibold text-sm tracking-wide uppercase text-muted-foreground">Conversations</h2>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-                {conversations?.length ?? 0} active
-              </span>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-0 border border-border rounded-xl overflow-hidden h-[600px]">
+          {/* Conversation List */}
+          <div className="border-r border-border bg-card flex flex-col">
+            <div className="p-4 border-b border-border">
+              <h2 className="font-semibold text-foreground">Conversations</h2>
             </div>
             <ScrollArea className="flex-1">
               {!conversations || conversations.length === 0 ? (
-                <div className="p-8 text-center text-muted-foreground space-y-3">
-                  <MessageSquare className="h-10 w-10 mx-auto opacity-40 text-primary" />
-                  <p className="text-sm font-medium">No conversations yet.</p>
-                  <p className="text-xs max-w-xs mx-auto">Start a conversation directly from job postings or applications.</p>
-                  <Button asChild variant="outline" size="sm" className="mt-2">
-                    <Link href="/jobs">Browse Jobs</Link>
-                  </Button>
+                <div className="p-6 text-center text-muted-foreground">
+                  <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                  <p className="text-sm">No conversations yet.</p>
+                  <p className="text-xs mt-1">Start a conversation from a job page.</p>
                 </div>
               ) : (
-                <div className="divide-y divide-border/50">
-                  {conversations.map((conv: Conversation) => {
-                    const isSelected = conv.id === selectedConvId;
-                    const otherUserId = conv.clientId === user?.id ? conv.professionalId : conv.clientId;
-                    return (
-                      <button
-                        key={conv.id}
-                        onClick={() => setSelectedConvId(conv.id)}
-                        className={`w-full p-4 text-left transition-all hover:bg-accent/40 flex items-start gap-3 ${
-                          isSelected ? "bg-primary/15 border-l-4 border-l-primary" : ""
-                        }`}
-                      >
-                        <Avatar className="h-10 w-10 shrink-0">
+                conversations.map((conv: Conversation) => {
+                  const isSelected = conv.id === selectedConvId;
+                  const otherUserId = conv.clientId === user?.id ? conv.professionalId : conv.clientId;
+                  return (
+                    <button
+                      key={conv.id}
+                      onClick={() => setSelectedConvId(conv.id)}
+                      className={`w-full p-4 text-left hover:bg-accent/50 transition-colors border-b border-border/50 ${
+                        isSelected ? "bg-primary/10 border-l-2 border-l-primary" : ""
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-9 w-9">
                           <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">
-                            {otherUserId.toString().padStart(2, "0")}
+                            {otherUserId.toString().slice(0, 2)}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="text-sm font-semibold text-foreground truncate">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-foreground truncate">
                               Job #{conv.jobId}
                             </span>
-                            <span className="text-[11px] text-muted-foreground shrink-0">
+                            <span className="text-xs text-muted-foreground">
                               {formatDistanceToNow(new Date(conv.lastMessageAt), { addSuffix: true })}
                             </span>
                           </div>
-                          <p className="text-xs text-muted-foreground truncate mt-0.5">
-                            {conv.clientId === user?.id ? "Role: Contractor / Client" : "Role: Verified Professional"}
+                          <p className="text-xs text-muted-foreground truncate">
+                            {conv.clientId === user?.id ? "You are the contractor" : "You are the professional"}
                           </p>
                         </div>
-                      </button>
-                    );
-                  })}
-                </div>
+                      </div>
+                    </button>
+                  );
+                })
               )}
             </ScrollArea>
           </div>
 
-          {/* Active Message Thread Panel */}
-          <div className={`md:col-span-8 lg:col-span-8 flex flex-col bg-background min-h-0 ${!selectedConvId ? "hidden md:flex" : "flex"}`}>
+          {/* Message Thread */}
+          <div className="col-span-2 flex flex-col bg-background">
             {!selectedConvId ? (
-              <div className="flex-1 flex items-center justify-center p-8 text-center">
-                <div className="space-y-3 max-w-sm">
-                  <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto text-primary">
-                    <MessageSquare className="h-8 w-8" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-foreground">Select a Conversation</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Choose an active thread from the sidebar to inspect milestone discussions and exchange secure real-time messages.
-                  </p>
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center text-muted-foreground">
+                  <MessageSquare className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <p className="font-medium">Select a conversation</p>
+                  <p className="text-sm mt-1">Choose a conversation from the left to start messaging.</p>
                 </div>
               </div>
             ) : (
               <>
-                {/* Thread Header */}
-                <div className="p-4 border-b border-border bg-card flex items-center justify-between shrink-0">
+                {/* Header */}
+                <div className="p-4 border-b border-border bg-card">
                   <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => setSelectedConvId(null)}
-                      className="md:hidden p-1.5 -ml-1 text-muted-foreground hover:text-foreground rounded-lg"
-                      aria-label="Back to conversations"
-                    >
-                      <ChevronLeft className="h-5 w-5" />
-                    </button>
-                    <Avatar className="h-9 w-9">
+                    <Avatar className="h-8 w-8">
                       <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">JB</AvatarFallback>
                     </Avatar>
                     <div>
-                      <h3 className="font-bold text-sm text-foreground">
-                        Job #{conversations?.find((c: Conversation) => c.id === selectedConvId)?.jobId} Discussion
-                      </h3>
-                      <p className="text-xs text-muted-foreground">Secure Escrow-Protected Chat</p>
+                      <p className="font-semibold text-foreground text-sm">
+                        Job #{conversations?.find((c: Conversation) => c.id === selectedConvId)?.jobId}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Project conversation</p>
                     </div>
                   </div>
-                  <Badge variant="outline" className="hidden sm:inline-flex text-xs font-medium text-emerald-400 border-emerald-500/30 bg-emerald-500/10">
-                    Encrypted & Verified
-                  </Badge>
                 </div>
 
-                {/* Message Scroll Area */}
-                <ScrollArea className="flex-1 p-4 sm:p-6 min-h-0">
+                {/* Messages */}
+                <ScrollArea className="flex-1 p-4">
                   {messagesLoading ? (
-                    <div className="flex justify-center py-16">
+                    <div className="flex justify-center py-8">
                       <Loader2 className="h-6 w-6 animate-spin text-primary" />
                     </div>
                   ) : messages.length === 0 ? (
-                    <div className="text-center py-16 text-muted-foreground space-y-2">
-                      <p className="text-sm font-medium">No messages in this thread yet.</p>
-                      <p className="text-xs">Send your first message below to begin collaboration.</p>
+                    <div className="text-center text-muted-foreground py-8">
+                      <p className="text-sm">No messages yet. Start the conversation!</p>
                     </div>
                   ) : (
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                       {messages.map((msg) => {
                         const isMine = msg.senderId === user?.id;
                         return (
                           <div key={msg.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
                             <div
-                              className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-4 py-3 shadow-sm ${
+                              className={`max-w-[70%] rounded-2xl px-4 py-2.5 ${
                                 isMine
-                                  ? "bg-primary text-primary-foreground rounded-br-xs"
-                                  : "bg-card border border-border text-foreground rounded-bl-xs"
+                                  ? "bg-primary text-primary-foreground rounded-br-sm"
+                                  : "bg-card border border-border text-foreground rounded-bl-sm"
                               }`}
                             >
-                              <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>
-                              <p className={`text-[10px] mt-1 text-right ${isMine ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
+                              <p className="text-sm leading-relaxed">{msg.content}</p>
+                              <p className={`text-xs mt-1 ${isMine ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
                                 {formatDistanceToNow(new Date(msg.createdAt), { addSuffix: true })}
                               </p>
                             </div>
@@ -401,29 +286,24 @@ export default function Messaging() {
                   )}
                 </ScrollArea>
 
-                {/* Message Composer Bar */}
-                <div className="p-3 sm:p-4 border-t border-border bg-card shrink-0">
-                  <div className="flex items-center gap-2">
+                {/* Input */}
+                <div className="p-4 border-t border-border bg-card">
+                  <div className="flex gap-2">
                     <Input
                       value={inputValue}
                       onChange={(e) => setInputValue(e.target.value)}
                       onKeyDown={handleKeyDown}
-                      placeholder="Type a secure message..."
-                      className="flex-1 bg-background"
+                      placeholder="Type a message..."
+                      className="flex-1 bg-background border-border"
+                      maxLength={5000}
                     />
                     <Button
                       onClick={sendMessage}
-                      disabled={!inputValue.trim() || sendMessageMutation.isPending}
-                      className="gap-2 shrink-0 px-4"
+                      disabled={!inputValue.trim() || !socketConnected}
+                      size="icon"
+                      className="bg-primary hover:bg-primary/90 shrink-0"
                     >
-                      {sendMessageMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <>
-                          <span className="hidden sm:inline">Send</span>
-                          <Send className="h-4 w-4" />
-                        </>
-                      )}
+                      <Send className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
@@ -431,7 +311,7 @@ export default function Messaging() {
             )}
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

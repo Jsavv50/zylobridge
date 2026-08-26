@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -50,29 +50,8 @@ export default function ProfessionalDashboard() {
     hourlyRate: profile?.hourlyRate ?? "",
     location: profile?.location ?? "",
     yearsExperience: profile?.yearsExperience?.toString() ?? "",
-    latitude: profile?.latitude?.toString() ?? "",
-    longitude: profile?.longitude?.toString() ?? "",
-    serviceRadiusKm: profile?.serviceRadiusKm?.toString() ?? "",
     isAvailable: profile?.isAvailable ?? true,
   });
-
-  useEffect(() => {
-    if (!profile || editingProfile) return;
-    setProfileForm({
-      vocation: profile.vocation ?? "",
-      bio: profile.bio ?? "",
-      skills: profile.skills ?? "",
-      certifications: profile.certifications ?? "",
-      portfolioUrl: profile.portfolioUrl ?? "",
-      hourlyRate: profile.hourlyRate?.toString() ?? "",
-      location: profile.location ?? "",
-      yearsExperience: profile.yearsExperience?.toString() ?? "",
-      latitude: profile.latitude?.toString() ?? "",
-      longitude: profile.longitude?.toString() ?? "",
-      serviceRadiusKm: profile.serviceRadiusKm?.toString() ?? "",
-      isAvailable: profile.isAvailable ?? true,
-    });
-  }, [profile, editingProfile]);
 
   const { mutate: upsertProfile, isPending: savingProfile } = trpc.profiles.upsert.useMutation({
     onSuccess: () => {
@@ -116,7 +95,7 @@ export default function ProfessionalDashboard() {
 
   const handleSaveProfile = () => {
     upsertProfile({
-      vocation: profileForm.vocation ? (profileForm.vocation as VocationKey) : undefined,
+      vocation: profileForm.vocation || undefined,
       bio: profileForm.bio || undefined,
       skills: profileForm.skills || undefined,
       certifications: profileForm.certifications || undefined,
@@ -124,9 +103,6 @@ export default function ProfessionalDashboard() {
       hourlyRate: profileForm.hourlyRate ? Number(profileForm.hourlyRate) : undefined,
       location: profileForm.location || undefined,
       yearsExperience: profileForm.yearsExperience ? Number(profileForm.yearsExperience) : undefined,
-      latitude: profileForm.latitude.trim() ? Number(profileForm.latitude) : undefined,
-      longitude: profileForm.longitude.trim() ? Number(profileForm.longitude) : undefined,
-      serviceRadiusKm: profileForm.serviceRadiusKm.trim() ? Number(profileForm.serviceRadiusKm) : undefined,
       isAvailable: profileForm.isAvailable,
     });
   };
@@ -337,9 +313,6 @@ export default function ProfessionalDashboard() {
                       hourlyRate: profile?.hourlyRate ?? "",
                       location: profile?.location ?? "",
                       yearsExperience: profile?.yearsExperience?.toString() ?? "",
-                      latitude: profile?.latitude?.toString() ?? "",
-                      longitude: profile?.longitude?.toString() ?? "",
-                      serviceRadiusKm: profile?.serviceRadiusKm?.toString() ?? "",
                       isAvailable: profile?.isAvailable ?? true,
                     });
                     setEditingProfile(true);
@@ -422,26 +395,6 @@ export default function ProfessionalDashboard() {
                     <Input value={profileForm.location} onChange={(e) => setProfileForm({ ...profileForm, location: e.target.value })}
                       placeholder="e.g. Houston, TX"
                       className="mt-1.5 bg-[#1c2740] border-white/10 text-white placeholder:text-gray-600" />
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <Label className="text-gray-300 text-sm">Latitude</Label>
-                      <Input type="number" step="any" min="-90" max="90" value={profileForm.latitude}
-                        onChange={(e) => setProfileForm({ ...profileForm, latitude: e.target.value })}
-                        placeholder="-33.9249" className="mt-1.5 bg-[#1c2740] border-white/10 text-white placeholder:text-gray-600" />
-                    </div>
-                    <div>
-                      <Label className="text-gray-300 text-sm">Longitude</Label>
-                      <Input type="number" step="any" min="-180" max="180" value={profileForm.longitude}
-                        onChange={(e) => setProfileForm({ ...profileForm, longitude: e.target.value })}
-                        placeholder="18.4241" className="mt-1.5 bg-[#1c2740] border-white/10 text-white placeholder:text-gray-600" />
-                    </div>
-                    <div>
-                      <Label className="text-gray-300 text-sm">Service Radius (km)</Label>
-                      <Input type="number" min="1" max="500" step="1" value={profileForm.serviceRadiusKm}
-                        onChange={(e) => setProfileForm({ ...profileForm, serviceRadiusKm: e.target.value })}
-                        placeholder="50" className="mt-1.5 bg-[#1c2740] border-white/10 text-white placeholder:text-gray-600" />
-                    </div>
                   </div>
                   <div>
                     <Label className="text-gray-300 text-sm">Portfolio URL</Label>
