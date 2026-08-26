@@ -70,11 +70,12 @@ async function startServer() {
       origin: (origin, callback) => {
         // Allow same-origin requests (no Origin header) and local development
         if (!origin) return callback(null, true);
-        const isManagedPreviewOrigin = process.env.NODE_ENV !== "production" && /^https:\/\/3000-[a-z0-9-]+\.us\d+\.manus\.computer$/.test(origin);
+        const isDevelopment = process.env.NODE_ENV !== "production";
+        const isManagedPreviewOrigin = isDevelopment && /^https:\/\/3000-[a-z0-9-]+\.us\d+\.manus\.computer$/.test(origin);
+        const isLocalDevelopmentOrigin = isDevelopment && /^(http:\/\/localhost|http:\/\/127\.0\.0\.1)(:\d+)?$/.test(origin);
         if (
-          allowedOrigins.length === 0 ||
           allowedOrigins.includes(origin) ||
-          origin.startsWith("http://localhost") ||
+          isLocalDevelopmentOrigin ||
           isManagedPreviewOrigin
         ) {
           return callback(null, true);
@@ -108,9 +109,13 @@ async function startServer() {
   registerPaystackWebhook(app);
 
   // ── Root endpoint (API diagnostics) ──────────────────────────────────────
-  app.get("/", (_req, res) => {
-    res.json({ status: "ok", service: "Zylobridge API" });
-  });
+  // In development, setupVite owns the root route so the local React app renders.
+  // Railway remains API-only and keeps the diagnostic root response in production.
+  if (process.env.NODE_ENV !== "development") {
+    app.get("/", (_req, res) => {
+      res.json({ status: "ok", service: "Zylobridge API" });
+    });
+  }
 
   // ── Health check ──────────────────────────────────────────────────────────
   app.get("/api/health", (_req, res) => {

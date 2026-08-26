@@ -837,11 +837,20 @@
 - [x] Publish the Super Admin sign-in reliability repair
 
 ## Phase 86 — Full Recovery, Reconciliation, and Launch Restoration (`pasted_content_12.txt`)
-- [ ] Create and preserve a recovery branch and immutable baseline of the current restored project
-- [ ] Inventory GitHub branches, commits, reflog, stashes, pull requests, project checkpoints, deployed versions, and Supabase schema/configuration sources
-- [ ] Build a missing-changes inventory and reconcile recovered code with the current restored codebase
-- [ ] Reconcile `drizzle/schema.ts`, migration files, migration history, and production Supabase schema without destructive data operations
-- [ ] Audit authentication, profiles, employer workflows, enterprise, messaging, notifications, payments, verification, routing, responsiveness, security, observability, and deployment configuration
-- [ ] Repair or recover meaningful missing functionality and add regression coverage only where evidence requires it
-- [ ] Run complete automated validation and safe read-only live smoke checks
-- [ ] Produce the recovery and launch-readiness report, back up to GitHub, publish, and document concrete remaining blockers if any
+- [x] Create and preserve a recovery branch and immutable baseline of the current restored project
+- [x] Inventory GitHub branches, commits, reflog, stashes, pull requests, project checkpoints, deployed versions, and Supabase schema/configuration sources
+- [x] Build a missing-changes inventory and reconcile recovered code with the current restored codebase
+- [x] Reconcile `drizzle/schema.ts`, migration files, migration history, and production Supabase schema without destructive data operations
+- [x] Audit authentication, profiles, employer workflows, enterprise, messaging, notifications, payments, verification, routing, responsiveness, security, observability, and deployment configuration
+- [x] Repair or recover meaningful missing functionality and add regression coverage only where evidence requires it
+- [x] Run complete automated validation and safe read-only live smoke checks
+- [x] Produce the recovery and launch-readiness report, back up to GitHub, publish, and document concrete remaining blockers if any
+
+## Phase 87 — Recovered Runtime Routing and Schema Compatibility
+- [x] Keep the API diagnostic root out of development so Vite can serve the local React application
+- [x] Verify the new production reconciliation tables match the Drizzle schema and runtime imports
+- [x] Add regression coverage for the development root handoff and schema compatibility
+- [x] Re-run complete validation and publish the recovered runtime fix
+
+- [x] Allow the managed local preview origin `http://127.0.0.1:3000` only in development so Vite preview requests are not rejected by CORS
+- [x] Add regression coverage proving production still rejects non-approved origins
