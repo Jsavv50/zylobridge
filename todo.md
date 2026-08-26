@@ -987,4 +987,7 @@
 ## Phase 70 — Vercel Blank-Screen Production Repair
 - [x] Capture the deployed browser, asset, Vercel, and Railway evidence that explains the black-screen regression
 - [x] Apply the smallest safe fix to the production frontend or deployment configuration
-- [ ] Validate the corrected build locally and verify public Vercel routes and Railway health after deployment
+- [x] Validate the corrected build locally and verify public Vercel routes and Railway health after deployment
+
+## Phase 71 — Public Content Compliance
+- [x] Remove unsupported customer reviews, ratings, review-platform claims, and fabricated marketplace metrics from the public home page

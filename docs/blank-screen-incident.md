@@ -13,3 +13,7 @@ The root cause was confirmed by serving the compiled `dist/public` build directl
 The repair removes the custom `manualChunks` configuration and retains Vite's default dependency graph. The Home and NotFound modules are also route-lazy, and the entrypoint has a root-level recovery boundary so future asynchronous application-module failures produce a usable recovery state instead of an empty page.
 
 Validation completed locally against both the development server and a static production preview: `/sign-in` renders successfully. The client bundle carries a Vite size warning (the entry chunk is just over 500 KB) but is functional; performance optimization must be reintroduced only with a tested chunk graph.
+
+## Public Verification
+
+Vercel deployed the root-cause repair as production commit `c429a840`. The public `https://zylobridge.com/sign-in` route was then verified in a clean browser session. It initially displayed the intentional lazy-loading state and then rendered the complete sign-in interface, including the Google, email OTP, and phone OTP options. The empty-root black screen is resolved.
