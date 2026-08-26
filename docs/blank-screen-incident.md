@@ -8,4 +8,8 @@ On `https://zylobridge.com`, the deployment serves the application HTML and all 
 
 The exact Vercel preview deployment is access-protected and cannot be used for unauthenticated runtime inspection. The production Vercel configuration has a `VITE_API_URL` variable for Production and Preview. Vercel deployment runtime logs show no application errors because this is a static frontend deployment.
 
-Initial mitigation in progress: the eagerly loaded Home and NotFound modules were moved behind React lazy boundaries so an error in a page-specific module cannot prevent the application shell or sign-in page from mounting.
+The root cause was confirmed by serving the compiled `dist/public` build directly: the client rendered correctly in development but produced an empty `#root` in the production build when the custom Rollup `manualChunks` function was enabled. The same static build rendered the sign-in route immediately after the custom chunk partitioning was removed. This indicates a production chunk-initialization/ordering failure rather than a Vercel domain, Railway availability, or API-environment issue.
+
+The repair removes the custom `manualChunks` configuration and retains Vite's default dependency graph. The Home and NotFound modules are also route-lazy, and the entrypoint has a root-level recovery boundary so future asynchronous application-module failures produce a usable recovery state instead of an empty page.
+
+Validation completed locally against both the development server and a static production preview: `/sign-in` renders successfully. The client bundle carries a Vite size warning (the entry chunk is just over 500 KB) but is functional; performance optimization must be reintroduced only with a tested chunk graph.
