@@ -107,10 +107,13 @@ async function startServer() {
   registerRealtimeAuthRoutes(app);
   registerPaystackWebhook(app);
 
-  // ── Root endpoint (API diagnostics) ──────────────────────────────────────
-  app.get("/", (_req, res) => {
-    res.json({ status: "ok", service: "Zylobridge API" });
-  });
+  // ── Root endpoint (production API diagnostics) ───────────────────────────
+  // In development Vite owns `/` so the local preview renders the client app.
+  if (process.env.NODE_ENV !== "development") {
+    app.get("/", (_req, res) => {
+      res.json({ status: "ok", service: "Zylobridge API" });
+    });
+  }
 
   // ── Health check ──────────────────────────────────────────────────────────
   app.get("/api/health", (_req, res) => {

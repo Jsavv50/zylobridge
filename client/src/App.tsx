@@ -1,12 +1,12 @@
 import { Toaster } from "@/components/ui/sonner";
 import { lazy, Suspense } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AuthProvider } from "@/_core/hooks/useAuth";
-import Home from "./pages/Home";
+const Home = lazy(() => import("./pages/Home"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 const JobsMarketplace = lazy(() => import("./pages/JobsMarketplace"));
 const JobDetail = lazy(() => import("./pages/JobDetail"));
 const JobPosting = lazy(() => import("./pages/JobPosting"));

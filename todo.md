@@ -983,3 +983,8 @@
 - [x] Install the merged lockfile dependencies and verify TypeScript, full tests, and production client/server builds
 - [x] Restore granular route and vendor chunking after merge to remove the oversized client bundle warning
 - [ ] Deploy the combined GitHub revision to Vercel and Railway, then perform authorized live validation of enterprise verification, notifications, OAuth, and payment flows
+
+## Phase 70 — Vercel Blank-Screen Production Repair
+- [x] Capture the deployed browser, asset, Vercel, and Railway evidence that explains the black-screen regression
+- [x] Apply the smallest safe fix to the production frontend or deployment configuration
+- [ ] Validate the corrected build locally and verify public Vercel routes and Railway health after deployment
