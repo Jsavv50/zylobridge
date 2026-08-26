@@ -167,3 +167,49 @@ export async function validateResendKey(): Promise<boolean> {
     return false;
   }
 }
+
+
+/**
+ * Send a secure organization invitation. The raw token is included only in the
+ * recipient link and is never logged or persisted; the database stores only its
+ * SHA-256 hash.
+ */
+export async function sendOrganizationInvitationEmail(
+  to: string,
+  organizationName: string,
+  role: string,
+  invitationUrl: string,
+): Promise<boolean> {
+  const resend = getResend();
+  const escapeHtml = (value: string) => value.replace(/[&<>"']/g, character => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[character] ?? character);
+  const safeOrganization = escapeHtml(organizationName);
+  const safeRole = escapeHtml(role);
+  const safeUrl = escapeHtml(invitationUrl);
+  const { error } = await resend.emails.send({
+    from: "ZYLOBRIDGE <onboarding@resend.dev>",
+    to,
+    subject: `You have been invited to join ${organizationName} on ZYLOBRIDGE`,
+    html: `
+      <div style="font-family:Arial,sans-serif;background:#0a0d14;color:#f8fafc;padding:32px;line-height:1.6">
+        <div style="max-width:560px;margin:auto;background:#0d1117;border:1px solid rgba(124,58,237,.25);border-radius:16px;padding:32px">
+          <p style="margin:0;color:#a78bfa;font-weight:700;letter-spacing:2px">ZYLOBRIDGE</p>
+          <h1 style="margin:20px 0 8px">You have been invited</h1>
+          <p style="color:#cbd5e1">You have been invited to join <strong>${safeOrganization}</strong> as <strong>${safeRole}</strong>.</p>
+          <p><a href="${safeUrl}" style="display:inline-block;background:#7c3aed;color:white;text-decoration:none;border-radius:10px;padding:12px 18px;font-weight:700">Review invitation</a></p>
+          <p style="color:#94a3b8;font-size:13px">This invitation expires in 7 days. If you did not expect it, you can ignore this email.</p>
+        </div>
+      </div>
+    `.trim(),
+  });
+  if (error) {
+    console.error("[Resend] Failed to send organization invitation:", error);
+    throw new Error(`Organization invitation delivery failed: ${error.message}`);
+  }
+  return true;
+}

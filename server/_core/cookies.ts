@@ -39,10 +39,18 @@ export function getSessionCookieOptions(
   //       ? hostname
   //       : undefined;
 
+  const hostname = req.hostname || "";
+  let domain: string | undefined = undefined;
+  if (hostname.endsWith("zylobridge.com") || hostname.includes("railway.app")) {
+    // For custom domain split architecture, share cookie across .zylobridge.com
+    domain = ".zylobridge.com";
+  }
+
   return {
     httpOnly: true,
     path: "/",
     sameSite: "none",
     secure: isSecureRequest(req),
+    ...(domain ? { domain } : {}),
   };
 }

@@ -3,16 +3,10 @@ import { Server as SocketIOServer, Socket } from "socket.io";
 import { jwtVerify } from "jose";
 import { getUserByOpenId, getDb } from "./db";
 import { messages, conversations } from "../drizzle/schema";
-import { eq, and, ne } from "drizzle-orm";
-import { ENV } from "./_core/env";
+import { eq, and } from "drizzle-orm";
 
-const JWT_SECRET = new TextEncoder().encode(ENV.cookieSecret);
+const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "dev-secret");
 const COOKIE_NAME = "app_session_id";
-const allowedOrigins = [
-  "https://zylobridge.com",
-  "https://www.zylobridge.com",
-  ...(process.env.FRONTEND_URL ?? "").split(",").map((origin) => origin.trim()).filter(Boolean),
-];
 
 interface AuthenticatedSocket extends Socket {
   userId?: number;
@@ -29,13 +23,27 @@ function parseCookies(cookieHeader: string): Record<string, string> {
 }
 
 export function registerSocketIO(httpServer: HttpServer) {
+  const allowedSocketOrigins = [
+    "https://zylobridge.com",
+    "https://www.zylobridge.com",
+    ...(process.env.FRONTEND_URL ?? "")
+      .split(",")
+      .map((o) => o.trim())
+      .filter(Boolean),
+  ];
+
   const io = new SocketIOServer(httpServer, {
     cors: {
-      origin(origin, callback) {
-        const permitted = !origin
-          ? process.env.NODE_ENV !== "production"
-          : allowedOrigins.includes(origin);
-        callback(permitted ? null : new Error("Socket origin not allowed"), permitted);
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        if (
+          allowedSocketOrigins.length === 0 ||
+          allowedSocketOrigins.includes(origin) ||
+          origin.startsWith("http://localhost")
+        ) {
+          return callback(null, true);
+        }
+        return callback(new Error(`CORS: origin ${origin} not allowed for Socket.io`));
       },
       credentials: true,
     },
@@ -50,8 +58,8 @@ export function registerSocketIO(httpServer: HttpServer) {
       const token = cookies[COOKIE_NAME];
       if (!token) return next(new Error("Unauthorized: no session cookie"));
 
-      const { payload } = await jwtVerify(token, JWT_SECRET, { algorithms: ["HS256"] });
-      const openId = payload.openId as string;
+      const { payload } = await jwtVerify(token, JWT_SECRET);
+      const openId = payload.sub as string;
       if (!openId) return next(new Error("Unauthorized: invalid token"));
 
       const user = await getUserByOpenId(openId);
@@ -114,19 +122,27 @@ export function registerSocketIO(httpServer: HttpServer) {
           if (c.clientId !== userId && c.professionalId !== userId) return;
 
           // Insert message
-          const [newMessage] = await db.insert(messages).values({
+          const [result] = await db.insert(messages).values({
             conversationId,
             senderId: userId,
             content: content.trim(),
             isRead: false,
-          }).returning();
-          if (!newMessage) return;
+          });
 
           // Update conversation lastMessageAt
           await db
             .update(conversations)
             .set({ lastMessageAt: new Date() })
             .where(eq(conversations.id, conversationId));
+
+          const newMessage = {
+            id: (result as { insertId: number }).insertId,
+            conversationId,
+            senderId: userId,
+            content: content.trim(),
+            isRead: false,
+            createdAt: new Date(),
+          };
 
           // Broadcast to all in the conversation room
           io.to(`conversation:${conversationId}`).emit("new_message", newMessage);
@@ -149,16 +165,13 @@ export function registerSocketIO(httpServer: HttpServer) {
       try {
         const db = await getDb();
         if (!db) return;
-        const conv = await db.select().from(conversations).where(eq(conversations.id, conversationId)).limit(1);
-        if (!conv[0] || (conv[0].clientId !== userId && conv[0].professionalId !== userId)) return;
         await db
           .update(messages)
           .set({ isRead: true })
           .where(
             and(
               eq(messages.conversationId, conversationId),
-              eq(messages.isRead, false),
-              ne(messages.senderId, userId)
+              eq(messages.isRead, false)
             )
           );
         socket.to(`conversation:${conversationId}`).emit("messages_read", {

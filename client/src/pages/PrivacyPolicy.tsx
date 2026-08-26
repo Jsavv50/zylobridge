@@ -254,8 +254,8 @@ function buildSections(q: string): Section[] {
           </Callout>
           <p className="text-gray-300 leading-relaxed">
             <H t="We do not knowingly collect, solicit data from, or market to children under 18 years of age, nor do we knowingly sell such personal information. By using the Services, you represent that you are at least 18 or that you are the parent or guardian of such a minor and consent to such minor dependent's use of the Services. If we learn that personal information from users less than 18 years of age has been collected, we will deactivate the account and take reasonable measures to promptly delete such data from our records. If you become aware of any data we may have collected from children under age 18, please contact us at " />
-            <a href="mailto:Minermikee777@gmail.com" className="text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors">
-              Minermikee777@gmail.com
+            <a href="mailto:Support@zylobridge.com" className="text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors">
+              Support@zylobridge.com
             </a>
             .
           </p>
@@ -300,8 +300,8 @@ function buildSections(q: string): Section[] {
           </p>
           <p className="text-gray-300 leading-relaxed">
             <H t="If you have questions or comments about your privacy rights, you may email us at " />
-            <a href="mailto:Minermikee777@gmail.com" className="text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors">
-              Minermikee777@gmail.com
+            <a href="mailto:Support@zylobridge.com" className="text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors">
+              Support@zylobridge.com
             </a>
             .
           </p>
@@ -381,8 +381,8 @@ function buildSections(q: string): Section[] {
         <>
           <p className="text-gray-300 leading-relaxed mb-5">
             <H t="If you have questions or comments about this notice, you may email us at " />
-            <a href="mailto:Minermikee777@gmail.com" className="text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors">
-              Minermikee777@gmail.com
+            <a href="mailto:Support@zylobridge.com" className="text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors">
+              Support@zylobridge.com
             </a>
             <H t=" or contact us by post at:" />
           </p>
@@ -406,7 +406,7 @@ function buildSections(q: string): Section[] {
           </p>
           <div className="mt-6">
             <a
-              href="mailto:Minermikee777@gmail.com?subject=Data Subject Access Request"
+              href="mailto:Support@zylobridge.com?subject=Data Subject Access Request"
               className="inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 focus:ring-offset-[#0d1117]"
               style={{ background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)" }}
             >
@@ -613,10 +613,10 @@ export default function PrivacyPolicy() {
                     Contact our privacy team for any concerns about your data.
                   </p>
                   <a
-                    href="mailto:Minermikee777@gmail.com"
+                    href="mailto:Support@zylobridge.com"
                     className="inline-flex items-center gap-1.5 text-xs text-violet-400 hover:text-violet-300 font-medium transition-colors"
                   >
-                    Minermikee777@gmail.com
+                    Support@zylobridge.com
                     <ChevronRight className="h-3 w-3" />
                   </a>
                 </div>
@@ -719,8 +719,8 @@ export default function PrivacyPolicy() {
                     </p>
                     <p className="text-sm text-gray-400 mt-1">
                       <span className="text-gray-300 font-medium">Contact:</span>{" "}
-                      <a href="mailto:Minermikee777@gmail.com" className="text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors">
-                        Minermikee777@gmail.com
+                      <a href="mailto:Support@zylobridge.com" className="text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors">
+                        Support@zylobridge.com
                       </a>
                     </p>
                   </div>

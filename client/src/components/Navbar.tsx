@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
+import { ZylobridgeLogo } from "./ZylobridgeLogo";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Menu, X, ChevronDown, Briefcase, LayoutDashboard, Shield, MessageSquare, ShieldCheck, ShoppingBag, User } from "lucide-react";
+import { Menu, X, ChevronDown, Briefcase, LayoutDashboard, Building2, Shield, MessageSquare, ShieldCheck, ShoppingBag, User } from "lucide-react";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { trpc } from "@/lib/trpc";
 
@@ -20,14 +21,15 @@ const LOGO_URL = "/ZYLO.png";
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user, isAuthenticated, logout } = useAuth();
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
 
-  const { mutate: doLogout } = trpc.auth.logout.useMutation({
-    onSuccess: () => {
-      logout();
-      window.location.href = "/";
-    },
-  });
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } finally {
+      navigate("/");
+    }
+  };
 
   const isAdmin = user?.role === "admin" || user?.role === "SUPER_ADMIN";
   const isClient = user?.userType === "client";
@@ -55,25 +57,7 @@ export default function Navbar() {
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-3 shrink-0">
-            <img
-              src={LOGO_URL}
-              alt="ZYLOBRIDGE"
-              className="h-9 w-9 object-contain"
-            />
-            <span
-              className="text-xl font-extrabold tracking-tight"
-              style={{
-                fontFamily: "'Space Grotesk', sans-serif",
-                background: "linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                backgroundClip: "text",
-              }}
-            >
-              ZYLOBRIDGE
-            </span>
-          </Link>
+          <ZylobridgeLogo />
 
           {/* Desktop Nav */}
           <div className="hidden md:flex items-center gap-6">
@@ -123,9 +107,9 @@ export default function Navbar() {
                 )}
                 {isEnterprise && (
                   <Link href="/dashboard/enterprise">
-                    <Button variant="ghost" size="sm" className="text-emerald-300 hover:text-emerald-200 hover:bg-emerald-500/10">
-                      <Briefcase className="h-4 w-4 mr-1.5" />
-                      Enterprise
+                    <Button variant="ghost" size="sm" className="text-amber-300 hover:text-amber-200 hover:bg-amber-500/10">
+                      <Building2 className="h-4 w-4 mr-1.5" />
+                      Workspace
                     </Button>
                   </Link>
                 )}
@@ -191,7 +175,7 @@ export default function Navbar() {
                     </DropdownMenuItem>
                     <DropdownMenuSeparator className="bg-white/10" />
                     <DropdownMenuItem
-                      onClick={() => doLogout()}
+                      onClick={() => void handleLogout()}
                       className="text-red-400 hover:text-red-300 cursor-pointer"
                     >
                       Sign Out
@@ -272,8 +256,8 @@ export default function Navbar() {
                 )}
                 {isEnterprise && (
                   <Link href="/dashboard/enterprise" onClick={() => setMobileOpen(false)}>
-                    <Button variant="outline" size="sm" className="w-full border-emerald-500/30 text-emerald-300">
-                      Enterprise Workspace
+                    <Button variant="outline" size="sm" className="w-full border-amber-500/30 text-amber-300">
+                      <Building2 className="h-4 w-4 mr-2" /> Enterprise Workspace
                     </Button>
                   </Link>
                 )}
@@ -293,7 +277,7 @@ export default function Navbar() {
                   variant="ghost"
                   size="sm"
                   className="w-full text-red-400 hover:text-red-300"
-                  onClick={() => { doLogout(); setMobileOpen(false); }}
+                  onClick={() => { void handleLogout(); setMobileOpen(false); }}
                 >
                   Sign Out
                 </Button>

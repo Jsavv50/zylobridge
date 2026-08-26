@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -15,39 +15,43 @@ type Step = "phone" | "otp" | "name";
 
 export default function PhoneLogin() {
   const [, navigate] = useLocation();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, refresh } = useAuth();
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [name, setName] = useState("");
   const [countdown, setCountdown] = useState(0);
 
-  // Redirect if already authenticated
-  if (isAuthenticated) {
-    navigate("/");
-    return null;
-  }
+  // A cleanup-safe, one-second countdown. It restarts only after the backend
+  // confirms that Twilio accepted a new OTP request.
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const timer = window.setTimeout(() => setCountdown((current) => current - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [countdown]);
+
+  useEffect(() => {
+    if (isAuthenticated) navigate("/");
+  }, [isAuthenticated, navigate]);
 
   const sendOtpMutation = trpc.phoneAuth.sendOtp.useMutation({
     onSuccess: () => {
       toast.success("OTP sent! Check your phone.");
       setStep("otp");
-      // 60-second resend countdown
       setCountdown(60);
-      const timer = setInterval(() => {
-        setCountdown((c) => {
-          if (c <= 1) { clearInterval(timer); return 0; }
-          return c - 1;
-        });
-      }, 1000);
     },
     onError: (err) => toast.error(err.message || "Failed to send OTP."),
   });
 
   const verifyOtpMutation = trpc.phoneAuth.verifyOtp.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
+      const authenticatedUser = await refresh();
+      if (!authenticatedUser) {
+        toast.error("Your session could not be established. Please try again.");
+        return;
+      }
       toast.success("Phone verified! Welcome to ZYLOBRIDGE.");
-      window.location.href = "/";
+      navigate("/");
     },
     onError: (err) => toast.error(err.message || "Invalid OTP. Please try again."),
   });
@@ -62,6 +66,11 @@ export default function PhoneLogin() {
     e.preventDefault();
     if (!otp.trim() || otp.length !== 6) { toast.error("Please enter the 6-digit OTP."); return; }
     verifyOtpMutation.mutate({ phone: phone.trim(), otp: otp.trim(), name: name.trim() || undefined });
+  };
+
+  const handleResendOtp = () => {
+    if (countdown > 0 || sendOtpMutation.isPending || !phone.trim()) return;
+    sendOtpMutation.mutate({ phone: phone.trim() });
   };
 
   return (
@@ -219,9 +228,9 @@ export default function PhoneLogin() {
                       type="button"
                       className={`transition-colors ${countdown > 0 ? "text-muted-foreground cursor-not-allowed" : "text-primary hover:text-primary/80"}`}
                       disabled={countdown > 0 || sendOtpMutation.isPending}
-                      onClick={() => sendOtpMutation.mutate({ phone: phone.trim() })}
+                      onClick={handleResendOtp}
                     >
-                      {countdown > 0 ? `Resend in ${countdown}s` : "Resend OTP"}
+                      {sendOtpMutation.isPending ? "Sending..." : countdown > 0 ? `Resend OTP in ${countdown}s` : "Resend OTP"}
                     </button>
                   </div>
                 </form>
