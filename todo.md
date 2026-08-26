@@ -1009,3 +1009,9 @@
 - [x] Restore supported prior authentication options and redirects without changing the split deployment architecture
 - [x] Validate authentication fixes with regression tests, production builds, and safe live checks
 - [x] Publish the authentication recovery release and document any user-authorized live-test limitations
+
+## Phase 75 — Authenticated Workspace Feature Restoration
+- [x] Trace missing notifications, messages, posted jobs, applications, and related workspace routes after successful sign-in
+- [x] Restore role-correct navigation and feature panels using existing procedures and pages
+- [ ] Validate authenticated feature visibility, authorization, tests, builds, and responsive behavior
+- [ ] Publish the workspace feature restoration and document verified coverage

@@ -29,3 +29,7 @@ The authenticated Railway service page did not reload into the service controls 
 ## Post-release recovery check
 
 After checkpoint `33f686f0`, `https://api.zylobridge.com/api/health` returned HTTP 200 with `{"status":"ok",...}`. The published Vercel sign-in route rendered after its intentional loading state and the public home route rendered with the restored navigation and live-data metric placeholders. The Google and email choices were present in the sign-in surface. No Google consent screen was opened and no email OTP was requested.
+
+## Final public sign-in smoke test
+
+At `https://zylobridge.com/sign-in?release=a8427c14`, the page rendered successfully after the loading state. The Google link resolved to `https://api.zylobridge.com/api/auth/google`, and the email OTP option was visible. This was a non-destructive smoke test: neither the Google link nor the email option was activated, so no OAuth session, OTP email, or production account change occurred.

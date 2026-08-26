@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Menu, X, ChevronDown, Briefcase, LayoutDashboard, Building2, Shield, MessageSquare, ShieldCheck, ShoppingBag, User } from "lucide-react";
+import { Menu, X, ChevronDown, Briefcase, LayoutDashboard, Building2, Shield, MessageSquare, Bell, ClipboardList, ShieldCheck, ShoppingBag, User } from "lucide-react";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { trpc } from "@/lib/trpc";
 
@@ -48,6 +48,15 @@ export default function Navbar() {
     { href: "/how-it-works", label: "How It Works" },
   ];
 
+  const workspaceLinks = isAuthenticated
+    ? [
+        ...(isProfessional ? [{ href: "/applications", label: "Applications", icon: ClipboardList }] : []),
+        ...(isClient || isEnterprise ? [{ href: "/employer/jobs", label: "Job Postings", icon: Briefcase }] : []),
+        { href: "/messages", label: "Messages", icon: MessageSquare },
+        { href: "/notifications", label: "Notifications", icon: Bell },
+      ]
+    : [];
+
   const initials = user?.name
     ? user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
     : "U";
@@ -77,7 +86,15 @@ export default function Navbar() {
           </div>
 
           {/* Desktop Auth */}
-          <div className="hidden md:flex items-center gap-3">
+          <div className="hidden md:flex items-center gap-2">
+            {isAuthenticated && workspaceLinks.map(({ href, label, icon: Icon }) => (
+              <Link key={href} href={href}>
+                <Button variant="ghost" size="sm" className="text-gray-300 hover:text-white hover:bg-white/5" title={label}>
+                  <Icon className="h-4 w-4 mr-1.5" />{label}
+                  {label === "Messages" && unreadCount > 0 && <span className="ml-1 rounded-full bg-violet-600 px-1.5 py-0.5 text-[10px] font-bold text-white">{unreadCount > 99 ? "99+" : unreadCount}</span>}
+                </Button>
+              </Link>
+            ))}
             {isAuthenticated ? (
               <>
                 {/* Dashboard link based on role */}
@@ -261,11 +278,14 @@ export default function Navbar() {
                     </Button>
                   </Link>
                 )}
-                <Link href="/messages" onClick={() => setMobileOpen(false)}>
-                  <Button variant="outline" size="sm" className="w-full border-white/10 text-gray-300">
-                    <MessageSquare className="h-4 w-4 mr-2" /> Messages
-                  </Button>
-                </Link>
+                {workspaceLinks.map(({ href, label, icon: Icon }) => (
+                  <Link key={href} href={href} onClick={() => setMobileOpen(false)}>
+                    <Button variant="outline" size="sm" className="w-full border-white/10 text-gray-300">
+                      <Icon className="h-4 w-4 mr-2" /> {label}
+                      {label === "Messages" && unreadCount > 0 && <span className="ml-auto rounded-full bg-violet-600 px-1.5 py-0.5 text-[10px] font-bold text-white">{unreadCount > 99 ? "99+" : unreadCount}</span>}
+                    </Button>
+                  </Link>
+                ))}
                 {isProfessional && (
                   <Link href="/verification" onClick={() => setMobileOpen(false)}>
                     <Button variant="outline" size="sm" className="w-full border-emerald-500/30 text-emerald-400">
