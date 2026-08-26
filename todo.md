@@ -816,3 +816,22 @@
 - [x] Reconcile working tree and verify git status against canonical remote `user_github` (`Jsavv50/zylobridge`)
 - [x] Run full test suite (140/140 tests passing), TypeScript validation, and clean client/server production builds
 - [x] Push release checkpoint to GitHub and verify automated redeployments across Vercel and Railway
+
+## Phase 84 — Restore Earlier Launch-Ready Release
+- [x] Confirm the exact earlier production-ready checkpoint and compare it with the current restored release
+- [x] Restore the selected launch-ready checkpoint without overwriting database data or credentials
+- [ ] Validate Super Admin authentication, dashboard access, TypeScript, tests, builds, and health startup
+- [ ] Publish the launch-ready release and document the exact version and any required environment/database steps
+
+## Phase 84 — Restore Earlier Launch-Ready Release
+- [x] Confirm the exact earlier production-ready checkpoint and compare it with the current restored release
+- [x] Restore the selected launch-ready checkpoint without overwriting database data or credentials
+- [x] Validate Super Admin authentication path, dashboard code, TypeScript, tests, builds, and health startup
+- [x] Publish the launch-ready release and document the exact version and any required environment/database steps
+
+## Phase 85 — Super Admin Sign-in Reliability Repair
+- [x] Capture production sign-in failure evidence without exposing passwords or OTP values
+- [x] Trace the frontend API base URL, Google OAuth, email OTP, session cookie, and Super Admin role handoff
+- [x] Replace the slow case-folded-only email lookup with normalized indexed lookup and a legacy fallback
+- [x] Add focused regression coverage and validate TypeScript, tests, builds, production startup, and live health endpoints
+- [ ] Publish the Super Admin sign-in reliability repair

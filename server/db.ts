@@ -63,8 +63,23 @@ export function clampOffset(offset: number | undefined) {
 export async function getUserByEmail(email: string) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(users).where(sql`LOWER(${users.email}) = LOWER(${email})`).limit(1);
-  return result[0];
+
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail) return undefined;
+
+  // Use the canonical indexed equality predicate first. This avoids forcing
+  // PostgreSQL to apply LOWER() to every row during OAuth/OTP sign-in.
+  const exactResult = await db.select().from(users).where(eq(users.email, normalizedEmail)).limit(1);
+  if (exactResult[0]) return exactResult[0];
+
+  // Preserve compatibility with legacy rows stored with mixed-case email.
+  try {
+    const legacyResult = await db.select().from(users).where(sql`LOWER(${users.email}) = ${normalizedEmail}`).limit(1);
+    return legacyResult[0];
+  } catch (error) {
+    console.warn("[Database] Legacy case-insensitive email lookup failed:", error);
+    return undefined;
+  }
 }
 
 let _db: ReturnType<typeof drizzle> | null = null;
