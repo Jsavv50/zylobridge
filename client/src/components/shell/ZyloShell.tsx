@@ -6,6 +6,7 @@ import {
   Search, Building2, BarChart3, DollarSign 
 } from "lucide-react";
 import { useAuth } from "../../_core/hooks/useAuth";
+import { ZylobridgeLogo } from "../ZylobridgeLogo";
 
 export interface PageHeaderProps {
   title: string;
@@ -125,10 +126,10 @@ export function ApplicationShell({ children, role = "user" }: { children: React.
           >
             {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
-          <Link href="/" className="flex items-center gap-2 font-bold text-xl tracking-tight text-foreground">
-            <span className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-black text-lg">Z</span>
-            <span>Zylobridge</span>
-          </Link>
+          <ZylobridgeLogo
+            imageClassName="h-8 w-8 rounded-lg"
+            className="gap-2 font-bold text-xl tracking-tight text-foreground"
+          />
         </div>
 
         <div className="flex items-center gap-4">
@@ -148,7 +149,7 @@ export function ApplicationShell({ children, role = "user" }: { children: React.
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <Link href="/sign-in" className="px-4 py-2 text-sm font-medium text-foreground hover:text-primary">Sign In</Link>
+              <Link href="/sign-in" className="hidden sm:inline-flex px-4 py-2 text-sm font-medium text-foreground hover:text-primary">Sign In</Link>
               <Link href="/sign-in" className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg shadow hover:bg-primary/90">Get Started</Link>
             </div>
           )}

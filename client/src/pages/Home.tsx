@@ -2,143 +2,12 @@ import { Link } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, CheckCircle, Star, Users, Briefcase, Shield, Zap, Quote, ChevronLeft, ChevronRight } from "lucide-react";
-import useEmblaCarousel from "embla-carousel-react";
-import Autoplay from "embla-carousel-autoplay";
-import { useCallback, useEffect, useState } from "react";
+import { ArrowRight, CheckCircle, Briefcase, Shield, Zap } from "lucide-react";
+
 import { VOCATION_LABELS, VOCATION_ICONS, VOCATION_KEYS, type VocationKey } from "@shared/vocations";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-
-
-const LOGO_URL = "/ZYLO.png";
-
-const TESTIMONIALS = [
-  {
-    id: 1,
-    source: "trustpilot",
-    rating: 5,
-    name: "Marcus O.",
-    role: "General Contractor",
-    location: "Lagos, Nigeria",
-    avatar: "MO",
-    avatarColor: "bg-violet-600",
-    date: "March 2025",
-    title: "Found a certified electrician within 24 hours",
-    body: "I posted a job on ZYLOBRIDGE at 9pm and had three qualified bids by morning. The escrow system gave me total peace of mind — funds only released when the work was done and signed off. Absolutely seamless.",
-  },
-  {
-    id: 2,
-    source: "google",
-    rating: 5,
-    name: "Adaeze N.",
-    role: "Skilled Plumber",
-    location: "Abuja, Nigeria",
-    avatar: "AN",
-    avatarColor: "bg-cyan-600",
-    date: "February 2025",
-    title: "My income doubled in two months",
-    body: "Before ZYLOBRIDGE I was relying on word-of-mouth. Now I have a steady stream of verified clients. The Verified badge made a huge difference — contractors trust me before we even speak.",
-  },
-  {
-    id: 3,
-    source: "trustpilot",
-    rating: 5,
-    name: "Emeka T.",
-    role: "Property Developer",
-    location: "Port Harcourt, Nigeria",
-    avatar: "ET",
-    avatarColor: "bg-emerald-600",
-    date: "April 2025",
-    title: "Best platform for sourcing trade professionals",
-    body: "We used ZYLOBRIDGE to staff an entire housing project — masons, painters, tilers, HVAC technicians. The vocation filters saved us hours. Every professional we hired had verifiable credentials.",
-  },
-  {
-    id: 4,
-    source: "google",
-    rating: 5,
-    name: "Fatima B.",
-    role: "HVAC Technician",
-    location: "Kano, Nigeria",
-    avatar: "FB",
-    avatarColor: "bg-amber-600",
-    date: "January 2025",
-    title: "Professional, fast, and fair",
-    body: "The bidding system is transparent and fair. I can see exactly what the contractor needs, set my rate, and the messaging feature means everything is documented. No more disputes over scope.",
-  },
-  {
-    id: 5,
-    source: "trustpilot",
-    rating: 5,
-    name: "Chidi A.",
-    role: "Facilities Manager",
-    location: "Enugu, Nigeria",
-    avatar: "CA",
-    avatarColor: "bg-rose-600",
-    date: "March 2025",
-    title: "Escrow payments are a game changer",
-    body: "I have been burned before by professionals who disappeared after receiving payment. ZYLOBRIDGE's escrow system completely eliminates that risk. I will never hire a tradesperson any other way.",
-  },
-  {
-    id: 6,
-    source: "google",
-    rating: 5,
-    name: "Ngozi E.",
-    role: "Carpenter",
-    location: "Ibadan, Nigeria",
-    avatar: "NE",
-    avatarColor: "bg-teal-600",
-    date: "April 2025",
-    title: "More jobs, better clients, zero hassle",
-    body: "ZYLOBRIDGE connected me with clients I would never have reached on my own. The profile system lets my work speak for itself, and the real-time messaging means I always know exactly what is expected.",
-  },
-  {
-    id: 7,
-    source: "trustpilot",
-    rating: 5,
-    name: "Babatunde F.",
-    role: "Construction Company Owner",
-    location: "Lagos, Nigeria",
-    avatar: "BF",
-    avatarColor: "bg-indigo-600",
-    date: "February 2025",
-    title: "Replaced our entire hiring process",
-    body: "We used to spend weeks sourcing and vetting subcontractors. ZYLOBRIDGE cut that to days. The verification badges mean we skip the credential checks entirely. Our project delivery times have improved significantly.",
-  },
-  {
-    id: 8,
-    source: "google",
-    rating: 5,
-    name: "Ifeoma C.",
-    role: "Glazier",
-    location: "Benin City, Nigeria",
-    avatar: "IC",
-    avatarColor: "bg-pink-600",
-    date: "March 2025",
-    title: "Finally a platform that respects skilled trades",
-    body: "ZYLOBRIDGE treats glaziers and specialist tradespeople as professionals, not afterthoughts. The vocation categories are specific and accurate, and contractors actually understand what they are hiring for.",
-  },
-  {
-    id: 9,
-    source: "trustpilot",
-    rating: 5,
-    name: "Oluwaseun M.",
-    role: "Road Construction Supervisor",
-    location: "Abuja, Nigeria",
-    avatar: "OM",
-    avatarColor: "bg-orange-600",
-    date: "January 2025",
-    title: "Reliable professionals, every single time",
-    body: "I have hired heavy equipment operators and road construction workers through ZYLOBRIDGE on three separate projects. Every single one showed up, did the work, and delivered on time. The review system keeps standards high.",
-  },
-];
-
-const STATS = [
-  { label: "Active Professionals", value: "2,400+", icon: Users },
-  { label: "Jobs Posted", value: "8,900+", icon: Briefcase },
-  { label: "Avg. Rating", value: "4.8★", icon: Star },
-  { label: "Verified Contractors", value: "1,200+", icon: Shield },
-];
+import { ZylobridgeLogo } from "@/components/ZylobridgeLogo";
 
 const HOW_IT_WORKS = [
   {
@@ -171,172 +40,27 @@ const TRUST_BADGES = [
 ];
 
 
-// ── Trustpilot / Google star rating icons ──────────────────────────────────
-function TrustpilotLogo() {
+function CommunityProofSection() {
   return (
-    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#00b67a]">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="#00b67a" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
-      </svg>
-      Trustpilot
-    </span>
-  );
-}
-
-function GoogleLogo() {
-  return (
-    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-gray-300">
-      <svg width="12" height="12" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-      </svg>
-      Google
-    </span>
-  );
-}
-
-function StarRating({ count = 5 }: { count?: number }) {
-  return (
-    <div className="flex gap-0.5">
-      {Array.from({ length: count }).map((_, i) => (
-        <Star key={i} className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-      ))}
-    </div>
-  );
-}
-
-function TestimonialsSection() {
-  const [emblaRef, emblaApi] = useEmblaCarousel(
-    { loop: true, align: "start", slidesToScroll: 1 },
-    [Autoplay({ delay: 4000, stopOnInteraction: false })]
-  );
-  const [selectedIndex, setSelectedIndex] = useState(0);
-
-  const scrollPrev = useCallback(() => emblaApi?.scrollPrev(), [emblaApi]);
-  const scrollNext = useCallback(() => emblaApi?.scrollNext(), [emblaApi]);
-
-  useEffect(() => {
-    if (!emblaApi) return;
-    const onSelect = () => setSelectedIndex(emblaApi.selectedScrollSnap());
-    emblaApi.on("select", onSelect);
-    return () => { emblaApi.off("select", onSelect); };
-  }, [emblaApi]);
-
-  return (
-    <section className="py-20 bg-[#0d1117] overflow-hidden">
+    <section className="py-20 bg-[#0d1117]">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-widest text-amber-400 uppercase bg-amber-500/10 border border-amber-500/20 rounded-full px-4 py-1.5 mb-4">
-            <Star className="h-3.5 w-3.5 fill-amber-400" />
-            Trusted by Thousands
-          </span>
-          <h2
-            className="text-3xl sm:text-4xl font-extrabold text-white mb-3"
-            style={{ fontFamily: "'Space Grotesk', sans-serif" }}
-          >
-            What Our Community Says
+        <div className="mx-auto max-w-3xl rounded-2xl border border-white/8 bg-[#131a26] p-8 text-center sm:p-10">
+          <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-full bg-violet-500/10 text-violet-300">
+            <Shield className="h-6 w-6" />
+          </div>
+          <h2 className="text-3xl font-extrabold text-white sm:text-4xl" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
+            Built for accountable work
           </h2>
-          <p className="text-gray-400 text-sm max-w-lg mx-auto">
-            Real reviews from contractors and skilled professionals who have built their businesses on ZYLOBRIDGE.
+          <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-gray-400">
+            ZYLOBRIDGE brings structured job briefs, verified professional profiles, documented messaging, and escrow-ready workflows into one marketplace experience.
           </p>
-          {/* Aggregate badges */}
-          <div className="flex items-center justify-center gap-6 mt-5">
-            <div className="flex items-center gap-2">
-              <TrustpilotLogo />
-              <div className="flex gap-0.5">
-                {[1,2,3,4,5].map(i => (
-                  <svg key={i} width="14" height="14" viewBox="0 0 24 24" fill="#00b67a" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
-                  </svg>
-                ))}
+          <div className="mt-7 grid gap-3 text-left sm:grid-cols-3">
+            {["Verified professional profiles", "Documented project communication", "Protected milestone workflows"].map((label) => (
+              <div key={label} className="rounded-xl border border-white/8 bg-white/[0.03] p-4 text-sm font-medium text-gray-200">
+                <CheckCircle className="mb-2 h-4 w-4 text-emerald-400" />
+                {label}
               </div>
-              <span className="text-xs text-gray-400">4.9 · Excellent</span>
-            </div>
-            <div className="w-px h-5 bg-white/10" />
-            <div className="flex items-center gap-2">
-              <GoogleLogo />
-              <StarRating />
-              <span className="text-xs text-gray-400">4.8 · 1,200+ reviews</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Carousel */}
-        <div className="relative">
-          <div className="overflow-hidden" ref={emblaRef}>
-            <div className="flex gap-5">
-              {TESTIMONIALS.map((t) => (
-                <div
-                  key={t.id}
-                  className="flex-none w-[90%] sm:w-[48%] lg:w-[31%] rounded-2xl border border-white/8 bg-[#131a26] p-6 flex flex-col gap-4"
-                >
-                  {/* Source badge */}
-                  <div className="flex items-center justify-between">
-                    {t.source === "trustpilot" ? <TrustpilotLogo /> : <GoogleLogo />}
-                    <StarRating count={t.rating} />
-                  </div>
-
-                  {/* Quote icon + title */}
-                  <div>
-                    <Quote className="h-5 w-5 text-violet-500/40 mb-2" />
-                    <h3 className="font-bold text-white text-sm leading-snug mb-2">
-                      {t.title}
-                    </h3>
-                    <p className="text-gray-400 text-xs leading-relaxed line-clamp-4">
-                      {t.body}
-                    </p>
-                  </div>
-
-                  {/* Reviewer */}
-                  <div className="flex items-center gap-3 mt-auto pt-3 border-t border-white/6">
-                    <div className={`w-9 h-9 rounded-full ${t.avatarColor} flex items-center justify-center text-xs font-bold text-white shrink-0`}>
-                      {t.avatar}
-                    </div>
-                    <div>
-                      <p className="text-white text-xs font-semibold">{t.name}</p>
-                      <p className="text-gray-500 text-[11px]">{t.role} · {t.location}</p>
-                    </div>
-                    <span className="ml-auto text-[10px] text-gray-600">{t.date}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Navigation buttons */}
-          <div className="flex items-center justify-center gap-3 mt-8">
-            <button
-              onClick={scrollPrev}
-              className="w-9 h-9 rounded-full border border-white/10 bg-white/5 hover:bg-violet-600/20 hover:border-violet-500/40 flex items-center justify-center transition-colors"
-              aria-label="Previous review"
-            >
-              <ChevronLeft className="h-4 w-4 text-gray-300" />
-            </button>
-
-            {/* Dot indicators */}
-            <div className="flex gap-1.5">
-              {TESTIMONIALS.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => emblaApi?.scrollTo(i)}
-                  className={`h-1.5 rounded-full transition-all duration-300 ${
-                    i === selectedIndex ? "w-6 bg-violet-500" : "w-1.5 bg-white/20"
-                  }`}
-                  aria-label={`Go to review ${i + 1}`}
-                />
-              ))}
-            </div>
-
-            <button
-              onClick={scrollNext}
-              className="w-9 h-9 rounded-full border border-white/10 bg-white/5 hover:bg-violet-600/20 hover:border-violet-500/40 flex items-center justify-center transition-colors"
-              aria-label="Next review"
-            >
-              <ChevronRight className="h-4 w-4 text-gray-300" />
-            </button>
+            ))}
           </div>
         </div>
       </div>
@@ -363,7 +87,7 @@ export default function Home() {
           <div className="flex flex-col items-center text-center max-w-4xl mx-auto">
             {/* Logo badge */}
             <div className="flex items-center gap-3 mb-8 px-4 py-2 rounded-full border border-violet-500/20 bg-violet-500/5">
-              <img src={LOGO_URL} alt="ZYLOBRIDGE" className="h-7 w-7 object-contain" />
+              <ZylobridgeLogo compact showWordmark={false} imageClassName="h-7 w-7" />
               <span className="text-sm font-semibold text-violet-300 tracking-wide">ZYLOBRIDGE MARKETPLACE</span>
             </div>
 
@@ -488,17 +212,14 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Stats Bar ─────────────────────────────────────────────────────── */}
+      {/* ── Platform capabilities ─────────────────────────────────────────── */}
       <section className="border-y border-white/5 bg-[#131a26]">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl py-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {STATS.map(({ label, value, icon: Icon }) => (
-              <div key={label} className="flex flex-col items-center text-center gap-2">
-                <Icon className="h-5 w-5 text-violet-400" />
-                <span className="text-2xl font-extrabold text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                  {value}
-                </span>
-                <span className="text-xs text-gray-500">{label}</span>
+          <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
+            {["Verified profiles", "Structured job briefs", "Escrow-ready milestones", "Documented conversations"].map((label) => (
+              <div key={label} className="flex flex-col items-center gap-2 text-center">
+                <CheckCircle className="h-5 w-5 text-emerald-400" />
+                <span className="text-sm font-semibold text-white">{label}</span>
               </div>
             ))}
           </div>
@@ -629,12 +350,12 @@ export default function Home() {
       </section>
 
       {/* ── Testimonials ─────────────────────────────────────────────────── */}
-      <TestimonialsSection />
+      <CommunityProofSection />
 
       {/* ── Final CTA ─────────────────────────────────────────────────────── */}
       <section className="py-20 bg-[#131a26]">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl text-center">
-          <img src={LOGO_URL} alt="ZYLOBRIDGE" className="h-16 w-16 object-contain mx-auto mb-6" />
+          <ZylobridgeLogo compact showWordmark={false} className="mx-auto mb-6" imageClassName="h-16 w-16" />
           <h2
             className="text-3xl sm:text-4xl font-extrabold text-white mb-4"
             style={{ fontFamily: "'Space Grotesk', sans-serif" }}

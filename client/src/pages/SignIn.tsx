@@ -20,8 +20,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
-
-const LOGO_URL = "/ZYLO.png";
+import { ZylobridgeLogo } from "@/components/ZylobridgeLogo";
 
 type AuthMethod = "choose" | "email_input" | "email_otp" | "phone_input" | "phone_otp" | "name_capture";
 type NameCaptureFor = "email" | "phone";
@@ -191,16 +190,10 @@ export default function SignIn() {
 
       {/* Top Header */}
       <header className="w-full border-b border-white/8 bg-[#0a0e17]/80 backdrop-blur-md sticky top-0 z-50 px-6 py-4 flex items-center justify-between">
-        <Link href="/">
-          <div className="flex items-center gap-3 cursor-pointer group">
-            <div className="w-10 h-10 rounded-xl bg-violet-600 flex items-center justify-center shadow-lg shadow-violet-600/30 group-hover:scale-105 transition-transform">
-              <img src={LOGO_URL} alt="Logo" className="w-6 h-6 object-contain" />
-            </div>
-            <span className="text-xl font-extrabold tracking-tight text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-              ZYLOBRIDGE
-            </span>
-          </div>
-        </Link>
+        <ZylobridgeLogo
+          className="group text-white"
+          imageClassName="h-10 w-10 rounded-xl shadow-lg shadow-violet-600/30 transition-transform group-hover:scale-105"
+        />
         <Link href="/">
           <span className="text-sm font-medium text-gray-400 hover:text-white transition-colors flex items-center gap-1.5 cursor-pointer">
             <ArrowLeft className="h-4 w-4" /> Back to Home

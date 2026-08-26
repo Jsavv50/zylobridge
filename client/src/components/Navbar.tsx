@@ -13,9 +13,8 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Menu, X, ChevronDown, Briefcase, LayoutDashboard, Building2, Shield, MessageSquare, ShieldCheck, ShoppingBag, User } from "lucide-react";
 import { VerificationBadge } from "@/components/VerificationBadge";
+import { ZylobridgeLogo } from "@/components/ZylobridgeLogo";
 import { trpc } from "@/lib/trpc";
-
-const LOGO_URL = "/ZYLO.png";
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -55,26 +54,8 @@ export default function Navbar() {
     <nav className="sticky top-0 z-50 border-b border-white/5 bg-[#0d1117]/90 backdrop-blur-xl">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl">
         <div className="flex h-16 items-center justify-between">
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-3 shrink-0">
-            <img
-              src={LOGO_URL}
-              alt="ZYLOBRIDGE"
-              className="h-9 w-9 object-contain"
-            />
-            <span
-              className="text-xl font-extrabold tracking-tight"
-              style={{
-                fontFamily: "'Space Grotesk', sans-serif",
-                background: "linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                backgroundClip: "text",
-              }}
-            >
-              ZYLOBRIDGE
-            </span>
-          </Link>
+          {/* Canonical official logo; always returns to the homepage. */}
+          <ZylobridgeLogo />
 
           {/* Desktop Nav */}
           <div className="hidden md:flex items-center gap-6">
