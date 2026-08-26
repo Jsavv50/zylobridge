@@ -1020,10 +1020,10 @@
 - [x] Diagnose the PostgreSQL/Drizzle email lookup failure for Enterprise sign-in and record production evidence
 - [x] Apply a compatible query or schema repair without changing roles, sessions, or enterprise authorization
 - [x] Add regression coverage and run tests, type checks, and production builds
-- [ ] Perform a safe live authentication check and publish the repair
+- [x] Perform a safe live authentication check and publish the repair
 
 ## Phase 77 — Homepage Presentation Rollback
 - [x] Remove the authenticated “Your workspace” panel from the homepage only
 - [x] Restore the prior 12 featured vocations and remove the expanded homepage vocation presentation
 - [x] Restore the prior real-data review presentation without fabricating testimonials or metrics
-- [ ] Validate and publish the homepage rollback while preserving authenticated workspace routes
+- [x] Validate and publish the homepage rollback while preserving authenticated workspace routes
