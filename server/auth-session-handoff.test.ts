@@ -88,11 +88,13 @@ describe("production auth session handoff architecture", () => {
     expect(db).toContain('updateData.role = "admin"');
   });
 
-  it("uses Railway as the production API fallback when VITE_API_URL is absent", () => {
+  it("uses the same-origin Vercel API proxy in production and preserves credentials", () => {
     const main = readProjectFile("client/src/main.tsx");
+    const vercel = readProjectFile("vercel.json");
 
-    expect(main).toContain("import.meta.env.PROD ? \"https://api.zylobridge.com\" : \"\"");
+    expect(main).toContain('import.meta.env.PROD ? "" : configuredApiUrl || ""');
     expect(main).toContain("url: `${API_URL}/api/trpc`");
     expect(main).toContain('credentials: "include"');
+    expect(vercel).toContain('"destination": "https://api.zylobridge.com/api/$1"');
   });
 });

@@ -5,10 +5,14 @@ import { describe, expect, it } from "vitest";
 describe("production authentication recovery", () => {
   const read = (relativePath: string) => fs.readFileSync(path.resolve(__dirname, relativePath), "utf8");
 
-  it("keeps the Vercel sign-in page pointed at Railway when VITE_API_URL is absent", () => {
+  it("uses the Vercel same-origin API proxy for production authentication", () => {
+    const main = read("../client/src/main.tsx");
     const signIn = read("../client/src/pages/SignIn.tsx");
-    expect(signIn).toContain('import.meta.env.PROD ? "https://api.zylobridge.com" : ""');
+    const vercel = read("../vercel.json");
+    expect(main).toContain('import.meta.env.PROD ? "" : configuredApiUrl || ""');
+    expect(signIn).toContain('import.meta.env.PROD ? "" : configuredApiUrl || ""');
     expect(signIn).toContain("/api/auth/google?returnPath=");
+    expect(vercel).toContain('"destination": "https://api.zylobridge.com/api/$1"');
   });
 
   it("normalizes email addresses before both Supabase OTP operations", () => {

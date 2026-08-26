@@ -60,7 +60,9 @@ const queryClient = new QueryClient({
  * Falls back to empty string for same-origin requests (local development).
  */
 const configuredApiUrl = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
-const API_URL = (configuredApiUrl || (import.meta.env.PROD ? "https://api.zylobridge.com" : "")).replace(/\/$/, "");
+// Production uses Vercel's same-origin /api proxy to keep credentialed auth requests
+// on the frontend origin. Non-production environments may target a configured backend.
+const API_URL = (import.meta.env.PROD ? "" : configuredApiUrl || "").replace(/\/$/, "");
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;

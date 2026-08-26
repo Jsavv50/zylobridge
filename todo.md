@@ -1027,3 +1027,21 @@
 - [x] Restore the prior 12 featured vocations and remove the expanded homepage vocation presentation
 - [x] Restore the prior real-data review presentation without fabricating testimonials or metrics
 - [x] Validate and publish the homepage rollback while preserving authenticated workspace routes
+
+## Phase 78 — Authorized Full Production Acceptance
+- [ ] Run the authorized two-account notification delivery and recipient-isolation acceptance test
+- [ ] Verify authenticated enterprise workspace access and OAuth redirect/callback behavior
+- [ ] Verify payment initialization/readiness without capturing funds or completing a charge
+- [ ] Document acceptance evidence, close only verified release items, and publish any required fixes
+
+## Phase 79 — Sender Email OTP Recovery
+- [ ] Capture the Witts655 email sign-in failure stage and production response without exposing OTP values
+- [ ] Repair the email OTP send/verify path if a deterministic defect is found
+- [ ] Add regression coverage and validate the sender sign-in repair with tests and builds
+- [ ] Publish the repair and retry the authorized sender sign-in before the notification test
+
+## Phase 80 — Repeated Production Authentication Failure
+- [x] Capture fresh Google redirect/callback and email OTP/session evidence for the repeated failure
+- [x] Fix the actual shared production authentication failure without weakening session security
+- [x] Add or update regression coverage and validate both sign-in paths
+- [ ] Publish the repair and retry both authorized authentication paths

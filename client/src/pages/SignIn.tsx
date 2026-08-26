@@ -4,7 +4,9 @@ import { useAuth } from "@/_core/hooks/useAuth";
 
 // Railway backend base URL — must be set in Vercel env vars as VITE_API_URL
 const configuredApiUrl = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
-const API_URL = (configuredApiUrl || (import.meta.env.PROD ? "https://api.zylobridge.com" : "")).replace(/\/$/, "");
+// Production uses Vercel's same-origin /api proxy so credentialed auth requests
+// and Google initiation are not blocked by cross-origin browser networking.
+const API_URL = (import.meta.env.PROD ? "" : configuredApiUrl || "").replace(/\/$/, "");
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
