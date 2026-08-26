@@ -1021,3 +1021,9 @@
 - [x] Apply a compatible query or schema repair without changing roles, sessions, or enterprise authorization
 - [x] Add regression coverage and run tests, type checks, and production builds
 - [ ] Perform a safe live authentication check and publish the repair
+
+## Phase 77 — Homepage Presentation Rollback
+- [x] Remove the authenticated “Your workspace” panel from the homepage only
+- [x] Restore the prior 12 featured vocations and remove the expanded homepage vocation presentation
+- [x] Restore the prior real-data review presentation without fabricating testimonials or metrics
+- [ ] Validate and publish the homepage rollback while preserving authenticated workspace routes
