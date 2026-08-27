@@ -394,3 +394,23 @@
 - [x] Restore the prior stable authentication and deployment behavior without changing unrelated application functionality
 - [x] Validate TypeScript, tests, client build, server build, and production startup after rollback
 - [x] Publish the rollback and document the resulting release version
+
+## Phase 82 — Super Admin Browser Sign-in and Dashboard Recovery
+- [ ] Open the live sign-in flow in the built-in browser and inspect current authentication/session state
+- [ ] Complete the sensitive Super Admin login step through secure browser handoff if required
+- [ ] Diagnose and fix the Super Admin dashboard failure without weakening authorization or changing financial data
+- [ ] Validate the Super Admin dashboard and document the result
+
+## Phase 83 — Super Admin Sign-in Failure Recovery
+- [ ] Capture fresh production sign-in failure evidence without exposing passwords or OTP values
+- [ ] Trace the frontend API base URL, Google OAuth, email OTP, session cookie, and Super Admin role handoff
+- [ ] Apply the smallest secure repair and add regression coverage
+- [ ] Validate the repair with tests, builds, and safe production checks, then publish it
+
+## Phase 89 — Production Routing Repair (`pasted_content_14.txt`)
+- [ ] Inventory every route declaration, navigation target, page component, redirect, and Vercel rewrite for Notifications, Escrow & Funding, Enterprise Organization, and related workflows
+- [ ] Determine the exact broken URLs and canonical route names without assuming the cause
+- [ ] Repair or reconnect existing Notifications, Escrow & Funding, and Enterprise Organization routes and navigation with existing authorization guards
+- [ ] Audit all frontend internal links for nonexistent or obsolete routes and preserve working routes
+- [ ] Verify SPA direct access, refresh behavior, authentication/role guards, desktop/tablet/mobile rendering, and production endpoints
+- [ ] Add routing regression coverage, run the full test suite and production builds, document root causes, and publish the fix
