@@ -1076,3 +1076,20 @@
 - [x] Add precise not-found, unauthorized, closed, expired, and retry states while preserving Apply/View Application behavior and source-context navigation.
 - [x] Add regression coverage for open, closed, expired, deleted, unauthorized, invalid-ID, network-failure, and unauthenticated cases; validate TypeScript, full Vitest, client/server builds, runtime, and cache behavior.
 - [x] Save the verified Applications-to-Job Details fix checkpoint.
+
+## Attached specification: pasted_content_34.txt
+- [x] Read and normalize the complete Find Jobs → Job Details production bug specification.
+- [x] Trace the Find Jobs card link, `/jobs/:id` route, route ID conversion, tRPC input, router authorization, database query/joins, production network request, and backend logs.
+- [x] Verify jobs.id/jobId/string-integer consistency and compare list and detail query schemas, including nullable optional relations.
+- [x] Implement the permanent end-to-end fix and safe server-side retrieval instrumentation without exposing internal errors.
+- [x] Add regression coverage for valid, invalid, missing, closed, nullable-relation, authorized, retry, and end-to-end navigation cases.
+- [x] Run full tests, TypeScript, client/server builds, runtime and production checks, inspect logs, and verify the live domain.
+- [x] Save the verified production Job Details fix checkpoint.
+
+## Attached specification: pasted_content_34.txt
+- [x] Read and normalize the complete Find Jobs → Job Details production bug specification.
+- [x] Trace marketplace card links, `/jobs/:id` routing, numeric ID conversion, tRPC input validation, router authorization, database query/joins, production requests, and logs.
+- [x] Verify jobs.id/jobId and string/integer consistency, and compare list/detail query handling including nullable optional relations.
+- [x] Implement the permanent end-to-end fix with safe server-side instrumentation and non-sensitive user-facing errors.
+- [x] Add regression coverage for valid, invalid, missing, closed, nullable-relation, authorized, retry, and end-to-end navigation cases.
+- [x] Run full tests, TypeScript, client/server builds, runtime and production checks; inspect logs and save the verified checkpoint.

@@ -520,11 +520,18 @@ export const appRouter = router({
     getById: publicProcedure
       .input(z.object({ id: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
-        const job = await getJobById(input.id);
-        if (!job) throw new TRPCError({ code: "NOT_FOUND" });
-        const viewerCanSeeUnpublished = Boolean(ctx.user && (ctx.user.id === job.clientId || ctx.user.role === "admin" || ctx.user.role === "SUPER_ADMIN"));
-        if (job.status !== "open" && !viewerCanSeeUnpublished) throw new TRPCError({ code: "NOT_FOUND" });
-        return job;
+        try {
+          const job = await getJobById(input.id);
+          console.info("[Jobs] detail lookup", { jobId: input.id, userId: ctx.user?.id ?? null, exists: Boolean(job), authorized: Boolean(job && (job.status === "open" || (ctx.user && (ctx.user.id === job.clientId || ctx.user.role === "admin" || ctx.user.role === "SUPER_ADMIN")))) });
+          if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "This job is no longer available." });
+          const viewerCanSeeUnpublished = Boolean(ctx.user && (ctx.user.id === job.clientId || ctx.user.role === "admin" || ctx.user.role === "SUPER_ADMIN"));
+          if (job.status !== "open" && !viewerCanSeeUnpublished) throw new TRPCError({ code: "NOT_FOUND", message: "This job is no longer available." });
+          return job;
+        } catch (error) {
+          if (error instanceof TRPCError) throw error;
+          console.error("[Jobs] public detail lookup failed", { jobId: input.id, userId: ctx.user?.id ?? null, error: error instanceof Error ? error.message.slice(0, 240) : "unknown_error" });
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Job details are temporarily unavailable. Please try again." });
+        }
       }),
 
     report: protectedProcedure
@@ -541,9 +548,16 @@ export const appRouter = router({
       .input(z.object({ id: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
         if (ctx.user.userType !== "professional") throw new TRPCError({ code: "FORBIDDEN", message: "Professional job details are available to professional accounts." });
-        const details = await getProfessionalJobDetails(ctx.user.id, input.id);
-        if (!details) throw new TRPCError({ code: "NOT_FOUND", message: "This opportunity is no longer available." });
-        return details;
+        try {
+          const details = await getProfessionalJobDetails(ctx.user.id, input.id);
+          console.info("[Jobs] professional detail lookup", { jobId: input.id, userId: ctx.user.id, exists: Boolean(details), hasApplication: Boolean(details?.application), authorized: Boolean(details) });
+          if (!details) throw new TRPCError({ code: "NOT_FOUND", message: "This job is no longer available to this account." });
+          return details;
+        } catch (error) {
+          if (error instanceof TRPCError) throw error;
+          console.error("[Jobs] professional detail lookup failed", { jobId: input.id, userId: ctx.user.id, error: error instanceof Error ? error.message.slice(0, 240) : "unknown_error" });
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Job details are temporarily unavailable. Please try again." });
+        }
       }),
 
     myJobs: protectedProcedure

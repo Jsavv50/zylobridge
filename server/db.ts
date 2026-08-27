@@ -296,21 +296,29 @@ export async function createJob(data: InsertJob) {
 export async function getJobById(id: number) {
   const db = await getDb();
   if (!db) return undefined;
-  const [row] = await db.select({
-    job: jobs,
-    organizationName: organizations.name,
-    organizationSlug: organizations.slug,
-  })
-    .from(jobs)
-    .leftJoin(organizations, eq(jobs.organizationId, organizations.id))
-    .where(eq(jobs.id, id))
-    .limit(1);
-  if (!row) return undefined;
-  return {
-    ...row.job,
-    organizationName: row.organizationName ?? undefined,
-    organizationSlug: row.organizationSlug ?? undefined,
-  };
+  try {
+    const [row] = await db.select({
+      job: jobs,
+      organizationName: organizations.name,
+      organizationSlug: organizations.slug,
+    })
+      .from(jobs)
+      .leftJoin(organizations, eq(jobs.organizationId, organizations.id))
+      .where(eq(jobs.id, id))
+      .limit(1);
+    if (!row) return undefined;
+    return {
+      ...row.job,
+      organizationName: row.organizationName ?? undefined,
+      organizationSlug: row.organizationSlug ?? undefined,
+    };
+  } catch (error) {
+    console.error("[Jobs] getJobById database query failed", {
+      jobId: id,
+      error: error instanceof Error ? error.message.slice(0, 240) : "unknown_error",
+    });
+    throw error;
+  }
 }
 
 export async function createJobReport(data: InsertJobReport) {

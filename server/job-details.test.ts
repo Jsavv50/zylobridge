@@ -78,6 +78,23 @@ describe("professional job details workspace", () => {
     expect(page).toContain("Applications are closed for this opportunity.");
   });
 
+  it("hardens the production Find Jobs to Job Details request path", () => {
+    const jobsPage = readFileSync(resolve(process.cwd(), "client/src/pages/JobsMarketplace.tsx"), "utf8");
+    const jobCard = readFileSync(resolve(process.cwd(), "client/src/components/JobCard.tsx"), "utf8");
+    expect(jobsPage).toContain("<JobCard key={job.id}");
+    expect(jobCard).toContain("href={`/jobs/${id}");
+    expect(page).toContain("const jobId = Number(id)");
+    expect(page).toContain("Number.isInteger(jobId) && jobId > 0");
+    expect(page).toContain("selectedQuery.refetch()");
+    expect(page).toContain("authLoading");
+    expect(router).toContain('input(z.object({ id: z.number().int().positive() }))');
+    expect(router).toContain('[Jobs] detail lookup');
+    expect(router).toContain('[Jobs] public detail lookup failed');
+    expect(router).toContain('[Jobs] professional detail lookup failed');
+    expect(db).toContain('.leftJoin(organizations, eq(jobs.organizationId, organizations.id))');
+    expect(db).toContain('organizationName: row.organizationName ?? undefined');
+  });
+
   it("does not reintroduce fabricated client data or placeholder metrics", () => {
     expect(page).not.toContain("MASON NEEDED");
     expect(page).not.toContain("Cape Town • Posted 2 days ago");
