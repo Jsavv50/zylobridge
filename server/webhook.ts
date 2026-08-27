@@ -9,14 +9,15 @@ export function registerPaystackWebhook(app: express.Express) {
   app.post("/api/payments/webhook", express.raw({ type: "application/json" }), async (req, res) => {
     try {
       const signature = req.headers["x-paystack-signature"] as string | undefined;
-      const rawBodyBuffer = req.body as Buffer;
-      const rawBodyString = rawBodyBuffer ? rawBodyBuffer.toString("utf8") : "";
+      const rawBodyBuffer = (req as express.Request & { rawBody?: Buffer }).rawBody
+        ?? (Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body ?? {})));
+      const rawBodyString = rawBodyBuffer.toString("utf8");
 
       const isValid = await verifyPaystackWebhookSignature(rawBodyString, signature);
       let parsedPayload: any = {};
       try {
         parsedPayload = JSON.parse(rawBodyString);
-      } catch (e) {
+      } catch {
         parsedPayload = { raw: rawBodyString };
       }
 

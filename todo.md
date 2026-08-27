@@ -916,3 +916,13 @@
 - [x] Add regression coverage for responsive behavior and participant-name resolution
 - [x] Run full tests, TypeScript, production builds, and safe live route verification
 - [x] Save and publish the verified responsive identity update
+
+## Phase 93: Payment Routing and South Africa Transfer Audit
+- [x] Audit Paystack initiation, callback/return URLs, verification, webhook, escrow linkage, idempotency, and Vercel routing
+- [x] Audit payment pages and routes for success, failed, cancelled, pending, and direct-refresh states
+- [x] Identify the authoritative bank-transfer provider, country support, bank-list mechanism, currencies, and transaction model
+- [x] Implement the minimum safe payment return-route fix without trusting frontend success state
+- [x] Add South Africa bank-transfer support only through provider-authoritative country/bank configuration; preserve Nigeria
+- [x] Add or update payment, routing, transfer, security, authorization, and duplicate-processing regression coverage
+- [x] Run full tests, TypeScript, production builds, safe live route checks, and inspect for committed secrets
+- [x] Save and publish the verified payment update

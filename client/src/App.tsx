@@ -27,6 +27,7 @@ const Messaging = lazy(() => import("./pages/Messaging"));
 const Notifications = lazy(() => import("./pages/Notifications"));
 const NotificationSettings = lazy(() => import("./pages/NotificationSettings"));
 const Payments = lazy(() => import("./pages/Payments"));
+const PaymentCallback = lazy(() => import("./pages/PaymentCallback"));
 const VerificationRequest = lazy(() => import("./pages/VerificationRequest"));
 const HowItWorks = lazy(() => import("./pages/HowItWorks"));
 const Shop = lazy(() => import("./pages/Shop"));
@@ -75,6 +76,7 @@ function Router() {
       <Route path="/notifications" component={Notifications} />
       <Route path="/notifications/settings" component={NotificationSettings} />
       <Route path="/payments" component={Payments} />
+      <Route path="/payment/callback" component={PaymentCallback} />
       <Route path="/verification" component={VerificationRequest} />
       <Route path="/how-it-works" component={HowItWorks} />
       <Route path="/shop" component={Shop} />

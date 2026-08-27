@@ -71,5 +71,5 @@ export function getBaseUrl(): string {
  */
 export function getFrontendUrl(): string {
   if (ENV.frontendBaseUrl) return ENV.frontendBaseUrl.replace(/\/$/, "");
-  return "http://localhost:3000";
+  return ENV.isProduction ? "https://zylobridge.com" : "http://localhost:3000";
 }

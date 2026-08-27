@@ -37,19 +37,53 @@ export interface PaystackInitResult {
 
 export async function initializePaystackTransaction(params: {
   email: string;
-  amount: number; // in kobo (multiply NGN by 100)
+  amount: number; // major currency units
   reference: string;
   metadata?: Record<string, unknown>;
   callback_url?: string;
+  currency?: string;
+  channels?: string[];
 }): Promise<PaystackInitResult> {
   return paystackFetch<PaystackInitResult>("/transaction/initialize", {
     method: "POST",
     body: JSON.stringify({
       email: params.email,
-      amount: Math.round(params.amount * 100), // convert to kobo
+      amount: Math.round(params.amount * 100),
       reference: params.reference,
       metadata: params.metadata,
       callback_url: params.callback_url,
+      currency: params.currency,
+      channels: params.channels,
+    }),
+  });
+}
+
+export interface PaystackEftChargeResult {
+  reference: string;
+  status: string;
+  url: string;
+  display_text?: string;
+}
+
+/**
+ * Paystack EFT is documented for South African customers only. Ozow is the
+ * currently documented provider and the amount is expressed in ZAR cents.
+ */
+export async function initializePaystackSouthAfricaEft(params: {
+  email: string;
+  amount: number;
+  reference: string;
+  metadata?: Record<string, unknown>;
+}): Promise<PaystackEftChargeResult> {
+  return paystackFetch<PaystackEftChargeResult>("/charge", {
+    method: "POST",
+    body: JSON.stringify({
+      email: params.email,
+      amount: Math.round(params.amount * 100),
+      currency: "ZAR",
+      reference: params.reference,
+      metadata: params.metadata,
+      eft: { provider: "ozow" },
     }),
   });
 }

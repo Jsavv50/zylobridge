@@ -121,7 +121,9 @@ import {
   listPaystackBanks,
   resolveAccountNumber,
   generatePaystackReference,
+  initializePaystackSouthAfricaEft,
 } from "./paystack";
+import { getFrontendUrl } from "./_core/env";
 import { maskPhoneNumber, normalizePhoneNumber, sendPhoneOtpSms, SmsDeliveryError } from "./sms";
 import { getUserNotificationPreference, updateUserNotificationPreference, createInAppNotification, getUnreadNotifications, markNotificationRead, generateIcsContent, executeMatchingV2 } from "./phase4";
 import { initializeMilestonePayment, processVerifiedPayment, verifyPaystackWebhookSignature } from "./finance";
@@ -748,13 +750,17 @@ export const appRouter = router({
         if (existing && existing.status === "funded") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Escrow already funded for this job." });
         }
+        if (existing?.status === "pending" && existing.clientId === ctx.user.id && existing.professionalId === input.professionalId && existing.paymentMethod === "paystack" && existing.paystackReference && existing.paystackAuthorizationUrl) {
+          return { authorizationUrl: existing.paystackAuthorizationUrl, reference: existing.paystackReference };
+        }
         const reference = generatePaystackReference("ZB-ESC");
         const result = await initializePaystackTransaction({
           email: ctx.user.email,
           amount: input.amount,
           reference,
           metadata: { jobId: input.jobId, clientId: ctx.user.id, professionalId: input.professionalId },
-          callback_url: input.callbackUrl,
+          callback_url: `${getFrontendUrl()}/payment/callback`,
+          currency: "NGN",
         });
         await createEscrowPayment({
           jobId: input.jobId,
@@ -771,6 +777,50 @@ export const appRouter = router({
         return { authorizationUrl: result.authorization_url, reference };
       }),
 
+    // South African EFT via Paystack Charge API (currently Ozow only)
+    initSouthAfricaEft: protectedProcedure
+      .input(z.object({
+        jobId: z.number().int().positive(),
+        professionalId: z.number().int().positive(),
+        amount: z.number().positive(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.userType !== "client" && ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Only clients can fund escrow." });
+        }
+        if (!ctx.user.email) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Account email required for payment." });
+        }
+        await requireEscrowJobAccess(ctx.user.id, ctx.user.role, input.jobId, input.professionalId);
+        const existing = await getEscrowByJobId(input.jobId);
+        if (existing && existing.status === "funded") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Escrow already funded for this job." });
+        }
+        if (existing?.status === "pending" && existing.clientId === ctx.user.id && existing.professionalId === input.professionalId && existing.currency === "ZAR" && existing.paystackReference && existing.paystackAuthorizationUrl) {
+          return { authorizationUrl: existing.paystackAuthorizationUrl, reference: existing.paystackReference, status: "pending" as const, currency: "ZAR" as const };
+        }
+        const reference = generatePaystackReference("ZB-ZA-EFT");
+        const result = await initializePaystackSouthAfricaEft({
+          email: ctx.user.email,
+          amount: input.amount,
+          reference,
+          metadata: { jobId: input.jobId, clientId: ctx.user.id, professionalId: input.professionalId, country: "ZA", paymentMethod: "eft" },
+        });
+        await createEscrowPayment({
+          jobId: input.jobId,
+          clientId: ctx.user.id,
+          professionalId: input.professionalId,
+          amount: String(input.amount),
+          currency: "ZAR",
+          paymentMethod: "paystack",
+          status: "pending",
+          paystackReference: reference,
+          paystackAuthorizationUrl: result.url,
+          bankName: "Ozow EFT",
+        });
+        return { authorizationUrl: result.url, reference, status: result.status, currency: "ZAR" as const };
+      }),
+
     // Verify Paystack payment after redirect
     verifyPaystack: protectedProcedure
       .input(z.object({ reference: z.string().min(1).max(255) }))
@@ -781,11 +831,21 @@ export const appRouter = router({
           throw new TRPCError({ code: "FORBIDDEN", message: "You are not authorized to verify this escrow payment." });
         }
         const result = await verifyPaystackTransaction(input.reference);
+        if (result.reference !== input.reference) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Payment reference mismatch." });
+        }
+        const expectedAmountMinor = Math.round(Number(escrow.amount) * 100);
+        if (result.amount !== expectedAmountMinor || result.currency !== escrow.currency) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Payment amount or currency does not match the escrow." });
+        }
         if (result.status !== "success") {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Payment not successful." });
+          return { success: false, status: result.status, amount: result.amount / 100 };
+        }
+        if (escrow.status === "funded") {
+          return { success: true, status: "success" as const, amount: result.amount / 100 };
         }
         await updateEscrowStatus(escrow.id, "funded", { paidAt: new Date() });
-        return { success: true, amount: result.amount / 100 };
+        return { success: true, status: "success" as const, amount: result.amount / 100 };
       }),
 
     // Initiate bank transfer escrow

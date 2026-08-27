@@ -40,7 +40,7 @@ interface EscrowPaymentModalProps {
   bidAmount: number;
 }
 
-type PaymentMethod = "paystack" | "bank_transfer";
+type PaymentMethod = "paystack" | "bank_transfer" | "south_africa_eft";
 type Step = "choose" | "paystack_init" | "bank_details" | "bank_proof" | "success";
 
 export default function EscrowPaymentModal({
@@ -51,6 +51,7 @@ export default function EscrowPaymentModal({
   jobTitle,
   bidAmount,
 }: EscrowPaymentModalProps) {
+  const [country, setCountry] = useState<"nigeria" | "south_africa">("nigeria");
   const [method, setMethod] = useState<PaymentMethod>("paystack");
   const [step, setStep] = useState<Step>("choose");
   const [bankCode, setBankCode] = useState("");
@@ -58,9 +59,8 @@ export default function EscrowPaymentModal({
   const [resolvedAccount, setResolvedAccount] = useState<{ account_name: string; account_number: string } | null>(null);
   const [bankName, setBankName] = useState("");
   const [proofFile, setProofFile] = useState<File | null>(null);
-  const [paystackUrl, setPaystackUrl] = useState("");
-
-  const { data: banks } = trpc.escrow.listBanks.useQuery();
+    const [paystackUrl, setPaystackUrl] = useState("");
+  const { data: banks } = trpc.escrow.listBanks.useQuery(undefined, { enabled: country === "nigeria" && method === "bank_transfer" });
   const { data: existingEscrow, refetch: refetchEscrow } = trpc.escrow.getByJobId.useQuery({ jobId });
 
   const initPaystack = trpc.escrow.initPaystack.useMutation({
@@ -71,6 +71,13 @@ export default function EscrowPaymentModal({
     onError: (e) => toast.error(e.message),
   });
 
+  const initSouthAfricaEft = trpc.escrow.initSouthAfricaEft.useMutation({
+    onSuccess: (data) => {
+      setPaystackUrl(data.authorizationUrl);
+      setStep("paystack_init");
+    },
+    onError: (e) => toast.error(e.message),
+  });
   const initBankTransfer = trpc.escrow.initBankTransfer.useMutation({
     onSuccess: () => {
       setStep("bank_details");
@@ -98,10 +105,14 @@ export default function EscrowPaymentModal({
   });
 
   const verifyPaystack = trpc.escrow.verifyPaystack.useMutation({
-    onSuccess: () => {
-      setStep("success");
-      refetchEscrow();
-      toast.success("Payment verified! Escrow funded successfully.");
+    onSuccess: (data) => {
+      if (data.success) {
+        setStep("success");
+        refetchEscrow();
+        toast.success("Payment verified! Escrow funded successfully.");
+      } else {
+        toast.info(`Payment status: ${data.status}. Escrow remains pending.`);
+      }
     },
     onError: (e) => toast.error(e.message),
   });
@@ -128,6 +139,10 @@ export default function EscrowPaymentModal({
   }, [step]);
 
   const handlePaystackInit = () => {
+    if (country === "south_africa") {
+      initSouthAfricaEft.mutate({ jobId, professionalId, amount: bidAmount });
+      return;
+    }
     initPaystack.mutate({
       jobId,
       professionalId,
@@ -204,7 +219,7 @@ export default function EscrowPaymentModal({
             Fund Escrow
           </DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            Secure <strong className="text-foreground">₦{bidAmount.toLocaleString()}</strong> for <em>{jobTitle}</em>
+            Secure <strong className="text-foreground">{country === "south_africa" ? "R" : "₦"}{bidAmount.toLocaleString()}</strong> for <em>{jobTitle}</em>
           </DialogDescription>
         </DialogHeader>
 
@@ -223,37 +238,61 @@ export default function EscrowPaymentModal({
               </div>
             </div>
 
+            <div className="space-y-2">
+              <Label className="text-muted-foreground text-xs">Payment country</Label>
+              <Select value={country} onValueChange={(value: "nigeria" | "south_africa") => {
+                setCountry(value);
+                setMethod(value === "south_africa" ? "south_africa_eft" : "paystack");
+                setBankCode("");
+                setAccountNumber("");
+              }}>
+                <SelectTrigger className="bg-background border-border"><SelectValue /></SelectTrigger>
+                <SelectContent className="bg-card border-border">
+                  <SelectItem value="nigeria">Nigeria — NGN</SelectItem>
+                  <SelectItem value="south_africa">South Africa — ZAR</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <button
-                onClick={() => setMethod("paystack")}
+                onClick={() => setMethod(country === "south_africa" ? "south_africa_eft" : "paystack")}
                 className={`p-4 rounded-xl border-2 transition-all text-left ${
-                  method === "paystack"
+                  (method === "paystack" || method === "south_africa_eft")
                     ? "border-primary bg-primary/10"
                     : "border-border hover:border-primary/50"
                 }`}
               >
                 <CreditCard className="h-6 w-6 text-primary mb-2" />
-                <p className="font-semibold text-foreground text-sm">Card / USSD</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Pay with Paystack</p>
+                <p className="font-semibold text-foreground text-sm">{country === "south_africa" ? "EFT" : "Card / USSD"}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{country === "south_africa" ? "Pay securely with Ozow via Paystack" : "Pay with Paystack"}</p>
                 <Badge variant="secondary" className="mt-2 text-xs">Instant</Badge>
               </button>
 
               <button
-                onClick={() => setMethod("bank_transfer")}
+                type="button"
+                disabled={country !== "nigeria"}
+                onClick={() => country === "nigeria" && setMethod("bank_transfer")}
                 className={`p-4 rounded-xl border-2 transition-all text-left ${
-                  method === "bank_transfer"
+                  method === "bank_transfer" && country === "nigeria"
                     ? "border-primary bg-primary/10"
                     : "border-border hover:border-primary/50"
                 }`}
               >
                 <Building2 className="h-6 w-6 text-primary mb-2" />
                 <p className="font-semibold text-foreground text-sm">Bank Transfer</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Direct bank deposit</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{country === "nigeria" ? "Manual Nigerian transfer" : "Unavailable for this country"}</p>
                 <Badge variant="outline" className="mt-2 text-xs">1–24 hrs</Badge>
               </button>
             </div>
 
-            {method === "bank_transfer" && (
+            {country === "south_africa" && (
+              <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm text-muted-foreground">
+                South African EFT is processed through Paystack’s documented Ozow provider in ZAR. No local bank account details are collected or hardcoded here.
+              </div>
+            )}
+
+            {method === "bank_transfer" && country === "nigeria" && (
               <div className="space-y-3 pt-2">
                 <Separator />
                 <p className="text-sm font-medium text-foreground">Your bank details (for our records)</p>
@@ -293,18 +332,19 @@ export default function EscrowPaymentModal({
             )}
 
             <Button
-              onClick={method === "paystack" ? handlePaystackInit : handleBankTransferInit}
+              onClick={method === "bank_transfer" ? handleBankTransferInit : handlePaystackInit}
               disabled={
                 initPaystack.isPending ||
+                initSouthAfricaEft.isPending ||
                 initBankTransfer.isPending ||
                 (method === "bank_transfer" && (!resolvedAccount || !bankCode))
               }
               className="w-full bg-primary hover:bg-primary/90"
             >
-              {initPaystack.isPending || initBankTransfer.isPending ? (
+              {initPaystack.isPending || initSouthAfricaEft.isPending || initBankTransfer.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : null}
-              {method === "paystack" ? "Pay with Paystack" : "Get Transfer Details"}
+              {method === "bank_transfer" ? "Get Transfer Details" : country === "south_africa" ? "Continue with South African EFT" : "Pay with Paystack"}
             </Button>
           </div>
         )}
