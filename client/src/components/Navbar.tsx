@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Menu, X, ChevronDown, Briefcase, LayoutDashboard, Building2, Shield, MessageSquare, ShieldCheck, ShoppingBag, User } from "lucide-react";
+import { Menu, X, ChevronDown, Briefcase, LayoutDashboard, Building2, Shield, MessageSquare, ShieldCheck, ShoppingBag, User, Bell } from "lucide-react";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { ZylobridgeLogo } from "@/components/ZylobridgeLogo";
 import { trpc } from "@/lib/trpc";
@@ -38,7 +38,9 @@ export default function Navbar() {
     enabled: isAuthenticated,
     refetchInterval: 30000, // poll every 30s
   });
-  const unreadCount = unreadData?.count ?? 0;
+  const messageUnreadCount = unreadData?.count ?? 0;
+  const { data: notificationUnread = [] } = trpc.notifications.listUnread.useQuery(undefined, { enabled: isAuthenticated, refetchInterval: 30_000 });
+  const notificationUnreadCount = notificationUnread.length;
 
   const navLinks = [
     { href: "/jobs", label: "Browse Jobs" },
@@ -80,6 +82,10 @@ export default function Navbar() {
           <div className="hidden md:flex items-center gap-3">
             {isAuthenticated ? (
               <>
+                <Link href="/notifications" aria-label={notificationUnreadCount ? `${notificationUnreadCount} unread notifications` : "Notifications"} className="relative rounded-lg p-2 text-gray-400 transition hover:bg-white/5 hover:text-white">
+                  <Bell className="h-4 w-4" />
+                  {notificationUnreadCount > 0 && <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-violet-600 px-1 text-center text-[9px] font-bold leading-4 text-white">{notificationUnreadCount > 99 ? "99+" : notificationUnreadCount}</span>}
+                </Link>
                 {/* Dashboard link based on role */}
                 {isAdmin && (
                   <Link href="/dashboard/admin">
@@ -144,9 +150,9 @@ export default function Navbar() {
                     <DropdownMenuItem asChild>
                       <Link href="/messages" className="cursor-pointer text-gray-300 hover:text-white flex items-center gap-2 justify-between">
                         <span className="flex items-center gap-2"><MessageSquare className="h-4 w-4" /> Messages</span>
-                        {unreadCount > 0 && (
+                        {messageUnreadCount > 0 && (
                           <span className="ml-auto bg-violet-600 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center">
-                            {unreadCount > 99 ? "99+" : unreadCount}
+                            {messageUnreadCount > 99 ? "99+" : messageUnreadCount}
                           </span>
                         )}
                       </Link>
@@ -264,6 +270,11 @@ export default function Navbar() {
                 <Link href="/messages" onClick={() => setMobileOpen(false)}>
                   <Button variant="outline" size="sm" className="w-full border-white/10 text-gray-300">
                     <MessageSquare className="h-4 w-4 mr-2" /> Messages
+                  </Button>
+                </Link>
+                <Link href="/notifications" onClick={() => setMobileOpen(false)}>
+                  <Button variant="outline" size="sm" className="relative w-full border-white/10 text-gray-300">
+                    <Bell className="h-4 w-4 mr-2" /> Notifications {notificationUnreadCount > 0 ? `(${notificationUnreadCount > 99 ? "99+" : notificationUnreadCount})` : ""}
                   </Button>
                 </Link>
                 {isProfessional && (

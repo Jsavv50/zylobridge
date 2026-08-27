@@ -1,8 +1,9 @@
-import { and, eq, sql, desc, gte, lte } from "drizzle-orm";
+import { and, eq, or, sql, desc, gte, lte } from "drizzle-orm";
 import { getDb } from "./db";
 import { users, profiles, jobs, applications, notifications, notificationPreferences, matchingScores, interviews, offers, engagements } from "../drizzle/schema";
 import { sendOtpEmail } from "./email";
 import { invokeLLM } from "./_core/llm";
+import type { NotificationCategory, NotificationChannelSettings } from "../shared/notifications";
 
 export async function getUserNotificationPreference(userId: number) {
   const db = await getDb();
@@ -13,7 +14,7 @@ export async function getUserNotificationPreference(userId: number) {
   return inserted[0];
 }
 
-export async function updateUserNotificationPreference(userId: number, data: { emailEnabled?: boolean; marketingEnabled?: boolean; marketplaceEvents?: boolean }) {
+export async function updateUserNotificationPreference(userId: number, data: { emailEnabled?: boolean; marketingEnabled?: boolean; marketplaceEvents?: boolean; channelSettings?: NotificationChannelSettings }) {
   const db = await getDb();
   if (!db) return { userId, ...data };
   const existing = await db.select().from(notificationPreferences).where(eq(notificationPreferences.userId, userId)).limit(1);
@@ -50,11 +51,52 @@ export async function getUnreadNotifications(userId: number, limit = 20) {
   return db.select().from(notifications).where(and(eq(notifications.userId, userId), eq(notifications.isRead, false))).limit(limit).orderBy(desc(notifications.createdAt));
 }
 
+export async function listNotifications(userId: number, filters: { category?: NotificationCategory; unreadOnly?: boolean; search?: string; limit?: number; offset?: number } = {}) {
+  const db = await getDb();
+  const limit = Math.min(Math.max(filters.limit ?? 25, 1), 100);
+  const offset = Math.max(filters.offset ?? 0, 0);
+  if (!db) return { items: [], total: 0, unreadCount: 0, categoryCounts: {} as Record<string, number> };
+  const conditions = [eq(notifications.userId, userId)];
+  if (filters.unreadOnly) conditions.push(eq(notifications.isRead, false));
+  if (filters.category) conditions.push(eq(notifications.category, filters.category));
+  if (filters.search?.trim()) {
+    const term = `%${filters.search.trim().slice(0, 80)}%`;
+    conditions.push(sql`(LOWER(${notifications.title}) LIKE LOWER(${term}) OR LOWER(${notifications.content}) LIKE LOWER(${term}))`);
+  }
+  const where = and(...conditions);
+  const actionTerms = ["%required%", "%verify%", "%failed%", "%security%", "%respond%", "%accept offer%", "%payout setup%"];
+  const actionCondition = or(...actionTerms.map((term) => sql`(LOWER(${notifications.title}) LIKE ${term} OR LOWER(${notifications.content}) LIKE ${term})`));
+  const [items, totalRows, unreadRows, categoryRows, actionRows] = await Promise.all([
+    db.select().from(notifications).where(where).orderBy(desc(notifications.createdAt)).limit(limit).offset(offset),
+    db.select({ value: sql<number>`count(*)` }).from(notifications).where(where),
+    db.select({ value: sql<number>`count(*)` }).from(notifications).where(and(eq(notifications.userId, userId), eq(notifications.isRead, false))),
+    db.select({ category: notifications.category, value: sql<number>`count(*)` }).from(notifications).where(and(eq(notifications.userId, userId), eq(notifications.isRead, false))).groupBy(notifications.category),
+    db.select({ value: sql<number>`count(*)` }).from(notifications).where(and(eq(notifications.userId, userId), eq(notifications.isRead, false), actionCondition)),
+  ]);
+  return {
+    items,
+    total: Number(totalRows[0]?.value ?? 0),
+    unreadCount: Number(unreadRows[0]?.value ?? 0),
+    categoryCounts: Object.fromEntries(categoryRows.map((row) => [row.category, Number(row.value)])),
+    actionRequiredCount: Number(actionRows[0]?.value ?? 0),
+  };
+}
+
 export async function markNotificationRead(id: number, userId: number) {
   const db = await getDb();
   if (!db) return false;
-  await db.update(notifications).set({ isRead: true }).where(and(eq(notifications.id, id), eq(notifications.userId, userId)));
-  return true;
+  const updated = await db.update(notifications).set({ isRead: true }).where(and(eq(notifications.id, id), eq(notifications.userId, userId))).returning({ id: notifications.id });
+  return updated.length > 0;
+}
+
+export async function markAllNotificationsRead(userId: number) {
+  const db = await getDb();
+  if (!db) return { updated: 0 };
+  const unread = await db.select({ id: notifications.id }).from(notifications).where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)));
+  if (unread.length) {
+    await db.update(notifications).set({ isRead: true }).where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)));
+  }
+  return { updated: unread.length };
 }
 
 export function generateIcsContent(event: { title: string; description: string; start: Date; end: Date; location?: string; organizer?: string }) {

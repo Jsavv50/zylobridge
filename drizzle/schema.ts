@@ -1,3 +1,5 @@
+import type { NotificationChannelSettings } from "../shared/notifications";
+
 import {
   integer,
   pgEnum,
@@ -741,6 +743,7 @@ export const notificationPreferences = pgTable("notification_preferences", {
   emailEnabled: boolean("emailEnabled").default(true).notNull(),
   marketingEnabled: boolean("marketingEnabled").default(false).notNull(),
   marketplaceEvents: boolean("marketplaceEvents").default(true).notNull(),
+  channelSettings: jsonb("channelSettings").$type<NotificationChannelSettings>().default({}),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 }, (table) => ({

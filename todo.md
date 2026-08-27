@@ -1041,3 +1041,11 @@
 - [x] Add focused regression tests for professional role isolation, real data integration, truthful states, canonical navigation, and responsive mobile navigation.
 - [x] Run TypeScript, focused/full Vitest, client/server builds, diff checks, clean restart, HTTP smoke checks, and desktop/mobile route QA.
 - [x] Save the verified Professional Command Center checkpoint.
+
+## Attached specification: pasted_content_28.txt
+- [x] Read and normalize every requirement in the attached specification.
+- [x] Audit the synchronized repository against the specification and identify exact implementation gaps.
+- [x] Implement all requested changes while preserving existing authorization, privacy, branding, and no-fabrication constraints.
+- [x] Add or update focused regression tests for the specification requirements.
+- [x] Run TypeScript, full Vitest, client/server builds, diff checks, and responsive/runtime validation.
+- [x] Save the verified implementation checkpoint.

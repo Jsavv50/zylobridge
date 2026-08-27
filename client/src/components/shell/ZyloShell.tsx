@@ -7,6 +7,8 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../_core/hooks/useAuth";
 import { ZylobridgeLogo } from "../ZylobridgeLogo";
+import { trpc } from "@/lib/trpc";
+import { notificationDestination } from "@shared/notifications";
 
 export interface PageHeaderProps {
   title: string;
@@ -57,7 +59,12 @@ export function EmptyState({ icon: Icon = Briefcase, title, description, action 
 export function ApplicationShell({ children, role = "user" }: { children: React.ReactNode; role?: "user" | "professional" | "employer" | "enterprise" | "admin" }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [location] = useLocation();
-  const { user, logout } = useAuth();
+  const { user, logout, isAuthenticated } = useAuth();
+  const [notificationPreviewOpen, setNotificationPreviewOpen] = useState(false);
+  const { data: unreadNotifications = [] } = trpc.notifications.listUnread.useQuery(undefined, { enabled: isAuthenticated, refetchInterval: 30_000 });
+  const notificationUnreadCount = unreadNotifications.length;
+  const utils = trpc.useUtils();
+  const markNotificationRead = trpc.notifications.markRead.useMutation({ onSuccess: () => void utils.notifications.listUnread.invalidate() });
 
   const resolvedRole = role !== "user"
     ? role
@@ -135,6 +142,14 @@ export function ApplicationShell({ children, role = "user" }: { children: React.
         <div className="flex items-center gap-4">
           {user ? (
             <div className="flex items-center gap-3">
+            <div className="relative">
+              <button type="button" onClick={() => setNotificationPreviewOpen((open) => !open)} aria-label={notificationUnreadCount ? `${notificationUnreadCount} unread notifications` : "Notifications"} aria-expanded={notificationPreviewOpen} className="relative rounded-lg p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground">
+                <Bell className="h-5 w-5" />
+                {notificationUnreadCount > 0 && <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-primary px-1 text-center text-[10px] font-bold leading-4 text-primary-foreground">{notificationUnreadCount > 99 ? "99+" : notificationUnreadCount}</span>}
+              </button>
+              {notificationPreviewOpen && <div className="absolute right-0 top-12 z-60 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-border bg-card p-3 shadow-2xl"><div className="flex items-center justify-between px-2 py-2"><div><p className="text-sm font-semibold text-foreground">Notifications</p><p className="text-xs text-muted-foreground">{notificationUnreadCount ? `${notificationUnreadCount} unread` : "You’re all caught up"}</p></div><Link href="/notifications" onClick={() => setNotificationPreviewOpen(false)} className="text-xs font-medium text-primary hover:underline">View all</Link></div><div className="max-h-80 space-y-1 overflow-y-auto">{unreadNotifications.slice(0, 5).map((notification) => <Link key={notification.id} href={notificationDestination(notification.referenceType, notification.referenceId)} onClick={() => { markNotificationRead.mutate({ id: notification.id }); setNotificationPreviewOpen(false); }} className="block rounded-xl p-3 transition hover:bg-muted"><p className="truncate text-sm font-medium text-foreground">{notification.title}</p><p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{notification.content}</p><p className="mt-2 text-[10px] text-muted-foreground">{new Date(notification.createdAt).toLocaleString()}</p></Link>)}{unreadNotifications.length === 0 && <div className="px-3 py-7 text-center text-xs text-muted-foreground"><CheckCircle2 className="mx-auto mb-2 h-5 w-5 text-emerald-400" />No new notifications</div>}</div></div>}
+            </div>
+            <div className="flex items-center gap-3">
               <div className="hidden md:flex flex-col text-right">
                 <span className="text-sm font-semibold text-foreground">{user.name || "User"}</span>
                 <span className="text-xs text-muted-foreground capitalize">{user.role || user.userType || resolvedRole}</span>
@@ -146,6 +161,7 @@ export function ApplicationShell({ children, role = "user" }: { children: React.
               >
                 <LogOut className="w-5 h-5" />
               </button>
+            </div>
             </div>
           ) : (
             <div className="flex items-center gap-2">
@@ -174,7 +190,8 @@ export function ApplicationShell({ children, role = "user" }: { children: React.
                   }`}
                 >
                   <Icon className="w-4 h-4" />
-                  <span>{item.label}</span>
+                  <span className="min-w-0 flex-1">{item.label}</span>
+                  {item.href === "/notifications" && notificationUnreadCount > 0 && <span className="rounded-full bg-background/20 px-1.5 py-0.5 text-[10px] font-bold">{notificationUnreadCount > 99 ? "99+" : notificationUnreadCount}</span>}
                 </Link>
               );
             })}
@@ -203,7 +220,8 @@ export function ApplicationShell({ children, role = "user" }: { children: React.
                     }`}
                   >
                     <Icon className="w-5 h-5" />
-                    <span>{item.label}</span>
+                    <span className="min-w-0 flex-1">{item.label}</span>
+                    {item.href === "/notifications" && notificationUnreadCount > 0 && <span className="rounded-full bg-background/20 px-1.5 py-0.5 text-[10px] font-bold">{notificationUnreadCount > 99 ? "99+" : notificationUnreadCount}</span>}
                   </Link>
                 );
               })}

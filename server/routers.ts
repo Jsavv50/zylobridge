@@ -148,7 +148,7 @@ import {
 import { getFrontendUrl } from "./_core/env";
 import { normalizeVocation } from "@shared/vocations";
 import { maskPhoneNumber, normalizePhoneNumber, sendPhoneOtpSms, SmsDeliveryError } from "./sms";
-import { getUserNotificationPreference, updateUserNotificationPreference, createInAppNotification, getUnreadNotifications, markNotificationRead, generateIcsContent, executeMatchingV2 } from "./phase4";
+import { getUserNotificationPreference, updateUserNotificationPreference, createInAppNotification, getUnreadNotifications, listNotifications, markNotificationRead, markAllNotificationsRead, generateIcsContent, executeMatchingV2 } from "./phase4";
 import { initializeMilestonePayment, processVerifiedPayment, verifyPaystackWebhookSignature } from "./finance";
 import { addOrVerifyProfessionalBank, initiateMilestonePayout, authorizeRefund, createDispute, resolveDispute } from "./financeProtection";
 import {
@@ -1943,9 +1943,14 @@ export const appRouter = router({
   notifications: router({
     listUnread: protectedProcedure
       .query(async ({ ctx }) => getUnreadNotifications(ctx.user.id)),
+    list: protectedProcedure
+      .input(z.object({ category: z.enum(["application", "job", "message", "payment", "verification", "profile", "review", "scheduling", "system"]).optional(), unreadOnly: z.boolean().optional(), search: z.string().max(80).optional(), limit: z.number().int().min(1).max(100).optional(), offset: z.number().int().min(0).optional() }).optional())
+      .query(async ({ ctx, input }) => listNotifications(ctx.user.id, input ?? {})),
     markRead: protectedProcedure
       .input(z.object({ id: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => markNotificationRead(input.id, ctx.user.id)),
+    markAllRead: protectedProcedure
+      .mutation(async ({ ctx }) => markAllNotificationsRead(ctx.user.id)),
     preferences: protectedProcedure
       .query(async ({ ctx }) => getUserNotificationPreference(ctx.user.id)),
     updatePreferences: protectedProcedure
@@ -1953,6 +1958,7 @@ export const appRouter = router({
         emailEnabled: z.boolean().optional(),
         marketingEnabled: z.boolean().optional(),
         marketplaceEvents: z.boolean().optional(),
+        channelSettings: z.record(z.string(), z.unknown()).optional(),
       }))
       .mutation(async ({ ctx, input }) => updateUserNotificationPreference(ctx.user.id, input)),
   }),
