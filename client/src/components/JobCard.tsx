@@ -1,5 +1,6 @@
 import { Link } from "wouter";
-import { Bookmark, Clock, DollarSign, MapPin, Zap } from "lucide-react";
+import { Bookmark, CheckCircle2, Clock, DollarSign, MapPin, Sparkles, Zap } from "lucide-react";
+import { formatJobBudget } from "@shared/currency";
 import { VOCATION_ICONS, VOCATION_LABELS, type VocationKey } from "@shared/vocations";
 import { VerificationBadge } from "@/components/VerificationBadge";
 
@@ -9,6 +10,7 @@ interface JobCardProps {
   vocation: string;
   location: string;
   budget: string;
+  currency?: string | null;
   status: string;
   isUrgent: boolean;
   createdAt: Date | string;
@@ -21,6 +23,9 @@ interface JobCardProps {
   savePending?: boolean;
   onToggleSave?: (saved: boolean) => void;
   returnTo?: string;
+  matchScore?: number;
+  matchReasons?: Array<{ label: string; detail: string; points: number }>;
+  applicationState?: "applied" | "shortlisted" | "under_review" | null;
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -43,6 +48,7 @@ export default function JobCard({
   vocation,
   location,
   budget,
+  currency,
   status,
   isUrgent,
   createdAt,
@@ -54,6 +60,9 @@ export default function JobCard({
   savePending = false,
   onToggleSave,
   returnTo = "/jobs",
+  matchScore,
+  matchReasons = [],
+  applicationState,
 }: JobCardProps) {
   const vKey = vocation as VocationKey;
   const icon = VOCATION_ICONS[vKey] ?? "🔧";
@@ -84,9 +93,17 @@ export default function JobCard({
       <div className="px-5 pb-5">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-white/5 pt-3 text-xs text-gray-400">
           <span className="inline-flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 text-cyan-300" />{location}</span>
-          <span className="inline-flex items-center gap-1.5"><DollarSign className="h-3.5 w-3.5 text-emerald-300" />₦{Number(budget).toLocaleString()}</span>
+          <span className="inline-flex items-center gap-1.5"><DollarSign className="h-3.5 w-3.5 text-emerald-300" />{formatJobBudget(budget, currency)}</span>
           <span className="inline-flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 text-gray-500" />{timeAgo}</span>
         </div>
+        {(matchScore !== undefined || applicationState || clientName || organizationName || isUrgent || onToggleSave) && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {matchScore !== undefined && <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-400/25 bg-violet-500/10 px-2.5 py-1 text-[11px] font-semibold text-violet-200" title={matchReasons.map((reason) => reason.detail).join(" ")}><Sparkles className="h-3 w-3" />{matchScore}% match</span>}
+            {applicationState === "shortlisted" && <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/25 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-200"><CheckCircle2 className="h-3 w-3" />Shortlisted</span>}
+            {applicationState === "under_review" && <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-400/25 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-semibold text-cyan-200">Under review</span>}
+            {applicationState === "applied" && <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-200"><CheckCircle2 className="h-3 w-3" />Applied</span>}
+          </div>
+        )}
         {(clientName || organizationName || isUrgent || onToggleSave) && (
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">

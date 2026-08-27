@@ -7,11 +7,14 @@ import {
   jobs,
   applications,
   savedJobs,
+  jobAlerts,
+  shortlists,
   profiles,
   reviews,
   InsertJob,
   InsertApplication,
   InsertSavedJob,
+  InsertJobAlert,
   InsertProfile,
   InsertReview,
   conversations,
@@ -41,7 +44,6 @@ import {
   professionalQualifications,
   professionalExperiences,
   professionalVerifications,
-  shortlists,
   interviews,
   offers,
   engagements,
@@ -632,6 +634,73 @@ export async function getSavedJobsByProfessionalId(professionalId: number, limit
     nextOffset: hasMore ? clampOffset(offset) + pageSize : null,
     hasMore,
   };
+}
+
+export type ProfessionalJobSignal = {
+  applicationStatus?: string;
+  shortlisted: boolean;
+};
+
+export async function getProfessionalJobSignals(professionalId: number, jobIds: number[]) {
+  const db = await getDb();
+  if (!db || jobIds.length === 0) return new Map<number, ProfessionalJobSignal>();
+  const [applicationRows, shortlistRows] = await Promise.all([
+    db.select({ jobId: applications.jobId, status: applications.status })
+      .from(applications)
+      .where(and(eq(applications.professionalId, professionalId), inArray(applications.jobId, jobIds), sql`${applications.status} != 'withdrawn'`)),
+    db.select({ jobId: shortlists.jobId })
+      .from(shortlists)
+      .where(and(eq(shortlists.professionalId, professionalId), inArray(shortlists.jobId, jobIds))),
+  ]);
+  const signals = new Map<number, ProfessionalJobSignal>();
+  for (const row of applicationRows) signals.set(row.jobId, { applicationStatus: row.status, shortlisted: false });
+  for (const row of shortlistRows) signals.set(row.jobId, { ...(signals.get(row.jobId) ?? {}), shortlisted: true });
+  return signals;
+}
+
+export async function getProfessionalMarketplaceActivity(professionalId: number) {
+  const db = await getDb();
+  if (!db) return { activeApplications: 0, shortlistedJobs: 0, newOpportunities: 0 };
+  const since = new Date(Date.now() - 7 * 86_400_000);
+  const [activeApplications, shortlistedJobs, newOpportunities] = await Promise.all([
+    db.select({ count: sql<number>`count(*)` }).from(applications).where(and(eq(applications.professionalId, professionalId), sql`${applications.status} IN ('pending', 'accepted')`)),
+    db.select({ count: sql<number>`count(*)` }).from(shortlists).where(eq(shortlists.professionalId, professionalId)),
+    db.select({ count: sql<number>`count(*)` }).from(jobs).where(and(eq(jobs.status, "open"), gte(jobs.createdAt, since))),
+  ]);
+  return {
+    activeApplications: Number(activeApplications[0]?.count ?? 0),
+    shortlistedJobs: Number(shortlistedJobs[0]?.count ?? 0),
+    newOpportunities: Number(newOpportunities[0]?.count ?? 0),
+  };
+}
+
+export async function listJobAlerts(professionalId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(jobAlerts).where(eq(jobAlerts.professionalId, professionalId)).orderBy(desc(jobAlerts.updatedAt));
+}
+
+export async function createJobAlert(data: InsertJobAlert) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const [alert] = await db.insert(jobAlerts).values(data)
+    .onConflictDoUpdate({ target: [jobAlerts.professionalId, jobAlerts.name], set: { q: data.q, vocation: data.vocation, location: data.location, currency: data.currency, isUrgentOnly: data.isUrgentOnly ?? false, isActive: true, updatedAt: new Date() } })
+    .returning();
+  return alert;
+}
+
+export async function updateJobAlert(professionalId: number, id: number, data: Partial<InsertJobAlert>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const [alert] = await db.update(jobAlerts).set({ ...data, updatedAt: new Date() }).where(and(eq(jobAlerts.id, id), eq(jobAlerts.professionalId, professionalId))).returning();
+  return alert;
+}
+
+export async function deleteJobAlert(professionalId: number, id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.delete(jobAlerts).where(and(eq(jobAlerts.id, id), eq(jobAlerts.professionalId, professionalId)));
+  return { success: true };
 }
 
 // ─── Applications ─────────────────────────────────────────────────────────────

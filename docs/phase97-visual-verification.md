@@ -1,0 +1,3 @@
+# Phase 97 Visual Verification
+
+The `/jobs` route was captured at 1280×720 and 375×812. The desktop capture showed the existing dark Zylobridge shell, premium gradient marketplace hero, responsive search controls, discovery tabs, filters, alert action, and job-card loading state without horizontal overflow. The mobile capture showed the condensed navigation, wrapped hero heading and description, stacked search inputs, full-width search button, horizontally scrollable discovery tabs, and mobile filter/post-job controls within the viewport. The authenticated-only greeting and activity metrics were not visible in the unauthenticated preview, which is expected because they are gated by the real professional session and no mock identity or stats were introduced.

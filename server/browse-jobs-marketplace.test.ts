@@ -12,7 +12,8 @@ describe("Browse Jobs marketplace integration", () => {
   const schema = read("drizzle/schema.ts");
 
   it("uses the real jobs search contract and preserves filter state", () => {
-    expect(page).toContain("trpc.jobs.search.useQuery(input)");
+    expect(page).toContain("trpc.jobs.search.useQuery(input,");
+    expect(page).toContain("trpc.jobs.recommended.useQuery");
     expect(page).toContain('navigate(params.toString() ? `/jobs?${params.toString()}` : "/jobs")');
     expect(page).toContain("minBudget");
     expect(page).toContain("maxBudget");

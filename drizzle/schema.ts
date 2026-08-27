@@ -180,6 +180,8 @@ export const jobs = pgTable("jobs", {
   description: text("description").notNull(),
   vocation: vocationEnum("vocation").notNull(),
   budget: numeric("budget", { precision: 12, scale: 2 }).notNull(),
+  /** Explicit market currency for new jobs; null preserves legacy records without reinterpretation. */
+  currency: varchar("currency", { length: 3 }),
   location: varchar("location", { length: 255 }).notNull(),
   deadline: timestamp("deadline"),
   status: jobStatusEnum("status").default("open").notNull(),
@@ -228,6 +230,27 @@ export const savedJobs = pgTable("saved_jobs", {
 }));
 export type SavedJob = typeof savedJobs.$inferSelect;
 export type InsertSavedJob = typeof savedJobs.$inferInsert;
+
+// ─── Professional Job Alerts ───────────────────────────────────────────────────
+export const jobAlerts = pgTable("job_alerts", {
+  id: serial("id").primaryKey(),
+  professionalId: integer("professionalId").notNull(),
+  name: varchar("name", { length: 120 }).notNull(),
+  q: varchar("q", { length: 120 }),
+  vocation: varchar("vocation", { length: 64 }),
+  location: varchar("location", { length: 200 }),
+  currency: varchar("currency", { length: 3 }),
+  isUrgentOnly: boolean("isUrgentOnly").default(false).notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  lastNotifiedAt: timestamp("lastNotifiedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+}, (table) => ({
+  professionalActiveIdx: index("job_alerts_professional_active_idx").on(table.professionalId, table.isActive, table.updatedAt),
+  professionalNameUnique: uniqueIndex("job_alerts_professional_name_unique").on(table.professionalId, table.name),
+}));
+export type JobAlert = typeof jobAlerts.$inferSelect;
+export type InsertJobAlert = typeof jobAlerts.$inferInsert;
 
 // ─── Reviews ──────────────────────────────────────────────────────────────────
 export const reviews = pgTable("reviews", {

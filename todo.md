@@ -956,3 +956,24 @@
 - [x] Add regression coverage for Browse Jobs, filters, sorting, routing, actions, states, authorization, and responsive structure
 - [x] Run full tests, TypeScript, production builds, responsive route checks, and safe live verification
 - [x] Save and publish the verified Browse Jobs marketplace upgrade
+
+## Phase 97: Personalized Professional Browse Jobs Experience
+- [x] Audit professional profile data, job/application schemas, currency fields, geo support, alerts infrastructure, and existing Browse Jobs implementation
+- [x] Add deterministic explainable match scoring and real match reasons with graceful missing-profile behavior
+- [x] Add personalized professional hero and live opportunity/application activity summaries without fabricated counts or names
+- [x] Upgrade job search, filters, quick chips, sorting, pagination, cards, featured selection, and currency display using real supported data
+- [x] Expose application-aware card states and preserve duplicate-application prevention and authorization
+- [x] Implement or truthfully scope persistent job alerts with real delivery behavior and no overstated capabilities
+- [x] Add comprehensive matching, discovery, saved-job, application, alert, currency, access-control, and responsive regression coverage
+- [x] Run full tests, TypeScript, production builds, responsive checks, security/data-integrity audits, and safe live verification
+- [x] Save and publish the verified personalized Browse Jobs experience
+
+## Phase 97: Personalized Professional Browse Jobs Experience
+- [x] Add dynamic time-based professional greeting and real opportunity/application activity summary to `/jobs`
+- [x] Implement deterministic, explainable job match scoring from real profile/job fields
+- [x] Add application-aware job-card states for Applied, Shortlisted, and Under Review using real data
+- [x] Implement persistent professional job alerts with criteria matching, deduplicated saves, and alert listing/toggling
+- [x] Audit and implement explicit country-aware compensation currency for Nigeria and South Africa without reinterpreting historical records
+- [x] Add regression tests for matching, activity summaries, alerts, application awareness, and currency behavior
+- [x] Run TypeScript, full Vitest suite, client/server builds, and responsive route verification
+- [x] Save the verified Phase 97 checkpoint

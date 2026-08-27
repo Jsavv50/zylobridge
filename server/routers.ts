@@ -9,6 +9,7 @@ import { storagePut, storageGetSignedUrl } from "./storage";
 import { getDb } from "./db";
 import { conversations, users, professionalVerifications, interviews, offers } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
+import { calculateExplainableJobMatch } from "../shared/jobMatching";
 import {
   upsertUser,
   getUserByOpenId,
@@ -113,6 +114,12 @@ import {
   updateEngagementStatus,
   getEngagementsByUserId,
   calculateCandidateMatch,
+  getProfessionalJobSignals,
+  getProfessionalMarketplaceActivity,
+  listJobAlerts,
+  createJobAlert,
+  updateJobAlert,
+  deleteJobAlert,
   searchJobs,
   searchProfessionals,
   getPublicProfessionalProfile,
@@ -216,6 +223,7 @@ const jobCreateSchema = z.object({
   budget: z.number().positive(),
   location: z.string().min(2).max(200).trim(),
   deadline: z.string().optional(),
+  currency: z.enum(["NGN", "ZAR"]).default("NGN"),
   isUrgent: z.boolean().optional().default(false),
   organizationId: z.number().int().positive().optional(),
   projectId: z.number().int().positive().optional(),
@@ -429,6 +437,39 @@ export const appRouter = router({
       }))
       .query(async ({ input }) => searchJobs({ ...input, vocation: canonicalizeVocation(input.vocation) })),
 
+    recommended: protectedProcedure
+      .input(z.object({
+        q: z.string().max(120).optional(),
+        vocation: z.string().max(64).optional(),
+        location: z.string().max(128).optional(),
+        minBudget: z.number().nonnegative().optional(),
+        maxBudget: z.number().nonnegative().optional(),
+        isUrgent: z.boolean().optional(),
+        limit: z.number().int().min(1).max(MAX_PAGE_SIZE).optional().default(20),
+        offset: z.number().int().nonnegative().optional().default(0),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.userType !== "professional") throw new TRPCError({ code: "FORBIDDEN", message: "Personalized recommendations are available to professionals." });
+        const [profile, result] = await Promise.all([
+          getProfileByUserId(ctx.user.id),
+          searchJobs({ ...input, vocation: canonicalizeVocation(input.vocation), sort: "newest" }),
+        ]);
+        const signals = await getProfessionalJobSignals(ctx.user.id, result.items.map((job) => job.id));
+        const activity = await getProfessionalMarketplaceActivity(ctx.user.id);
+        const items = result.items.map((job) => {
+          const match = calculateExplainableJobMatch(profile ?? {}, job);
+          const signal = signals.get(job.id);
+          const applicationState = signal?.shortlisted ? "shortlisted" : signal?.applicationStatus === "pending" ? "under_review" : signal?.applicationStatus ? "applied" : null;
+          return { ...job, matchScore: match.score, matchReasons: match.reasons, applicationState, isSaved: false };
+        }).sort((a, b) => b.matchScore - a.matchScore || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        return { ...result, items, activity };
+      }),
+
+    activity: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user.userType !== "professional") throw new TRPCError({ code: "FORBIDDEN", message: "Professional activity is only available to professionals." });
+      return getProfessionalMarketplaceActivity(ctx.user.id);
+    }),
+
     getById: publicProcedure
       .input(z.object({ id: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
@@ -463,6 +504,7 @@ export const appRouter = router({
         description: input.description,
         vocation: canonicalizeVocation(input.vocation) as any,
         budget: String(input.budget),
+        currency: input.currency,
         location: input.location,
         deadline: input.deadline ? new Date(input.deadline) : undefined,
         isUrgent: input.isUrgent ?? false,
@@ -532,6 +574,41 @@ export const appRouter = router({
         if (!job || job.status !== "open") throw new TRPCError({ code: "NOT_FOUND", message: "Open job not found." });
         if (input.saved) return saveJob({ jobId: input.jobId, professionalId: ctx.user.id });
         return unsaveJob(input.jobId, ctx.user.id);
+      }),
+  }),
+
+  // ── Professional Job Alerts ────────────────────────────────────────────────
+  jobAlerts: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user.userType !== "professional") throw new TRPCError({ code: "FORBIDDEN", message: "Only professionals can manage job alerts." });
+      return listJobAlerts(ctx.user.id);
+    }),
+    create: protectedProcedure
+      .input(z.object({
+        name: z.string().min(2).max(120).trim(),
+        q: z.string().max(120).trim().optional(),
+        vocation: z.string().max(64).optional(),
+        location: z.string().max(200).trim().optional(),
+        currency: z.enum(["NGN", "ZAR"]).optional(),
+        isUrgentOnly: z.boolean().optional().default(false),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.userType !== "professional") throw new TRPCError({ code: "FORBIDDEN", message: "Only professionals can create job alerts." });
+        return createJobAlert({ ...input, professionalId: ctx.user.id, vocation: canonicalizeVocation(input.vocation) ?? null, q: input.q || null, location: input.location || null, currency: input.currency || null });
+      }),
+    toggle: protectedProcedure
+      .input(z.object({ id: z.number().int().positive(), isActive: z.boolean() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.userType !== "professional") throw new TRPCError({ code: "FORBIDDEN", message: "Only professionals can update job alerts." });
+        const alert = await updateJobAlert(ctx.user.id, input.id, { isActive: input.isActive });
+        if (!alert) throw new TRPCError({ code: "NOT_FOUND", message: "Job alert not found." });
+        return alert;
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.userType !== "professional") throw new TRPCError({ code: "FORBIDDEN", message: "Only professionals can delete job alerts." });
+        return deleteJobAlert(ctx.user.id, input.id);
       }),
   }),
 
