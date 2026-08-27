@@ -1,5 +1,6 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import { and, or, inArray, desc, asc, eq, like, gte, lte, lt, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import {
   InsertUser,
   users,
@@ -865,6 +866,9 @@ export async function getAdminStats(): Promise<AdminStats> {
 
 
 // ─── Conversations & Messages ─────────────────────────────────────────────────
+const conversationClient = alias(users, "conversation_client");
+const conversationProfessional = alias(users, "conversation_professional");
+
 export async function getOrCreateConversation(jobId: number, clientId: number, professionalId: number) {
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");
@@ -896,11 +900,20 @@ export async function getConversationsByUserId(userId: number, limit = MAX_PAGE_
     professionalId: conversations.professionalId,
     lastMessageAt: conversations.lastMessageAt,
     createdAt: conversations.createdAt,
+    clientName: conversationClient.name,
+    clientAvatarUrl: conversationClient.avatarUrl,
+    professionalName: conversationProfessional.name,
+    professionalAvatarUrl: conversationProfessional.avatarUrl,
+    jobTitle: jobs.title,
+    jobLocation: jobs.location,
     unreadCount: sql<number>`count(case when ${messages.isRead} = false and ${messages.senderId} <> ${userId} then 1 end)`,
   }).from(conversations)
+    .leftJoin(jobs, eq(jobs.id, conversations.jobId))
+    .leftJoin(conversationClient, eq(conversationClient.id, conversations.clientId))
+    .leftJoin(conversationProfessional, eq(conversationProfessional.id, conversations.professionalId))
     .leftJoin(messages, eq(messages.conversationId, conversations.id))
     .where(or(eq(conversations.clientId, userId), eq(conversations.professionalId, userId)))
-    .groupBy(conversations.id, conversations.jobId, conversations.clientId, conversations.professionalId, conversations.lastMessageAt, conversations.createdAt)
+    .groupBy(conversations.id, conversations.jobId, conversations.clientId, conversations.professionalId, conversations.lastMessageAt, conversations.createdAt, conversationClient.name, conversationClient.avatarUrl, conversationProfessional.name, conversationProfessional.avatarUrl, jobs.title, jobs.location)
     .orderBy(desc(conversations.lastMessageAt))
     .limit(clampPageSize(limit, MAX_PAGE_SIZE))
     .offset(clampOffset(offset));

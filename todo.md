@@ -898,3 +898,12 @@
 - [x] Add regression coverage for candidate routing and review authorization/idempotency
 - [x] Validate TypeScript, Vitest, client/server production builds, and route behavior
 - [x] Save a published checkpoint with launch-readiness evidence
+
+## Phase 91: Messages Context and Branding Update
+- [x] Audit Messages conversation schema, queries, participant authorization, job relationships, notifications, and shared logo usage
+- [x] Return real other-participant and associated job metadata for authorized conversations with legacy fallbacks
+- [x] Update conversation list, active header, mobile layout, and related message context without generic Job # labels
+- [x] Add the official home-linking Zylobridge logo to Messages without duplicating the global header
+- [x] Add regression coverage for participant isolation, job context, legacy fallbacks, logo integration, and unread/read behavior
+- [x] Run full tests, TypeScript, production builds, responsive checks, and safe live verification
+- [x] Save and publish the verified Messages update

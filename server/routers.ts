@@ -696,10 +696,12 @@ export const appRouter = router({
         }
         const message = await createMessage(input.conversationId, ctx.user.id, input.content);
         const recipientId = conv.clientId === ctx.user.id ? conv.professionalId : conv.clientId;
+        const job = await getJobById(conv.jobId);
+        const jobLabel = job?.title?.trim() || "a marketplace job";
         await createInAppNotification({
           userId: recipientId,
           title: "New message",
-          content: `${ctx.user.name || "A participant"} sent you a new message in Job #${conv.jobId}.`,
+          content: `${ctx.user.name || "A participant"} sent you a new message regarding ${jobLabel}.`,
           category: "messages",
           referenceType: "message",
           referenceId: String(input.conversationId),

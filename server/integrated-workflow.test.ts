@@ -29,4 +29,26 @@ describe("integrated marketplace workflow", () => {
     expect(messaging).toContain('new URLSearchParams(location.split("?")[1] ?? "").get("conv")');
     expect(messaging).toContain('markAsReadMutation.mutate({ conversationId: selectedConvId })');
   });
+
+  it("joins real job and participant metadata while retaining legacy-safe fallbacks", () => {
+    const db = read("server/db.ts");
+    const messaging = read("client/src/pages/Messaging.tsx");
+    expect(db).toContain('const conversationClient = alias(users, "conversation_client")');
+    expect(db).toContain("leftJoin(jobs, eq(jobs.id, conversations.jobId))");
+    expect(db).toContain("professionalName: conversationProfessional.name");
+    expect(db).toContain("jobTitle: jobs.title");
+    expect(messaging).toContain('const name = (isClient ? conversation.professionalName : conversation.clientName)?.trim()');
+    expect(messaging).toContain('return "Marketplace conversation"');
+    expect(messaging).toContain("{participantName}");
+    expect(messaging).not.toContain("Job #{conv.jobId}");
+  });
+
+  it("uses the official home-linked logo and meaningful message notification context", () => {
+    const messaging = read("client/src/pages/Messaging.tsx");
+    const routers = read("server/routers.ts");
+    expect(messaging).toContain('import ZylobridgeLogo from "@/components/ZylobridgeLogo";');
+    expect(messaging).toContain("<ZylobridgeLogo compact />");
+    expect(routers).toContain("const jobLabel = job?.title?.trim() || \"a marketplace job\";");
+    expect(routers).toContain("regarding ${jobLabel}");
+  });
 });

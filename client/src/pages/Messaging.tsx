@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Send, MessageSquare, Loader2 } from "lucide-react";
+import ZylobridgeLogo from "@/components/ZylobridgeLogo";
 import { getLoginUrl } from "@/const";
 import { formatDistanceToNow } from "date-fns";
 import { getSupabaseBrowserClient, initSupabaseRealtimeAuth } from "@/lib/supabase";
@@ -29,6 +30,32 @@ interface Conversation {
   lastMessageAt: Date;
   createdAt: Date;
   unreadCount?: number;
+  clientName?: string | null;
+  clientAvatarUrl?: string | null;
+  professionalName?: string | null;
+  professionalAvatarUrl?: string | null;
+  jobTitle?: string | null;
+  jobLocation?: string | null;
+}
+
+function conversationParticipant(conversation: Conversation, userId?: number) {
+  const isClient = conversation.clientId === userId;
+  const name = (isClient ? conversation.professionalName : conversation.clientName)?.trim();
+  return name || (isClient ? "Professional" : "Employer");
+}
+
+function conversationParticipantAvatar(conversation: Conversation, userId?: number) {
+  return conversation.clientId === userId ? conversation.professionalAvatarUrl : conversation.clientAvatarUrl;
+}
+
+function conversationInitials(name: string) {
+  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "ZY";
+}
+
+function conversationJobLabel(conversation: Conversation) {
+  const title = conversation.jobTitle?.trim();
+  if (title) return title;
+  return "Marketplace conversation";
 }
 
 type RealtimeStatus = "CONNECTING" | "CONNECTED" | "ERROR";
@@ -228,46 +255,57 @@ export default function Messaging() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center space-y-4">
+      <div className="min-h-screen bg-background px-4 py-6">
+        <div className="mx-auto flex max-w-6xl justify-start">
+          <ZylobridgeLogo compact />
+        </div>
+        <div className="flex min-h-[calc(100vh-100px)] items-center justify-center">
+          <div className="text-center space-y-4">
           <MessageSquare className="h-16 w-16 text-primary mx-auto" />
           <h2 className="text-2xl font-bold text-foreground">Sign in to access messages</h2>
           <Button asChild>
             <a href={getLoginUrl()}>Sign In</a>
           </Button>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background pt-16">
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold text-foreground">Messages</h1>
-          <div className="flex items-center gap-2">
-            <div
-              className={`h-2 w-2 rounded-full ${
-                realtimeStatus === "CONNECTED"
-                  ? "bg-green-500"
+    <div className="min-h-screen bg-background pt-8 md:pt-12">
+      <div className="mx-auto max-w-6xl px-4 py-6 md:px-6 md:py-8">
+        <div className="mb-6 flex flex-col gap-5">
+          <div className="flex items-center justify-between gap-4">
+            <ZylobridgeLogo compact />
+            <div className="flex items-center gap-2" aria-live="polite">
+              <div
+                className={`h-2 w-2 rounded-full ${
+                  realtimeStatus === "CONNECTED"
+                    ? "bg-green-500"
+                    : realtimeStatus === "ERROR"
+                    ? "bg-red-500"
+                    : "bg-amber-500 animate-pulse"
+                }`}
+              />
+              <span className="text-sm text-muted-foreground">
+                {realtimeStatus === "CONNECTED"
+                  ? "Connected"
                   : realtimeStatus === "ERROR"
-                  ? "bg-red-500"
-                  : "bg-amber-500 animate-pulse"
-              }`}
-            />
-            <span className="text-sm text-muted-foreground">
-              {realtimeStatus === "CONNECTED"
-                ? "Connected"
-                : realtimeStatus === "ERROR"
-                ? "Connection error"
-                : "Connecting..."}
-            </span>
+                  ? "Connection error"
+                  : "Connecting..."}
+              </span>
+            </div>
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Workspace communication</p>
+            <h1 className="mt-1 text-3xl font-bold text-foreground">Messages</h1>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-0 border border-border rounded-xl overflow-hidden h-[600px]">
+        <div className="grid min-h-0 grid-cols-1 gap-0 overflow-hidden rounded-xl border border-border md:grid-cols-3 h-[min(600px,calc(100vh-190px))] min-h-[480px]">
           {/* Conversation List */}
-          <div className="border-r border-border bg-card flex flex-col">
+          <div className="flex min-h-0 flex-col border-b border-border bg-card md:border-b-0 md:border-r">
             <div className="p-4 border-b border-border">
               <h2 className="font-semibold text-foreground">Conversations</h2>
             </div>
@@ -281,7 +319,9 @@ export default function Messaging() {
               ) : (
                 conversations.map((conv: Conversation) => {
                   const isSelected = conv.id === selectedConvId;
-                  const otherUserId = conv.clientId === user?.id ? conv.professionalId : conv.clientId;
+                  const participantName = conversationParticipant(conv, user?.id);
+                  const participantAvatar = conversationParticipantAvatar(conv, user?.id);
+                  const jobLabel = conversationJobLabel(conv);
                   return (
                     <button
                       key={conv.id}
@@ -293,21 +333,21 @@ export default function Messaging() {
                       <div className="flex items-center gap-3">
                         <Avatar className="h-9 w-9">
                           <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">
-                            {otherUserId.toString().slice(0, 2)}
+                            {participantAvatar ? <img src={participantAvatar} alt="" className="h-full w-full rounded-full object-cover" /> : conversationInitials(participantName)}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between">
                             <span className={`text-sm truncate ${conv.unreadCount ? "font-bold text-foreground" : "font-medium text-foreground"}`}>
-                              Job #{conv.jobId}
+                              {participantName}
                             </span>
                             {Boolean(conv.unreadCount) && <Badge className="ml-2 shrink-0 bg-primary text-primary-foreground">{conv.unreadCount! > 99 ? "99+" : conv.unreadCount}</Badge>}
-                            <span className="text-xs text-muted-foreground">
+                            <span className="ml-2 shrink-0 text-xs text-muted-foreground">
                               {formatDistanceToNow(new Date(conv.lastMessageAt), { addSuffix: true })}
                             </span>
                           </div>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {conv.clientId === user?.id ? "You are the contractor" : "You are the professional"}
+                          <p className="truncate text-xs text-muted-foreground" title={jobLabel}>
+                            {jobLabel}{conv.jobLocation ? ` · ${conv.jobLocation}` : ""}
                           </p>
                         </div>
                       </div>
@@ -319,7 +359,7 @@ export default function Messaging() {
           </div>
 
           {/* Message Thread */}
-          <div className="col-span-2 flex flex-col bg-background">
+          <div className="flex min-h-0 flex-col bg-background md:col-span-2">
             {!selectedConvId ? (
               <div className="flex-1 flex items-center justify-center">
                 <div className="text-center text-muted-foreground">
@@ -331,19 +371,25 @@ export default function Messaging() {
             ) : (
               <>
                 {/* Header */}
-                <div className="p-4 border-b border-border bg-card">
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">JB</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="font-semibold text-foreground text-sm">
-                        Job #{conversations?.find((c: Conversation) => c.id === selectedConvId)?.jobId}
-                      </p>
-                      <p className="text-xs text-muted-foreground">Project conversation</p>
+                {(() => {
+                  const selectedConversation = conversations?.find((conversation: Conversation) => conversation.id === selectedConvId);
+                  if (!selectedConversation) return null;
+                  const participantName = conversationParticipant(selectedConversation, user?.id);
+                  const participantAvatar = conversationParticipantAvatar(selectedConversation, user?.id);
+                  const jobLabel = conversationJobLabel(selectedConversation);
+                  return <div className="border-b border-border bg-card p-4">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <Avatar className="h-9 w-9 shrink-0">
+                        {participantAvatar && <img src={participantAvatar} alt="" className="h-full w-full rounded-full object-cover" />}
+                        <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">{conversationInitials(participantName)}</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-foreground" title={participantName}>{participantName}</p>
+                        <p className="truncate text-xs text-muted-foreground" title={jobLabel}>{jobLabel}{selectedConversation.jobLocation ? ` · ${selectedConversation.jobLocation}` : ""}</p>
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  </div>;
+                })()}
 
                 {/* Messages */}
                 <ScrollArea className="flex-1 p-4">
