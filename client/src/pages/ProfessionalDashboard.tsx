@@ -36,6 +36,9 @@ export default function ProfessionalDashboard() {
   const { data: myApplications, isLoading: appsLoading } = trpc.applications.myApplications.useQuery(undefined, {
     enabled: !!user && user.userType === "professional",
   });
+  const { data: applicationCenter } = trpc.applications.commandCenter.useQuery({ limit: 1, offset: 0, status: "all", sort: "recent" }, {
+    enabled: !!user && user.userType === "professional",
+  });
   const { data: openJobs, isLoading: jobsLoading } = trpc.jobs.list.useQuery({ status: "open", limit: 20 }, {
     enabled: !!user && user.userType === "professional",
   });
@@ -88,9 +91,9 @@ export default function ProfessionalDashboard() {
   }
 
   const appStats = {
-    total: myApplications?.length ?? 0,
-    pending: myApplications?.filter((a) => a.status === "pending").length ?? 0,
-    accepted: myApplications?.filter((a) => a.status === "accepted").length ?? 0,
+    total: applicationCenter?.total ?? myApplications?.length ?? 0,
+    pending: applicationCenter?.counts?.under_review ?? myApplications?.filter((a) => a.status === "pending").length ?? 0,
+    accepted: applicationCenter?.counts?.accepted ?? myApplications?.filter((a) => a.status === "accepted").length ?? 0,
   };
 
   const handleSaveProfile = () => {
@@ -166,17 +169,17 @@ export default function ProfessionalDashboard() {
           <div className="space-y-6">
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
               {[
-                { label: "Total Applications", value: appStats.total, icon: Briefcase, color: "violet" },
-                { label: "Pending", value: appStats.pending, icon: Clock, color: "yellow" },
-                { label: "Accepted", value: appStats.accepted, icon: CheckCircle, color: "emerald" },
-              ].map(({ label, value, icon: Icon, color }) => (
-                <div key={label} className="rounded-xl border border-white/8 bg-[#131a26] p-5">
+                { label: "Total Applications", value: appStats.total, filter: "all", icon: Briefcase, color: "violet" },
+                { label: "Pending", value: appStats.pending, filter: "under_review", icon: Clock, color: "yellow" },
+                { label: "Accepted", value: appStats.accepted, filter: "accepted", icon: CheckCircle, color: "emerald" },
+              ].map(({ label, value, filter, icon: Icon, color }) => (
+                <Link key={label} href={`/applications${filter === "all" ? "" : `?status=${filter}`}`} className="block rounded-xl border border-white/8 bg-[#131a26] p-5 transition hover:border-violet-400/40">
                   <div className={`h-9 w-9 rounded-lg bg-${color}-500/15 border border-${color}-500/25 flex items-center justify-center mb-3`}>
                     <Icon className={`h-4.5 w-4.5 text-${color}-400`} />
                   </div>
                   <p className="text-2xl font-extrabold text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{value}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{label}</p>
-                </div>
+                </Link>
               ))}
             </div>
 

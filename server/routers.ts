@@ -39,10 +39,13 @@ import {
   createApplication,
   hasActiveApplication,
   getApplicationById,
+  getApplicationByJobAndProfessionalId,
   getApplicationsByJobId,
   getApplicationsByProfessionalId,
   getDetailedApplicationsByJobId,
   getDetailedApplicationsByProfessionalId,
+  getProfessionalApplicationCommandCenter,
+  getProfessionalApplicationById,
   updateApplicationStatus,
   getApplicationCount,
   createProfile,
@@ -631,14 +634,15 @@ export const appRouter = router({
         if (duplicate) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "You already have an active application for this job." });
         }
-        await createApplication({
+        const created = await createApplication({
           jobId: input.jobId,
           professionalId: ctx.user.id,
           coverLetter: input.coverLetter,
           bidAmount: String(input.bidAmount),
           status: "pending",
         });
-        return { success: true };
+        void createInAppNotification({ userId: job.clientId, title: "New application received", content: `${ctx.user.name || "A professional"} applied for ${job.title}.`, category: "application", referenceType: "application", referenceId: String(created.id) }).catch(() => undefined);
+        return { success: true, applicationId: created.id };
       }),
 
     listForJob: protectedProcedure
@@ -658,6 +662,32 @@ export const appRouter = router({
         }
         if (!canManage) throw new TRPCError({ code: "FORBIDDEN" });
         return getDetailedApplicationsByJobId(input.jobId, input.limit, input.offset, input.status);
+      }),
+
+    commandCenter: protectedProcedure
+      .input(z.object({
+        q: z.string().max(160).optional(),
+        status: z.string().max(32).optional().default("all"),
+        vocation: z.string().max(64).optional(),
+        location: z.string().max(160).optional(),
+        employer: z.string().max(160).optional(),
+        fromDate: z.string().datetime().optional(),
+        toDate: z.string().datetime().optional(),
+        minBid: z.number().nonnegative().optional(),
+        maxBid: z.number().nonnegative().optional(),
+        paymentStatus: z.string().max(32).optional(),
+        sort: z.enum(["recent", "oldest", "updated", "bid_high", "bid_low"]).optional().default("recent"),
+        limit: z.number().int().min(1).max(MAX_PAGE_SIZE).optional().default(20),
+        offset: z.number().int().nonnegative().optional().default(0),
+      }))
+      .query(async ({ ctx, input }) => getProfessionalApplicationCommandCenter(ctx.user.id, { ...input, fromDate: input.fromDate ? new Date(input.fromDate) : undefined, toDate: input.toDate ? new Date(input.toDate) : undefined })),
+
+    detail: protectedProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        const detail = await getProfessionalApplicationById(input.id, ctx.user.id);
+        if (!detail) throw new TRPCError({ code: "NOT_FOUND", message: "Application not found." });
+        return detail;
       }),
 
     myApplications: protectedProcedure
@@ -691,6 +721,9 @@ export const appRouter = router({
           }
         }
         await updateApplicationStatus(input.id, input.status);
+        const recipientId = input.status === "withdrawn" ? (await getJobById(app.jobId))?.clientId : app.professionalId;
+        const statusLabel = input.status === "accepted" ? "accepted" : input.status === "rejected" ? "was not selected" : "withdrawn";
+        if (recipientId) void createInAppNotification({ userId: recipientId, title: `Application ${input.status === "rejected" ? "update" : input.status}`, content: `Your application has ${statusLabel}.`, category: "application", referenceType: "application", referenceId: String(app.id) }).catch(() => undefined);
         return { success: true };
       }),
   }),
@@ -1723,7 +1756,20 @@ export const appRouter = router({
 
     addToShortlist: protectedProcedure
       .input(z.object({ jobId: z.number().int().positive(), professionalId: z.number().int().positive(), notes: z.string().optional() }))
-      .mutation(async ({ ctx, input }) => createShortlist({ jobId: input.jobId, employerId: ctx.user.id, professionalId: input.professionalId, notes: input.notes })),
+      .mutation(async ({ ctx, input }) => {
+        const job = await getJobById(input.jobId);
+        if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found." });
+        let canManage = job.clientId === ctx.user.id || ctx.user.role === "admin" || ctx.user.role === "SUPER_ADMIN";
+        if (!canManage && job.organizationId) {
+          const member = await requireOrganizationAccess(ctx.user.id, job.organizationId);
+          canManage = ["OWNER", "ADMIN", "HIRING_MANAGER", "RECRUITER"].includes(member.role);
+        }
+        if (!canManage) throw new TRPCError({ code: "FORBIDDEN", message: "Unauthorized to shortlist candidates for this job." });
+        const shortlist = await createShortlist({ jobId: input.jobId, employerId: job.clientId, professionalId: input.professionalId, notes: input.notes });
+        const application = await getApplicationByJobAndProfessionalId(input.jobId, input.professionalId);
+        if (application) void createInAppNotification({ userId: input.professionalId, title: "You were shortlisted", content: `You were shortlisted for ${job.title}.`, category: "application", referenceType: "application", referenceId: String(application.id) }).catch(() => undefined);
+        return shortlist;
+      }),
     removeFromShortlist: protectedProcedure
       .input(z.object({ jobId: z.number().int().positive(), professionalId: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => removeShortlist(input.jobId, input.professionalId, ctx.user.id)),
@@ -1743,6 +1789,8 @@ export const appRouter = router({
         }
         if (!canManage) throw new TRPCError({ code: "FORBIDDEN", message: "Unauthorized to schedule interviews for this job." });
         const interview = await createInterview({ ...input, employerId: job.clientId });
+        const application = input.applicationId ? { id: input.applicationId } : await getApplicationByJobAndProfessionalId(input.jobId, input.professionalId);
+        if (application) void createInAppNotification({ userId: input.professionalId, title: "Interview scheduled", content: `An interview was scheduled for ${job.title}.`, category: "application", referenceType: "application", referenceId: String(application.id) }).catch(() => undefined);
         return interview;
       }),
     updateInterview: protectedProcedure

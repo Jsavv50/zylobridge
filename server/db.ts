@@ -51,6 +51,7 @@ import {
   organizationMembers,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
+import { deriveApplicationStage, type ApplicationStage } from "../shared/applicationLifecycle";
 
 export const MAX_PAGE_SIZE = 100;
 export const DEFAULT_PAGE_SIZE = 20;
@@ -794,6 +795,123 @@ export async function getDetailedApplicationsByProfessionalId(professionalId: nu
     employerName: r.client?.name ?? "Employer",
     employerVerified: Boolean(r.client?.isVerified),
   }));
+}
+
+export type ProfessionalApplicationFilters = {
+  q?: string;
+  status?: string;
+  vocation?: string;
+  location?: string;
+  employer?: string;
+  fromDate?: Date;
+  toDate?: Date;
+  minBid?: number;
+  maxBid?: number;
+  paymentStatus?: string;
+  sort?: "recent" | "oldest" | "updated" | "bid_high" | "bid_low";
+  limit?: number;
+  offset?: number;
+};
+
+export async function getProfessionalApplicationCommandCenter(professionalId: number, filters: ProfessionalApplicationFilters = {}) {
+  const db = await getDb();
+  if (!db) return { items: [], counts: {}, total: 0, hasMore: false, nextOffset: 0 };
+  const conditions = [eq(applications.professionalId, professionalId)];
+  const q = filters.q?.trim().toLowerCase();
+  if (q) conditions.push(sql`(LOWER(${jobs.title}) LIKE ${`%${q}%`} OR LOWER(${jobs.description}) LIKE ${`%${q}%`} OR LOWER(${jobs.location}) LIKE ${`%${q}%`} OR LOWER(COALESCE(${users.name}, '')) LIKE ${`%${q}%`})` as any);
+  if (filters.status && filters.status !== "all") {
+    const statusMap: Record<string, string[]> = { submitted: ["pending"], under_review: ["pending"], shortlisted: ["pending"], interview: ["pending"], accepted: ["accepted"], active: ["accepted"], completed: ["accepted"], rejected: ["rejected"], withdrawn: ["withdrawn"] };
+    const statuses = statusMap[filters.status];
+    if (statuses?.length === 1) conditions.push(eq(applications.status, statuses[0] as any));
+  }
+  if (filters.vocation && filters.vocation !== "all") conditions.push(eq(jobs.vocation, filters.vocation as any));
+  if (filters.location?.trim()) conditions.push(sql`LOWER(${jobs.location}) LIKE ${`%${filters.location.trim().toLowerCase()}%`}` as any);
+  if (filters.employer?.trim()) conditions.push(sql`LOWER(COALESCE(${users.name}, '')) LIKE ${`%${filters.employer.trim().toLowerCase()}%`}` as any);
+  if (filters.fromDate) conditions.push(gte(applications.createdAt, filters.fromDate));
+  if (filters.toDate) conditions.push(lte(applications.createdAt, filters.toDate));
+  if (filters.minBid !== undefined) conditions.push(gte(applications.bidAmount, String(filters.minBid)));
+  if (filters.maxBid !== undefined) conditions.push(lte(applications.bidAmount, String(filters.maxBid)));
+  if (filters.paymentStatus && filters.paymentStatus !== "all") {
+    if (filters.paymentStatus === "none") conditions.push(sql`NOT EXISTS (SELECT 1 FROM escrow_payments ep WHERE ep."jobId" = ${applications.jobId} AND ep."professionalId" = ${professionalId})` as any);
+    else conditions.push(sql`EXISTS (SELECT 1 FROM escrow_payments ep WHERE ep."jobId" = ${applications.jobId} AND ep."professionalId" = ${professionalId} AND ep."status" = ${filters.paymentStatus})` as any);
+  }
+  const base = db.select({
+    application: applications,
+    job: { id: jobs.id, title: jobs.title, description: jobs.description, vocation: jobs.vocation, location: jobs.location, budget: jobs.budget, currency: jobs.currency, status: jobs.status, clientId: jobs.clientId, deadline: jobs.deadline, assignedProfessionalId: jobs.assignedProfessionalId },
+    employer: { id: users.id, name: users.name, isVerified: users.isVerified },
+  }).from(applications).innerJoin(jobs, eq(applications.jobId, jobs.id)).leftJoin(users, eq(jobs.clientId, users.id)).where(and(...conditions));
+  const rows = await base.orderBy(filters.sort === "oldest" ? asc(applications.createdAt) : filters.sort === "updated" ? desc(applications.updatedAt) : filters.sort === "bid_high" ? desc(applications.bidAmount) : filters.sort === "bid_low" ? asc(applications.bidAmount) : desc(applications.createdAt)).limit(clampPageSize(filters.limit, MAX_PAGE_SIZE)).offset(clampOffset(filters.offset));
+  const [{ total }] = await db.select({ total: sql<number>`count(*)` }).from(applications).innerJoin(jobs, eq(applications.jobId, jobs.id)).leftJoin(users, eq(jobs.clientId, users.id)).where(and(...conditions));
+  const applicationIds = rows.map((row) => row.application.id);
+  const jobIds = rows.map((row) => row.application.jobId);
+  const [shortlistRows, interviewRows, offerRows, engagementRows, escrowRows] = await Promise.all([
+    jobIds.length ? db.select().from(shortlists).where(and(eq(shortlists.professionalId, professionalId), inArray(shortlists.jobId, jobIds))) : [],
+    applicationIds.length ? db.select().from(interviews).where(and(eq(interviews.professionalId, professionalId), inArray(interviews.applicationId, applicationIds))) : [],
+    applicationIds.length ? db.select().from(offers).where(and(eq(offers.professionalId, professionalId), inArray(offers.applicationId, applicationIds))) : [],
+    jobIds.length ? db.select().from(engagements).where(and(eq(engagements.professionalId, professionalId), inArray(engagements.jobId, jobIds))) : [],
+    jobIds.length ? db.select().from(escrowPayments).where(and(eq(escrowPayments.professionalId, professionalId), inArray(escrowPayments.jobId, jobIds))) : [],
+  ]);
+  const shortlistJobs = new Set(shortlistRows.map((row) => row.jobId));
+  const interviewByApplication = new Map(interviewRows.map((row) => [row.applicationId, row]));
+  const offerByApplication = new Map(offerRows.map((row) => [row.applicationId, row]));
+  const engagementByJob = new Map(engagementRows.map((row) => [row.jobId, row]));
+  const escrowByJob = new Map(escrowRows.map((row) => [row.jobId, row]));
+  const items = rows.map((row) => {
+    const interview = interviewByApplication.get(row.application.id);
+    const engagement = engagementByJob.get(row.application.jobId);
+    const stage = deriveApplicationStage({ applicationStatus: row.application.status, jobStatus: row.job.status, shortlisted: shortlistJobs.has(row.application.jobId), interviewStatus: interview?.status, engagementStatus: engagement?.status });
+    return { ...row.application, job: row.job, employerId: row.employer?.id ?? null, employerName: row.employer?.name ?? "Employer", employerVerified: Boolean(row.employer?.isVerified), stage, interview: interview ?? null, offer: offerByApplication.get(row.application.id) ?? null, engagement: engagement ?? null, escrow: escrowByJob.get(row.application.jobId) ?? null };
+  }).filter((item) => !filters.status || filters.status === "all" || item.stage === filters.status);
+  const countMap = await getProfessionalApplicationStageCounts(professionalId);
+  return { items, counts: countMap, total: Number(total ?? 0), hasMore: Number(total ?? 0) > (filters.offset ?? 0) + rows.length, nextOffset: (filters.offset ?? 0) + rows.length };
+}
+
+export async function getProfessionalApplicationStageCounts(professionalId: number) {
+  const db = await getDb();
+  if (!db) return {} as Record<string, number>;
+  const rows = await db.select({ application: applications, jobStatus: jobs.status }).from(applications).innerJoin(jobs, eq(applications.jobId, jobs.id)).where(eq(applications.professionalId, professionalId));
+  const jobIds = rows.map((row) => row.application.jobId);
+  const applicationIds = rows.map((row) => row.application.id);
+  const [shortlistRows, interviewRows, engagementRows] = await Promise.all([
+    jobIds.length ? db.select({ jobId: shortlists.jobId }).from(shortlists).where(and(eq(shortlists.professionalId, professionalId), inArray(shortlists.jobId, jobIds))) : [],
+    applicationIds.length ? db.select({ applicationId: interviews.applicationId, status: interviews.status }).from(interviews).where(and(eq(interviews.professionalId, professionalId), inArray(interviews.applicationId, applicationIds))) : [],
+    jobIds.length ? db.select({ jobId: engagements.jobId, status: engagements.status }).from(engagements).where(and(eq(engagements.professionalId, professionalId), inArray(engagements.jobId, jobIds))) : [],
+  ]);
+  const shortlistedJobs = new Set(shortlistRows.map((row) => row.jobId));
+  const interviewByApplication = new Map(interviewRows.map((row) => [row.applicationId, row.status]));
+  const engagementByJob = new Map(engagementRows.map((row) => [row.jobId, row.status]));
+  return rows.reduce<Record<string, number>>((counts, row) => {
+    const stage = deriveApplicationStage({ applicationStatus: row.application.status, jobStatus: row.jobStatus, shortlisted: shortlistedJobs.has(row.application.jobId), interviewStatus: interviewByApplication.get(row.application.id), engagementStatus: engagementByJob.get(row.application.jobId) });
+    counts[stage] = (counts[stage] ?? 0) + 1;
+    return counts;
+  }, {});
+}
+
+export async function getProfessionalApplicationById(id: number, professionalId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [row] = await db.select({
+    application: applications,
+    job: { id: jobs.id, title: jobs.title, description: jobs.description, vocation: jobs.vocation, location: jobs.location, budget: jobs.budget, currency: jobs.currency, status: jobs.status, clientId: jobs.clientId, deadline: jobs.deadline, assignedProfessionalId: jobs.assignedProfessionalId },
+    employer: { id: users.id, name: users.name, isVerified: users.isVerified },
+  }).from(applications).innerJoin(jobs, eq(applications.jobId, jobs.id)).leftJoin(users, eq(jobs.clientId, users.id)).where(and(eq(applications.id, id), eq(applications.professionalId, professionalId))).limit(1);
+  if (!row) return undefined;
+  const [shortlist, interview, offer, engagement, escrow] = await Promise.all([
+    db.select().from(shortlists).where(and(eq(shortlists.professionalId, professionalId), eq(shortlists.jobId, row.application.jobId))).limit(1),
+    db.select().from(interviews).where(and(eq(interviews.professionalId, professionalId), eq(interviews.applicationId, row.application.id))).orderBy(desc(interviews.createdAt)).limit(1),
+    db.select().from(offers).where(and(eq(offers.professionalId, professionalId), eq(offers.applicationId, row.application.id))).orderBy(desc(offers.createdAt)).limit(1),
+    db.select().from(engagements).where(and(eq(engagements.professionalId, professionalId), eq(engagements.jobId, row.application.jobId))).orderBy(desc(engagements.createdAt)).limit(1),
+    db.select().from(escrowPayments).where(and(eq(escrowPayments.professionalId, professionalId), eq(escrowPayments.jobId, row.application.jobId))).orderBy(desc(escrowPayments.createdAt)).limit(1),
+  ]);
+  const stage = deriveApplicationStage({ applicationStatus: row.application.status, jobStatus: row.job.status, shortlisted: Boolean(shortlist[0]), interviewStatus: interview[0]?.status, engagementStatus: engagement[0]?.status });
+  return { ...row.application, job: row.job, employerId: row.employer?.id ?? null, employerName: row.employer?.name ?? "Employer", employerVerified: Boolean(row.employer?.isVerified), stage, shortlist: shortlist[0] ?? null, interview: interview[0] ?? null, offer: offer[0] ?? null, engagement: engagement[0] ?? null, escrow: escrow[0] ?? null };
+}
+
+export async function getApplicationByJobAndProfessionalId(jobId: number, professionalId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [application] = await db.select().from(applications).where(and(eq(applications.jobId, jobId), eq(applications.professionalId, professionalId))).orderBy(desc(applications.createdAt)).limit(1);
+  return application;
 }
 
 export async function getApplicationById(id: number) {
