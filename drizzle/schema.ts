@@ -236,22 +236,6 @@ export const savedJobs = pgTable("saved_jobs", {
 export type SavedJob = typeof savedJobs.$inferSelect;
 export type InsertSavedJob = typeof savedJobs.$inferInsert;
 
-// ─── Job Reports ───────────────────────────────────────────────────────────────
-export const jobReports = pgTable("job_reports", {
-  id: serial("id").primaryKey(),
-  jobId: integer("jobId").notNull(),
-  reporterId: integer("reporterId").notNull(),
-  reason: varchar("reason", { length: 64 }).notNull(),
-  details: text("details"),
-  status: varchar("status", { length: 32 }).default("open").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-}, (table) => ({
-  jobReporterUnique: uniqueIndex("job_reports_job_reporter_unique").on(table.jobId, table.reporterId),
-  jobStatusIdx: index("job_reports_job_status_idx").on(table.jobId, table.status),
-}));
-export type JobReport = typeof jobReports.$inferSelect;
-export type InsertJobReport = typeof jobReports.$inferInsert;
-
 // ─── Professional Job Alerts ───────────────────────────────────────────────────
 export const jobAlerts = pgTable("job_alerts", {
   id: serial("id").primaryKey(),

@@ -67,7 +67,7 @@ export function deriveNotificationPriority(notification: { category?: string | n
 
 export function notificationDestination(referenceType: string | null, referenceId: string | null): string {
   if (!referenceId) return "/notifications";
-  if (referenceType === "job") return `/jobs/${encodeURIComponent(referenceId)}?from=${encodeURIComponent("/notifications")}`;
+  if (referenceType === "job") return `/jobs/${encodeURIComponent(referenceId)}`;
   if (referenceType === "message" && /^\d+$/.test(referenceId)) return `/messages/${encodeURIComponent(referenceId)}`;
   if (referenceType === "application" && /^\d+$/.test(referenceId)) return `/applications/${encodeURIComponent(referenceId)}`;
   if (referenceType === "payment" || referenceType === "escrow") return "/payments";
