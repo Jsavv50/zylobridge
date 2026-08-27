@@ -998,3 +998,13 @@
 - [x] Add supported attachments, safety/reporting controls, and only logically valid workflow actions using existing infrastructure
 - [x] Add focused messaging regression coverage and run full TypeScript, Vitest, client/server builds, security, and responsive verification
 - [x] Save the verified Professional Messages checkpoint
+
+## Earnings & Payouts Command Center: pasted_content_25.txt
+- [x] Audit the existing /payments route, escrow schema, transaction/payment tables, payout functionality, notifications, applications, jobs, auth, Supabase, and responsive professional layout
+- [x] Define truthful earnings, available, pending, protected escrow, payout-readiness, lifecycle, and transaction models from real supported backend states
+- [x] Implement protected professional financial summary, time-series, escrow, pending, payout-readiness, and transaction queries with ownership isolation
+- [x] Build responsive Earnings & Payouts command center with real-data loading, error, empty, and insufficient-history states
+- [x] Connect supported payment lifecycle, engagement/application links, notifications, statement export, payment settings, and withdrawal behavior without duplicate payment systems
+- [x] Add financial integrity, masking, authorization, duplicate-action, and no-fabrication regression coverage
+- [x] Run TypeScript, full Vitest, client/server production builds, diff/security checks, and responsive route verification
+- [x] Save the verified Earnings & Payouts checkpoint

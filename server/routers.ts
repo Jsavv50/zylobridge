@@ -120,6 +120,10 @@ import {
   calculateCandidateMatch,
   getProfessionalJobSignals,
   getProfessionalMarketplaceActivity,
+  getProfessionalFinancialDashboard,
+  getProfessionalFinancialTransactions,
+  getProfessionalPayouts,
+  getProfessionalProtectedEscrow,
   listJobAlerts,
   createJobAlert,
   updateJobAlert,
@@ -1910,6 +1914,36 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => updateUserNotificationPreference(ctx.user.id, input)),
   }),
   finance: router({
+    professionalDashboard: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (ctx.user.userType !== "professional" && ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Professional financial data is restricted to professional accounts." });
+        }
+        return getProfessionalFinancialDashboard(ctx.user.id);
+      }),
+    professionalTransactions: protectedProcedure
+      .input(z.object({ search: z.string().max(80).optional(), status: z.string().max(40).optional(), dateFrom: z.string().date().optional(), dateTo: z.string().date().optional(), limit: z.number().int().min(1).max(100).optional(), offset: z.number().int().min(0).optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.userType !== "professional" && ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Professional financial data is restricted to professional accounts." });
+        }
+        return getProfessionalFinancialTransactions(ctx.user.id, input ?? {});
+      }),
+    professionalPayouts: protectedProcedure
+      .input(z.object({ limit: z.number().int().min(1).max(100).optional(), offset: z.number().int().min(0).optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.userType !== "professional" && ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Professional payout data is restricted to professional accounts." });
+        }
+        return getProfessionalPayouts(ctx.user.id, input?.limit, input?.offset);
+      }),
+    professionalEscrow: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (ctx.user.userType !== "professional" && ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Professional escrow data is restricted to professional accounts." });
+        }
+        return getProfessionalProtectedEscrow(ctx.user.id);
+      }),
     initializeMilestonePayment: protectedProcedure
       .input(z.object({ engagementId: z.number().int().positive(), milestoneId: z.number().int().positive(), callbackUrl: z.string().optional() }))
       .mutation(async ({ ctx, input }) => initializeMilestonePayment({ ...input, payerId: ctx.user.id, email: ctx.user.email || "employer@zylobridge.com" })),

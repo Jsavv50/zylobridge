@@ -47,6 +47,10 @@ import {
   interviews,
   offers,
   engagements,
+  milestones,
+  paymentTransactions,
+  payouts,
+  professionalBankAccounts,
   organizations,
   organizationMembers,
 } from "../drizzle/schema";
@@ -1871,6 +1875,107 @@ export async function getEngagementsByUserId(userId: number, role: 'employer' | 
   if (!db) return [];
   const col = role === 'employer' ? engagements.employerId : engagements.professionalId;
   return db.select().from(engagements).where(eq(col, userId)).orderBy(desc(engagements.createdAt));
+}
+
+export async function getProfessionalFinancialDashboard(professionalId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+
+  const now = new Date();
+  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const earningStatuses = ["payment_confirmed", "funded"] as const;
+  const pendingStatuses = ["created", "payment_required", "payment_initiated", "payment_pending"] as const;
+
+  const [earningRows, pendingRows, eligibleRows, protectedRows, payoutRows, bankRows] = await Promise.all([
+    db.select({
+      currency: paymentTransactions.currency,
+      totalMinor: sql<number>`coalesce(sum(${paymentTransactions.amountMinor}), 0)`,
+      currentMonthMinor: sql<number>`coalesce(sum(case when ${paymentTransactions.createdAt} >= ${currentMonthStart} then ${paymentTransactions.amountMinor} else 0 end), 0)`,
+      previousMonthMinor: sql<number>`coalesce(sum(case when ${paymentTransactions.createdAt} >= ${previousMonthStart} and ${paymentTransactions.createdAt} < ${currentMonthStart} then ${paymentTransactions.amountMinor} else 0 end), 0)`,
+      count: sql<number>`count(*)`,
+    }).from(paymentTransactions).where(and(eq(paymentTransactions.payeeId, professionalId), inArray(paymentTransactions.status, earningStatuses as any))).groupBy(paymentTransactions.currency),
+    db.select({ currency: paymentTransactions.currency, totalMinor: sql<number>`coalesce(sum(${paymentTransactions.amountMinor}), 0)` }).from(paymentTransactions).where(and(eq(paymentTransactions.payeeId, professionalId), inArray(paymentTransactions.status, pendingStatuses as any))).groupBy(paymentTransactions.currency),
+    db.select({ currency: payouts.currency, totalMinor: sql<number>`coalesce(sum(${payouts.netAmountMinor}), 0)` }).from(payouts).where(and(eq(payouts.professionalId, professionalId), eq(payouts.status, "payout_eligible"))).groupBy(payouts.currency),
+    db.select({ currency: milestones.currency, totalMinor: sql<number>`coalesce(sum(${milestones.amountMinor}), 0)`, count: sql<number>`count(*)` }).from(milestones).innerJoin(engagements, eq(engagements.id, milestones.engagementId)).where(and(eq(engagements.professionalId, professionalId), eq(milestones.status, "funded"))).groupBy(milestones.currency),
+    db.select({ currency: payouts.currency, totalMinor: sql<number>`coalesce(sum(${payouts.netAmountMinor}), 0)`, count: sql<number>`count(*)` }).from(payouts).where(and(eq(payouts.professionalId, professionalId), inArray(payouts.status, ["payout_initiated", "payout_processing", "payout_completed"] as any))).groupBy(payouts.currency),
+    db.select({ bankName: professionalBankAccounts.bankName, accountNumber: professionalBankAccounts.accountNumber, isVerified: professionalBankAccounts.isVerified, recipientCode: professionalBankAccounts.recipientCode }).from(professionalBankAccounts).where(eq(professionalBankAccounts.userId, professionalId)).orderBy(desc(professionalBankAccounts.updatedAt)).limit(1),
+  ]);
+
+  const currencies = Array.from(new Set([
+    ...earningRows.map((row) => row.currency),
+    ...pendingRows.map((row) => row.currency),
+    ...eligibleRows.map((row) => row.currency),
+    ...protectedRows.map((row) => row.currency),
+    ...payoutRows.map((row) => row.currency),
+  ]));
+
+  const byCurrency = currencies.map((currency) => {
+    const earnings = earningRows.find((row) => row.currency === currency);
+    const pending = pendingRows.find((row) => row.currency === currency);
+    const eligible = eligibleRows.find((row) => row.currency === currency);
+    const protectedFunds = protectedRows.find((row) => row.currency === currency);
+    const currentMonthMinor = Number(earnings?.currentMonthMinor ?? 0);
+    const previousMonthMinor = Number(earnings?.previousMonthMinor ?? 0);
+    return {
+      currency,
+      totalEarningsMinor: Number(earnings?.totalMinor ?? 0),
+      pendingEarningsMinor: Number(pending?.totalMinor ?? 0),
+      availableBalanceMinor: Number(eligible?.totalMinor ?? 0),
+      protectedEscrowMinor: Number(protectedFunds?.totalMinor ?? 0),
+      protectedEngagementCount: Number(protectedFunds?.count ?? 0),
+      currentMonthEarningsMinor: currentMonthMinor,
+      previousMonthEarningsMinor: previousMonthMinor,
+      monthGrowthPercent: previousMonthMinor > 0 ? ((currentMonthMinor - previousMonthMinor) / previousMonthMinor) * 100 : null,
+      completedPaidEngagements: Number(earnings?.count ?? 0),
+    };
+  });
+
+  const bank = bankRows[0];
+  return {
+    currencies: byCurrency,
+    payoutReady: Boolean(bank?.isVerified && bank?.recipientCode),
+    payoutMethod: bank ? { bankName: bank.bankName, maskedAccount: `•••• ${bank.accountNumber.slice(-4)}`, isVerified: bank.isVerified } : null,
+    payouts: payoutRows.map((row) => ({ currency: row.currency, totalMinor: Number(row.totalMinor ?? 0), count: Number(row.count ?? 0) })),
+  };
+}
+
+export async function getProfessionalFinancialTransactions(professionalId: number, filters: { search?: string; status?: string; dateFrom?: string; dateTo?: string; limit?: number; offset?: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const limit = clampPageSize(filters.limit);
+  const offset = clampOffset(filters.offset);
+  const conditions = [eq(paymentTransactions.payeeId, professionalId)];
+  if (filters.status) conditions.push(eq(paymentTransactions.status, filters.status as any));
+  if (filters.dateFrom) {
+    const dateFrom = new Date(`${filters.dateFrom}T00:00:00.000Z`);
+    if (!Number.isNaN(dateFrom.getTime())) conditions.push(gte(paymentTransactions.createdAt, dateFrom));
+  }
+  if (filters.dateTo) {
+    const dateTo = new Date(`${filters.dateTo}T23:59:59.999Z`);
+    if (!Number.isNaN(dateTo.getTime())) conditions.push(lte(paymentTransactions.createdAt, dateTo));
+  }
+  if (filters.search?.trim()) {
+    const term = `%${filters.search.trim().slice(0, 80)}%`;
+    conditions.push(sql`(${paymentTransactions.reference} ILIKE ${term} OR ${jobs.title} ILIKE ${term} OR ${users.name} ILIKE ${term})` as any);
+  }
+  const [items, totalRows] = await Promise.all([
+    db.select({ id: paymentTransactions.id, reference: paymentTransactions.reference, amountMinor: paymentTransactions.amountMinor, platformFeeMinor: paymentTransactions.platformFeeMinor, currency: paymentTransactions.currency, status: paymentTransactions.status, createdAt: paymentTransactions.createdAt, jobId: jobs.id, jobTitle: jobs.title, employerName: users.name }).from(paymentTransactions).leftJoin(engagements, eq(engagements.id, paymentTransactions.engagementId)).leftJoin(jobs, eq(jobs.id, engagements.jobId)).leftJoin(users, eq(users.id, paymentTransactions.payerId)).where(and(...conditions)).orderBy(desc(paymentTransactions.createdAt)).limit(limit).offset(offset),
+    db.select({ count: sql<number>`count(*)` }).from(paymentTransactions).leftJoin(engagements, eq(engagements.id, paymentTransactions.engagementId)).leftJoin(jobs, eq(jobs.id, engagements.jobId)).leftJoin(users, eq(users.id, paymentTransactions.payerId)).where(and(...conditions)),
+  ]);
+  return { items, total: Number(totalRows[0]?.count ?? 0), limit, offset };
+}
+
+export async function getProfessionalPayouts(professionalId: number, limit = 20, offset = 0) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  return db.select({ id: payouts.id, reference: payouts.reference, amountMinor: payouts.amountMinor, netAmountMinor: payouts.netAmountMinor, platformFeeMinor: payouts.platformFeeMinor, currency: payouts.currency, status: payouts.status, transferReference: payouts.transferReference, createdAt: payouts.createdAt, updatedAt: payouts.updatedAt, jobId: jobs.id, jobTitle: jobs.title }).from(payouts).leftJoin(engagements, eq(engagements.id, payouts.engagementId)).leftJoin(jobs, eq(jobs.id, engagements.jobId)).where(eq(payouts.professionalId, professionalId)).orderBy(desc(payouts.createdAt)).limit(clampPageSize(limit)).offset(clampOffset(offset));
+}
+
+export async function getProfessionalProtectedEscrow(professionalId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  return db.select({ id: milestones.id, engagementId: milestones.engagementId, title: milestones.title, amountMinor: milestones.amountMinor, currency: milestones.currency, status: milestones.status, dueDate: milestones.dueDate, jobId: jobs.id, jobTitle: jobs.title, employerName: users.name }).from(milestones).innerJoin(engagements, eq(engagements.id, milestones.engagementId)).innerJoin(jobs, eq(jobs.id, engagements.jobId)).leftJoin(users, eq(users.id, engagements.employerId)).where(and(eq(engagements.professionalId, professionalId), eq(milestones.status, "funded"))).orderBy(desc(milestones.createdAt));
 }
 
 export async function calculateCandidateMatch(jobId: number, professionalId: number) {
