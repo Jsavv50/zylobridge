@@ -1,6 +1,6 @@
 import { getDb } from "./db";
-import { users, profiles, jobs, applications, engagements, escrowPayments, payouts, organizationMembers, organizationProjects, shortlists } from "../drizzle/schema";
-import { eq, and, or, sql, gte, lte, desc } from "drizzle-orm";
+import { users, profiles, jobs, applications, engagements, escrowPayments, payouts, organizationMembers, organizationProjects, shortlists, interviews, offers, conversations, messages, notifications } from "../drizzle/schema";
+import { eq, and, or, sql, gte, lte, desc, inArray } from "drizzle-orm";
 
 export type TimeRange = "today" | "7d" | "30d" | "90d" | "ytd" | "custom";
 
@@ -135,5 +135,140 @@ export async function getSuperAdminAnalytics(range: TimeRange = "30d") {
     marketplace: { jobs: Number(jobCounts?.total ?? 0), openJobs: Number(jobCounts?.open ?? 0), completedJobs: Number(jobCounts?.completed ?? 0), applications: Number(applicationCounts?.total ?? 0), engagements: Number(engagementCounts?.total ?? 0) },
     financial: { totalVolumeMinor: completedPayouts.reduce((total, payout) => total + Number(payout.amountMinor), 0), currency: "NGN" },
     operations: { backgroundJobsStatus: "reported by Phase 6A worker", reconciliationStatus: "reported by Phase 6A reconciliation service" },
+  };
+}
+
+
+/**
+ * Returns the employer dashboard data in one ownership-scoped contract.
+ * Every collection is constrained by the authenticated employer's owned jobs
+ * or participant relationship; optional metrics remain null/empty when the
+ * underlying marketplace has no records yet.
+ */
+export async function getEmployerCommandCenter(clientId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const [account] = await db.select({
+    id: users.id,
+    name: users.name,
+    email: users.email,
+    userType: users.userType,
+    avatarUrl: users.avatarUrl,
+    isVerified: users.isVerified,
+  }).from(users).where(eq(users.id, clientId)).limit(1);
+  if (!account) return null;
+
+  const ownedJobs = await db.select().from(jobs).where(eq(jobs.clientId, clientId)).orderBy(desc(jobs.createdAt)).limit(50);
+  const jobIds = ownedJobs.map((job) => job.id);
+
+  const [jobApplications, employerShortlists, employerInterviews, employerOffers, employerEngagements, employerEscrows, employerConversations, recentNotifications] = await Promise.all([
+    jobIds.length ? db.select().from(applications).where(inArray(applications.jobId, jobIds)).orderBy(desc(applications.createdAt)).limit(200) : Promise.resolve([]),
+    jobIds.length ? db.select().from(shortlists).where(inArray(shortlists.jobId, jobIds)).orderBy(desc(shortlists.createdAt)).limit(100) : Promise.resolve([]),
+    db.select().from(interviews).where(eq(interviews.employerId, clientId)).orderBy(desc(interviews.createdAt)).limit(50),
+    db.select().from(offers).where(eq(offers.employerId, clientId)).orderBy(desc(offers.createdAt)).limit(50),
+    db.select().from(engagements).where(eq(engagements.employerId, clientId)).orderBy(desc(engagements.createdAt)).limit(50),
+    db.select().from(escrowPayments).where(eq(escrowPayments.clientId, clientId)).orderBy(desc(escrowPayments.createdAt)).limit(100),
+    db.select().from(conversations).where(eq(conversations.clientId, clientId)).orderBy(desc(conversations.lastMessageAt)).limit(8),
+    db.select().from(notifications).where(eq(notifications.userId, clientId)).orderBy(desc(notifications.createdAt)).limit(8),
+  ]);
+
+  const candidateIds = Array.from(new Set(jobApplications.map((application) => application.professionalId)));
+  const candidates = candidateIds.length
+    ? await db.select({
+        userId: users.id,
+        name: users.name,
+        avatarUrl: users.avatarUrl,
+        isVerified: users.isVerified,
+        vocation: profiles.vocation,
+        location: profiles.location,
+        averageRating: profiles.averageRating,
+        totalReviews: profiles.totalReviews,
+        yearsExperience: profiles.yearsExperience,
+        isAvailable: profiles.isAvailable,
+      }).from(users).leftJoin(profiles, eq(profiles.userId, users.id)).where(inArray(users.id, candidateIds)).limit(100)
+    : [];
+
+  const conversationIds = employerConversations.map((conversation) => conversation.id);
+  const recentMessages = conversationIds.length
+    ? await db.select().from(messages).where(inArray(messages.conversationId, conversationIds)).orderBy(desc(messages.createdAt)).limit(100)
+    : [];
+  const messageSenderIds = Array.from(new Set(recentMessages.map((message) => message.senderId).filter((id) => id !== clientId)));
+  const messageSenders = messageSenderIds.length
+    ? await db.select({ id: users.id, name: users.name, avatarUrl: users.avatarUrl }).from(users).where(inArray(users.id, messageSenderIds)).limit(50)
+    : [];
+  const senderById = new Map(messageSenders.map((sender) => [sender.id, sender]));
+
+  const vocations = Array.from(new Set(ownedJobs.map((job) => job.vocation))).filter(Boolean);
+  const recommendedProfessionals = vocations.length
+    ? await db.select({
+        userId: users.id,
+        name: users.name,
+        avatarUrl: users.avatarUrl,
+        isVerified: users.isVerified,
+        vocation: profiles.vocation,
+        location: profiles.location,
+        averageRating: profiles.averageRating,
+        totalReviews: profiles.totalReviews,
+        yearsExperience: profiles.yearsExperience,
+        isAvailable: profiles.isAvailable,
+      }).from(profiles).innerJoin(users, eq(users.id, profiles.userId)).where(and(eq(users.userType, "professional"), eq(profiles.isAvailable, true), inArray(profiles.vocation, vocations))).orderBy(desc(users.isVerified), desc(profiles.averageRating)).limit(6)
+    : [];
+
+  const applicationsByJob = new Map<number, typeof jobApplications>();
+  for (const application of jobApplications) {
+    const current = applicationsByJob.get(application.jobId) ?? [];
+    current.push(application);
+    applicationsByJob.set(application.jobId, current);
+  }
+  const shortlistJobIds = new Set(employerShortlists.map((item) => item.jobId));
+  const pendingApplications = jobApplications.filter((application) => application.status === "pending").length;
+  const activeEscrow = employerEscrows.filter((escrow) => ["pending", "funded", "disputed"].includes(escrow.status)).reduce((sum, escrow) => sum + amount(escrow.amount), 0);
+  const releasedEscrow = employerEscrows.filter((escrow) => escrow.status === "released").reduce((sum, escrow) => sum + amount(escrow.amount), 0);
+  const hiredCount = employerEngagements.length + employerOffers.filter((offer) => offer.status === "accepted").length;
+
+  return {
+    account,
+    jobs: ownedJobs.map((job) => ({ ...job, applicationCount: applicationsByJob.get(job.id)?.length ?? 0, pendingApplicationCount: applicationsByJob.get(job.id)?.filter((application) => application.status === "pending").length ?? 0, hasShortlist: shortlistJobIds.has(job.id) })),
+    candidates,
+    recommendedProfessionals,
+    pipeline: {
+      applied: jobApplications.length,
+      shortlisted: employerShortlists.length,
+      interviews: employerInterviews.filter((interview) => interview.status !== "cancelled").length,
+      offers: employerOffers.filter((offer) => offer.status === "pending" || offer.status === "accepted").length,
+      hired: hiredCount,
+    },
+    financial: {
+      activeEscrow,
+      releasedEscrow,
+      pendingEscrow: employerEscrows.filter((escrow) => escrow.status === "pending").reduce((sum, escrow) => sum + amount(escrow.amount), 0),
+      currencies: Array.from(new Set(employerEscrows.map((escrow) => escrow.currency))),
+    },
+    projects: employerEngagements.filter((engagement) => engagement.status === "active").map((engagement) => ({
+      id: engagement.id,
+      jobId: engagement.jobId,
+      professionalId: engagement.professionalId,
+      compensation: engagement.compensation,
+      startDate: engagement.startDate,
+      endDate: engagement.endDate,
+      status: engagement.status,
+    })),
+    messages: employerConversations.map((conversation) => {
+      const latest = recentMessages.find((message) => message.conversationId === conversation.id);
+      return { ...conversation, latestMessage: latest ? { content: latest.content, createdAt: latest.createdAt, isRead: latest.isRead, sender: senderById.get(latest.senderId) ?? null } : null };
+    }),
+    notifications: recentNotifications,
+    summary: {
+      activeJobs: ownedJobs.filter((job) => job.status === "open" || job.status === "in_progress").length,
+      openJobs: ownedJobs.filter((job) => job.status === "open").length,
+      inProgressJobs: ownedJobs.filter((job) => job.status === "in_progress").length,
+      completedJobs: ownedJobs.filter((job) => job.status === "completed").length,
+      pendingApplications,
+      hiredCount,
+      unreadNotifications: recentNotifications.filter((notification) => !notification.isRead).length,
+      unreadMessages: recentMessages.filter((message) => message.senderId !== clientId && !message.isRead).length,
+    },
+    generatedAt: new Date(),
   };
 }

@@ -149,6 +149,7 @@ import {
 } from "./paystack";
 import { getFrontendUrl } from "./_core/env";
 import { normalizeVocation } from "@shared/vocations";
+import { getEmployerCommandCenter } from "./analytics";
 import { maskPhoneNumber, normalizePhoneNumber, sendPhoneOtpSms, SmsDeliveryError } from "./sms";
 import { getUserNotificationPreference, updateUserNotificationPreference, createInAppNotification, getUnreadNotifications, listNotifications, markNotificationRead, markAllNotificationsRead, generateIcsContent, executeMatchingV2 } from "./phase4";
 import { initializeMilestonePayment, processVerifiedPayment, verifyPaystackWebhookSignature } from "./finance";
@@ -452,6 +453,14 @@ export const appRouter = router({
         await createAuditLog({ actorUserId: ctx.user.id, actorRole: ctx.user.role, action: "CREATE_ORGANIZATION_PROJECT", resourceType: "organization_project", resourceId: String(project.id), previousState: null, newState: JSON.stringify({ organizationId: input.organizationId, name: input.name }), metadata: null, ipAddress: ctx.req.ip ?? null, userAgent: ctx.req.headers["user-agent"] ?? null });
         return project;
       }),
+  }),
+
+  // ── Employer dashboard ────────────────────────────────────────────────────
+  employerDashboard: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.user.userType !== "client" && ctx.user.userType !== "enterprise" && ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Employer dashboard access is restricted to employer accounts." });
+    }
+    return getEmployerCommandCenter(ctx.user.id);
   }),
 
   // ── Jobs ──────────────────────────────────────────────────────────────────

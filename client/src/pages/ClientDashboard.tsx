@@ -1,509 +1,109 @@
-import { useState } from "react";
-import { Link, useLocation } from "wouter";
+import { useMemo, useState } from "react";
+import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { ApplicationShell, EmptyState, PageHeader, StatusBadge } from "@/components/shell/ZyloShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import {
-  Loader2, Plus, Briefcase, Users, CheckCircle, Clock,
-  MapPin, DollarSign, ChevronRight, Zap, Eye, Trash2,
-  BarChart3, ArrowUpRight, Shield
-} from "lucide-react";
-import Navbar from "@/components/Navbar";
-import { VOCATION_KEYS, VOCATION_LABELS, VOCATION_ICONS, type VocationKey } from "@shared/vocations";
-import EscrowPaymentModal from "@/components/EscrowPaymentModal";
-import { VerificationBadge } from "@/components/VerificationBadge";
+import { ArrowRight, ArrowUpRight, BarChart3, Bell, BriefcaseBusiness, CheckCircle2, ChevronRight, Clock3, DollarSign, FileText, Loader2, MapPin, MessageCircle, Plus, Search, ShieldCheck, Sparkles, UserRound, UsersRound, WalletCards, X } from "lucide-react";
+import { VOCATION_ICONS, VOCATION_KEYS, VOCATION_LABELS, type VocationKey } from "@shared/vocations";
 
-const STATUS_STYLES: Record<string, string> = {
-  open: "bg-emerald-500/15 text-emerald-400 border-emerald-500/25",
-  in_progress: "bg-blue-500/15 text-blue-400 border-blue-500/25",
-  completed: "bg-purple-500/15 text-purple-400 border-purple-500/25",
-  cancelled: "bg-red-500/15 text-red-400 border-red-500/25",
+const statusMeta: Record<string, { label: string; tone: "success" | "warning" | "error" | "info" | "neutral" }> = {
+  open: { label: "Open", tone: "success" },
+  in_progress: { label: "In progress", tone: "info" },
+  completed: { label: "Completed", tone: "neutral" },
+  cancelled: { label: "Closed", tone: "error" },
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  open: "Open",
-  in_progress: "In Progress",
-  completed: "Completed",
-  cancelled: "Cancelled",
-};
+function formatMoney(value: string | number, currency = "NGN") {
+  return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 0 }).format(Number(value || 0));
+}
+function formatDate(value: Date | string | null | undefined) {
+  return value ? new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "Not specified";
+}
+function relativeDate(value: Date | string | null | undefined) {
+  if (!value) return "Recently";
+  const days = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 86_400_000));
+  return days === 0 ? "Today" : days === 1 ? "Yesterday" : `${days} days ago`;
+}
+function greeting() {
+  const hour = new Date().getHours();
+  return hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+}
 
 export default function ClientDashboard() {
-  const { user, isAuthenticated } = useAuth();
-  const [, navigate] = useLocation();
-  const [activeTab, setActiveTab] = useState<"overview" | "jobs" | "applications">("overview");
-  const [selectedJobId, setSelectedJobId] = useState<number | null>(null);
+  const { user } = useAuth({ redirectOnUnauthenticated: true });
   const [postJobOpen, setPostJobOpen] = useState(false);
-  const [escrowTarget, setEscrowTarget] = useState<{ jobId: number; professionalId: number; bidAmount: number; jobTitle: string } | null>(null);
-
-  // Post job form state
-  const [form, setForm] = useState({
-    title: "",
-    description: "",
-    vocation: "",
-    budget: "",
-    location: "",
-    deadline: "",
-    isUrgent: false,
-  });
-
+  const [form, setForm] = useState({ title: "", description: "", vocation: "", budget: "", location: "", deadline: "", isUrgent: false });
+  const dashboardQuery = trpc.employerDashboard.useQuery(undefined, { enabled: Boolean(user && ["client", "enterprise"].includes(user.userType)) });
   const utils = trpc.useUtils();
-  const { data: myJobs, isLoading: jobsLoading } = trpc.jobs.myJobs.useQuery(undefined, {
-    enabled: !!user && user.userType === "client",
+  const createJob = trpc.jobs.create.useMutation({
+    onSuccess: () => { toast.success("Job posted successfully."); setPostJobOpen(false); setForm({ title: "", description: "", vocation: "", budget: "", location: "", deadline: "", isUrgent: false }); void dashboardQuery.refetch(); },
+    onError: (error) => toast.error(error.message || "We couldn't post this job."),
   });
+  const updateStatus = trpc.jobs.updateStatus.useMutation({ onSuccess: () => { toast.success("Job status updated."); void Promise.all([dashboardQuery.refetch(), utils.jobs.myJobs.invalidate()]); }, onError: (error) => toast.error(error.message || "We couldn't update this job.") });
 
-  const { data: applications, isLoading: appsLoading } = trpc.applications.listForJob.useQuery(
-    { jobId: selectedJobId! },
-    { enabled: !!selectedJobId }
-  );
+  if (!user) return <ApplicationShell><div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div></ApplicationShell>;
+  if (!["client", "enterprise"].includes(user.userType) && !["admin", "SUPER_ADMIN"].includes(user.role)) return <ApplicationShell><EmptyState icon={ShieldCheck} title="Employer workspace required" description="This command center is available to client and enterprise accounts." action={<Link href="/jobs"><Button variant="outline">Browse the marketplace</Button></Link>} /></ApplicationShell>;
+  if (dashboardQuery.isLoading) return <ApplicationShell role={user.userType === "enterprise" ? "enterprise" : "employer"}><div className="space-y-6"><div className="h-44 animate-pulse rounded-3xl bg-muted/50" /><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[1, 2, 3, 4].map((item) => <div key={item} className="h-32 animate-pulse rounded-2xl bg-muted/50" />)}</div><div className="h-80 animate-pulse rounded-3xl bg-muted/50" /></div></ApplicationShell>;
+  if (dashboardQuery.isError || !dashboardQuery.data) return <ApplicationShell role="employer"><EmptyState icon={BriefcaseBusiness} title="We couldn't load your dashboard" description="Your employer workspace could not be retrieved. Try again to continue." action={<Button onClick={() => void dashboardQuery.refetch()}>Try again</Button>} /></ApplicationShell>;
 
-  const { mutate: createJob, isPending: creating } = trpc.jobs.create.useMutation({
-    onSuccess: () => {
-      toast.success("Job posted successfully!");
-      setPostJobOpen(false);
-      setForm({ title: "", description: "", vocation: "", budget: "", location: "", deadline: "", isUrgent: false });
-      utils.jobs.myJobs.invalidate();
-    },
-    onError: (err) => toast.error(err.message),
-  });
-
-  const { mutate: updateStatus } = trpc.jobs.updateStatus.useMutation({
-    onSuccess: () => {
-      toast.success("Job status updated.");
-      utils.jobs.myJobs.invalidate();
-    },
-    onError: (err) => toast.error(err.message),
-  });
-
-  const { mutate: deleteJob } = trpc.jobs.delete.useMutation({
-    onSuccess: () => {
-      toast.success("Job deleted.");
-      utils.jobs.myJobs.invalidate();
-    },
-    onError: (err) => toast.error(err.message),
-  });
-
-  const { mutate: updateAppStatus } = trpc.applications.updateStatus.useMutation({
-    onSuccess: (_, vars) => {
-      toast.success("Application status updated.");
-      utils.applications.listForJob.invalidate({ jobId: selectedJobId! });
-      utils.jobs.myJobs.invalidate();
-    },
-    onError: (err) => toast.error(err.message),
-  });
-
-  const { mutate: startConversation } = trpc.messaging.getOrCreateConversation.useMutation({
-    onSuccess: (conv: { id: number }) => {
-      toast.success("Conversation started!");
-      window.location.href = `/messages/${conv.id}`;
-    },
-    onError: (err: { message: string }) => toast.error(err.message),
-  });
-
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-[#0d1117] flex items-center justify-center">
-        <p className="text-gray-400">Please sign in to access your dashboard.</p>
-      </div>
-    );
-  }
-
-  if (user?.userType !== "client") {
-    return (
-      <div className="min-h-screen bg-[#0d1117] flex flex-col items-center justify-center gap-4">
-        <p className="text-gray-400">This dashboard is for contractors only.</p>
-        <Link href="/onboarding"><Button variant="outline" className="border-white/10 text-gray-400 bg-transparent">Set Up Profile</Button></Link>
-      </div>
-    );
-  }
-
-  const stats = {
-    total: myJobs?.length ?? 0,
-    open: myJobs?.filter((j) => j.status === "open").length ?? 0,
-    inProgress: myJobs?.filter((j) => j.status === "in_progress").length ?? 0,
-    completed: myJobs?.filter((j) => j.status === "completed").length ?? 0,
-  };
+  const dashboard = dashboardQuery.data;
+  const { summary, pipeline, financial } = dashboard;
+  const attention = useMemo(() => {
+    const items: Array<{ title: string; detail: string; href: string; icon: typeof UsersRound; tone: string }> = [];
+    if (summary.pendingApplications > 0) items.push({ title: "New applicants", detail: `${summary.pendingApplications} application${summary.pendingApplications === 1 ? "" : "s"} waiting for review.`, href: "/employer/jobs", icon: UsersRound, tone: "text-violet-300" });
+    if (summary.unreadMessages > 0) items.push({ title: "Unread messages", detail: `${summary.unreadMessages} conversation${summary.unreadMessages === 1 ? "" : "s"} need your attention.`, href: "/messages", icon: MessageCircle, tone: "text-cyan-300" });
+    if (summary.unreadNotifications > 0) items.push({ title: "Unread notifications", detail: `${summary.unreadNotifications} marketplace update${summary.unreadNotifications === 1 ? "" : "s"} to review.`, href: "/notifications", icon: Bell, tone: "text-amber-300" });
+    const expiring = dashboard.jobs.find((job) => job.status === "open" && job.deadline && new Date(job.deadline).getTime() - Date.now() < 7 * 86_400_000 && new Date(job.deadline).getTime() > Date.now());
+    if (expiring) items.push({ title: "Job closing soon", detail: `${expiring.title} closes ${formatDate(expiring.deadline)}.`, href: `/employer/jobs/${expiring.id}/candidates`, icon: Clock3, tone: "text-rose-300" });
+    return items;
+  }, [dashboard.jobs, summary]);
 
   const handlePostJob = () => {
-    if (!form.title || !form.description || !form.vocation || !form.budget || !form.location) {
-      toast.error("Please fill in all required fields.");
-      return;
-    }
-    createJob({
-      title: form.title,
-      description: form.description,
-      vocation: form.vocation,
-      budget: Number(form.budget),
-      location: form.location,
-      deadline: form.deadline ? new Date(form.deadline).toISOString() : undefined,
-      isUrgent: form.isUrgent,
-    });
+    if (!form.title.trim() || form.description.trim().length < 10 || !form.vocation || Number(form.budget) <= 0 || !form.location.trim()) { toast.error("Add a title, description, vocation, positive budget, and location."); return; }
+    createJob.mutate({ title: form.title.trim(), description: form.description.trim(), vocation: form.vocation, budget: Number(form.budget), location: form.location.trim(), deadline: form.deadline ? new Date(form.deadline).toISOString() : undefined, isUrgent: form.isUrgent });
   };
 
-  return (
-    <div className="min-h-screen bg-[#0d1117] text-white">
-      <Navbar />
+  const kpis = [
+    { label: "Active jobs", value: summary.activeJobs, detail: `${summary.openJobs} open positions`, href: "/employer/jobs", icon: BriefcaseBusiness, accent: "text-violet-300 bg-violet-400/10" },
+    { label: "Candidates", value: summary.pendingApplications, detail: "Awaiting review", href: "/employer/jobs", icon: UsersRound, accent: "text-cyan-300 bg-cyan-400/10" },
+    { label: "Professionals hired", value: summary.hiredCount, detail: `${summary.completedJobs} completed jobs`, href: "/employer/jobs", icon: CheckCircle2, accent: "text-emerald-300 bg-emerald-400/10" },
+    { label: "Active escrow", value: formatMoney(financial.activeEscrow, financial.currencies[0] || "NGN"), detail: financial.pendingEscrow ? `${formatMoney(financial.pendingEscrow, financial.currencies[0] || "NGN")} pending` : "No pending releases", href: "/payments", icon: WalletCards, accent: "text-amber-300 bg-amber-400/10" },
+  ];
 
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-extrabold text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-              Contractor Dashboard
-            </h1>
-            <p className="text-gray-500 text-sm mt-1">Welcome back, {user?.name}</p>
-          </div>
-          <Dialog open={postJobOpen} onOpenChange={setPostJobOpen}>
-            <DialogTrigger asChild>
-              <Button
-                className="font-semibold"
-                style={{ background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)" }}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Post a Job
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="bg-[#131a26] border-white/10 text-white max-w-lg">
-              <DialogHeader>
-                <DialogTitle className="text-white font-bold" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                  Post a New Job
-                </DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 mt-2">
-                <div>
-                  <Label className="text-gray-300 text-sm">Job Title *</Label>
-                  <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })}
-                    placeholder="e.g. Electrical rewiring for 3-bedroom house"
-                    className="mt-1.5 bg-[#1c2740] border-white/10 text-white placeholder:text-gray-600 focus:border-violet-500/50" />
-                </div>
-                <div>
-                  <Label className="text-gray-300 text-sm">Vocation *</Label>
-                  <Select value={form.vocation} onValueChange={(v) => setForm({ ...form, vocation: v })}>
-                    <SelectTrigger className="mt-1.5 bg-[#1c2740] border-white/10 text-gray-300">
-                      <SelectValue placeholder="Select a vocation" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-[#1c2740] border-white/10">
-                      {VOCATION_KEYS.map((key) => (
-                        <SelectItem key={key} value={key} className="text-gray-300">
-                          {VOCATION_ICONS[key as VocationKey]} {VOCATION_LABELS[key as VocationKey]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-gray-300 text-sm">Description *</Label>
-                  <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
-                    placeholder="Describe the project in detail..."
-                    rows={4}
-                    className="mt-1.5 bg-[#1c2740] border-white/10 text-white placeholder:text-gray-600 focus:border-violet-500/50 resize-none" />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-gray-300 text-sm">Budget (USD) *</Label>
-                    <div className="relative mt-1.5">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
-                      <Input type="number" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })}
-                        placeholder="5000"
-                        className="pl-7 bg-[#1c2740] border-white/10 text-white placeholder:text-gray-600 focus:border-violet-500/50" />
-                    </div>
-                  </div>
-                  <div>
-                    <Label className="text-gray-300 text-sm">Deadline</Label>
-                    <Input type="date" value={form.deadline} onChange={(e) => setForm({ ...form, deadline: e.target.value })}
-                      className="mt-1.5 bg-[#1c2740] border-white/10 text-white focus:border-violet-500/50" />
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-gray-300 text-sm">Location *</Label>
-                  <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })}
-                    placeholder="e.g. Austin, TX"
-                    className="mt-1.5 bg-[#1c2740] border-white/10 text-white placeholder:text-gray-600 focus:border-violet-500/50" />
-                </div>
-                <div className="flex items-center gap-3">
-                  <input type="checkbox" id="urgent" checked={form.isUrgent}
-                    onChange={(e) => setForm({ ...form, isUrgent: e.target.checked })}
-                    className="h-4 w-4 rounded border-white/20 bg-[#1c2740] accent-violet-500" />
-                  <Label htmlFor="urgent" className="text-gray-300 text-sm cursor-pointer">
-                    Mark as Urgent <span className="text-amber-400">(highlighted in marketplace)</span>
-                  </Label>
-                </div>
-                <Button onClick={handlePostJob} disabled={creating} className="w-full font-semibold"
-                  style={{ background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)" }}>
-                  {creating ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                  Post Job
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </div>
+  return <ApplicationShell role={user.userType === "enterprise" ? "enterprise" : "employer"}>
+    <div className="space-y-8">
+      <PageHeader title="Employer Dashboard" description="Manage jobs, candidates, professionals, projects and payments from one place." action={<div className="flex flex-wrap gap-2"><Link href="/talent"><Button variant="outline"><Search className="mr-2 h-4 w-4" />Find professionals</Button></Link><Button onClick={() => setPostJobOpen(true)}><Plus className="mr-2 h-4 w-4" />Post a job</Button></div>} />
 
-        {/* Tabs */}
-        <div className="flex gap-1 mb-6 bg-[#131a26] rounded-xl p-1 w-fit border border-white/5">
-          {(["overview", "jobs", "applications"] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all capitalize ${
-                activeTab === tab
-                  ? "bg-violet-600 text-white"
-                  : "text-gray-400 hover:text-white"
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
+      <section className="relative overflow-hidden rounded-3xl border border-primary/20 bg-gradient-to-br from-primary/15 via-card to-card p-6 md:p-8"><div className="absolute -right-20 -top-24 h-64 w-64 rounded-full bg-primary/10 blur-3xl" /><div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between"><div className="max-w-2xl"><div className="mb-3 inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-primary"><Sparkles className="h-3.5 w-3.5" />Employer command center</div><h2 className="text-3xl font-bold tracking-tight md:text-4xl">{greeting()}, {user.name?.split(" ")[0] || "there"}.</h2><p className="mt-3 max-w-xl text-base leading-7 text-muted-foreground">Here’s what’s happening with your workforce today. Move from a clear brief to the right professional with confidence.</p></div><div className="flex shrink-0 flex-wrap gap-3"><Link href="/employer/jobs"><Button variant="outline">Manage jobs <ArrowRight className="ml-2 h-4 w-4" /></Button></Link><Link href="/talent"><Button>Find professionals <ArrowRight className="ml-2 h-4 w-4" /></Button></Link></div></div></section>
 
-        {/* Overview Tab */}
-        {activeTab === "overview" && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              {[
-                { label: "Total Jobs", value: stats.total, icon: Briefcase, color: "violet" },
-                { label: "Open", value: stats.open, icon: Clock, color: "emerald" },
-                { label: "In Progress", value: stats.inProgress, icon: ArrowUpRight, color: "blue" },
-                { label: "Completed", value: stats.completed, icon: CheckCircle, color: "purple" },
-              ].map(({ label, value, icon: Icon, color }) => (
-                <div key={label} className="rounded-xl border border-white/8 bg-[#131a26] p-5">
-                  <div className={`h-9 w-9 rounded-lg bg-${color}-500/15 border border-${color}-500/25 flex items-center justify-center mb-3`}>
-                    <Icon className={`h-4.5 w-4.5 text-${color}-400`} />
-                  </div>
-                  <p className="text-2xl font-extrabold text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{value}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{label}</p>
-                </div>
-              ))}
-            </div>
+      <section aria-labelledby="attention-heading" className="rounded-3xl border border-border bg-card p-5 md:p-6"><div className="flex items-center justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Stay ahead</p><h2 id="attention-heading" className="mt-1 text-xl font-semibold">Attention required</h2></div><StatusBadge status={attention.length ? "warning" : "success"} label={attention.length ? `${attention.length} item${attention.length === 1 ? "" : "s"}` : "All caught up"} /></div>{attention.length ? <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">{attention.map((item) => { const Icon = item.icon; return <Link key={item.title} href={item.href} className="group rounded-2xl border border-border bg-background/40 p-4 transition hover:-translate-y-0.5 hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><div className="flex items-start justify-between gap-3"><Icon className={`h-5 w-5 ${item.tone}`} /><ArrowRight className="h-4 w-4 text-muted-foreground transition group-hover:translate-x-1" /></div><p className="mt-4 font-semibold">{item.title}</p><p className="mt-1 text-sm leading-6 text-muted-foreground">{item.detail}</p></Link>; })}</div> : <div className="mt-5 flex items-center gap-3 rounded-2xl border border-emerald-500/15 bg-emerald-500/5 p-4 text-sm text-muted-foreground"><CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-400" />You’re all caught up. Nothing requires your attention right now.</div>}</section>
 
-            {/* Recent Jobs */}
-            <div className="rounded-xl border border-white/8 bg-[#131a26] p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-white">Recent Jobs</h3>
-                <button onClick={() => setActiveTab("jobs")} className="text-xs text-violet-400 hover:text-violet-300">
-                  View all →
-                </button>
-              </div>
-              {jobsLoading ? (
-                <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-violet-400" /></div>
-              ) : myJobs && myJobs.length > 0 ? (
-                <div className="space-y-3">
-                  {myJobs.slice(0, 5).map((job) => (
-                    <div key={job.id} className="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
-                      <div className="flex items-center gap-3">
-                        <span className="text-lg">{VOCATION_ICONS[job.vocation as VocationKey] ?? "🔧"}</span>
-                        <div>
-                          <p className="text-sm font-medium text-white">{job.title}</p>
-                          <p className="text-xs text-gray-500">{job.location}</p>
-                        </div>
-                      </div>
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${STATUS_STYLES[job.status]}`}>
-                        {STATUS_LABELS[job.status]}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <p className="text-gray-500 text-sm mb-3">No jobs posted yet.</p>
-                  <Button size="sm" onClick={() => setPostJobOpen(true)}
-                    style={{ background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)" }}>
-                    Post Your First Job
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+      <section aria-label="Employer metrics" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{kpis.map((kpi) => { const Icon = kpi.icon; return <Link key={kpi.label} href={kpi.href} className="group rounded-2xl border border-border bg-card p-5 transition hover:-translate-y-0.5 hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><div className="flex items-start justify-between"><div className={`flex h-10 w-10 items-center justify-center rounded-xl ${kpi.accent}`}><Icon className="h-5 w-5" /></div><ArrowUpRight className="h-4 w-4 text-muted-foreground transition group-hover:text-primary" /></div><p className="mt-5 text-2xl font-bold tracking-tight">{kpi.value}</p><p className="mt-1 text-sm font-medium">{kpi.label}</p><p className="mt-1 text-xs text-muted-foreground">{kpi.detail}</p></Link>; })}</section>
 
-        {/* Jobs Tab */}
-        {activeTab === "jobs" && (
-          <div>
-            {jobsLoading ? (
-              <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-violet-400" /></div>
-            ) : myJobs && myJobs.length > 0 ? (
-              <div className="space-y-3">
-                {myJobs.map((job) => (
-                  <div key={job.id} className="rounded-xl border border-white/8 bg-[#131a26] p-5">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-start gap-3">
-                        <span className="text-2xl mt-0.5">{VOCATION_ICONS[job.vocation as VocationKey] ?? "🔧"}</span>
-                        <div>
-                          <h3 className="font-semibold text-white">{job.title}</h3>
-                          <div className="flex flex-wrap items-center gap-3 mt-1 text-xs text-gray-500">
-                            <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{job.location}</span>
-                            <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" />${Number(job.budget).toLocaleString()}</span>
-                            {job.isUrgent && <span className="flex items-center gap-1 text-amber-400"><Zap className="h-3 w-3" />Urgent</span>}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${STATUS_STYLES[job.status]}`}>
-                          {STATUS_LABELS[job.status]}
-                        </span>
-                      </div>
-                    </div>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
+        <section className="rounded-3xl border border-border bg-card p-5 md:p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Opportunity flow</p><h2 className="mt-1 text-xl font-semibold">Hiring pipeline</h2></div><Link href="/employer/jobs" className="text-sm font-medium text-primary hover:underline">Review candidates <ChevronRight className="inline h-4 w-4" /></Link></div><div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-5">{[{ label: "Applied", value: pipeline.applied }, { label: "Shortlisted", value: pipeline.shortlisted }, { label: "Interview", value: pipeline.interviews }, { label: "Offers", value: pipeline.offers }, { label: "Hired", value: pipeline.hired }].map((stage, index) => <div key={stage.label} className="relative rounded-2xl border border-border bg-background/40 p-4 text-center">{index < 4 && <span className="absolute -right-2 top-1/2 hidden h-px w-4 bg-border sm:block" />}<p className="text-2xl font-bold">{stage.value}</p><p className="mt-1 text-xs text-muted-foreground">{stage.label}</p></div>)}</div><div className="mt-6 rounded-2xl border border-border/80 bg-background/30 p-4"><div className="flex items-center gap-3"><BarChart3 className="h-5 w-5 text-primary" /><div><p className="font-medium">Hiring insights</p><p className="text-sm text-muted-foreground">{pipeline.applied ? `${pipeline.applied} applications across your current job portfolio.` : "More insights will appear as you hire through Zylobridge."}</p></div></div></div></section>
 
-                    <div className="flex items-center gap-2 mt-4 flex-wrap">
-                      <Button size="sm" variant="ghost"
-                        onClick={() => { setSelectedJobId(job.id); setActiveTab("applications"); }}
-                        className="text-xs text-gray-400 hover:text-white border border-white/8 hover:border-violet-500/30">
-                        <Users className="h-3.5 w-3.5 mr-1.5" />
-                        View Applications
-                      </Button>
-                      <Link href={`/jobs/${job.id}`}>
-                        <Button size="sm" variant="ghost" className="text-xs text-gray-400 hover:text-white border border-white/8 hover:border-violet-500/30">
-                          <Eye className="h-3.5 w-3.5 mr-1.5" />
-                          View
-                        </Button>
-                      </Link>
-                      {job.status === "open" && (
-                        <Button size="sm" variant="ghost"
-                          onClick={() => updateStatus({ id: job.id, status: "cancelled" })}
-                          className="text-xs text-red-400 hover:text-red-300 border border-red-500/20 hover:border-red-500/40">
-                          Cancel
-                        </Button>
-                      )}
-                      {job.status === "in_progress" && (
-                        <Button size="sm" variant="ghost"
-                          onClick={() => updateStatus({ id: job.id, status: "completed" })}
-                          className="text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-500/20 hover:border-emerald-500/40">
-                          Mark Complete
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-20 text-center">
-                <Briefcase className="h-12 w-12 text-gray-700 mb-4" />
-                <h3 className="text-lg font-semibold text-white mb-2">No jobs posted yet</h3>
-                <p className="text-gray-500 text-sm mb-6">Post your first job to start receiving bids from skilled professionals.</p>
-                <Button onClick={() => setPostJobOpen(true)}
-                  style={{ background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)" }}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Post a Job
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Applications Tab */}
-        {activeTab === "applications" && (
-          <div>
-            {/* Job selector */}
-            <div className="mb-5">
-              <Label className="text-gray-400 text-sm mb-2 block">Select a job to view applications:</Label>
-              <Select
-                value={selectedJobId?.toString() ?? ""}
-                onValueChange={(v) => setSelectedJobId(Number(v))}
-              >
-                <SelectTrigger className="w-full max-w-sm bg-[#131a26] border-white/10 text-gray-300">
-                  <SelectValue placeholder="Choose a job..." />
-                </SelectTrigger>
-                <SelectContent className="bg-[#131a26] border-white/10">
-                  {myJobs?.map((job) => (
-                    <SelectItem key={job.id} value={job.id.toString()} className="text-gray-300">
-                      {job.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {selectedJobId ? (
-              appsLoading ? (
-                <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-violet-400" /></div>
-              ) : applications && applications.length > 0 ? (
-                <div className="space-y-4">
-                  {applications.map((app) => (
-                    <div key={app.id} className="rounded-xl border border-white/8 bg-[#131a26] p-5">
-                      <div className="flex items-start justify-between gap-4 mb-3">
-                        <div>
-                          <p className="text-sm font-semibold text-white">Professional #{app.professionalId}</p>
-                          <p className="text-xs text-gray-500 mt-0.5">
-                            Applied {new Date(app.createdAt).toLocaleDateString()}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-violet-300">${Number(app.bidAmount).toLocaleString()}</span>
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
-                            app.status === "pending" ? "bg-yellow-500/15 text-yellow-400 border-yellow-500/25" :
-                            app.status === "accepted" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/25" :
-                            app.status === "rejected" ? "bg-red-500/15 text-red-400 border-red-500/25" :
-                            "bg-gray-500/15 text-gray-400 border-gray-500/25"
-                          }`}>
-                            {app.status.charAt(0).toUpperCase() + app.status.slice(1)}
-                          </span>
-                        </div>
-                      </div>
-                      <p className="text-sm text-gray-400 leading-relaxed mb-4">{app.coverLetter}</p>
-                      <div className="flex gap-2 flex-wrap">
-                        {app.status === "pending" && (
-                          <>
-                            <Button size="sm"
-                              onClick={() => updateAppStatus({ id: app.id, status: "accepted" })}
-                              className="text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white border-0">
-                              <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
-                              Accept
-                            </Button>
-                            <Button size="sm" variant="ghost"
-                              onClick={() => updateAppStatus({ id: app.id, status: "rejected" })}
-                              className="text-xs text-red-400 hover:text-red-300 border border-red-500/20 hover:border-red-500/40">
-                              Reject
-                            </Button>
-                          </>
-                        )}
-                        {app.status === "accepted" && (
-                          <>
-                            <Button size="sm" variant="ghost"
-                              onClick={() => setEscrowTarget({ jobId: selectedJobId!, professionalId: app.professionalId, bidAmount: Number(app.bidAmount), jobTitle: myJobs?.find(j => j.id === selectedJobId)?.title ?? "Job" })}
-                              className="text-xs text-violet-400 hover:text-violet-300 border border-violet-500/20">
-                              <DollarSign className="h-3.5 w-3.5 mr-1" /> Fund Escrow
-                            </Button>
-                            <Button size="sm" variant="ghost"
-                              onClick={() => startConversation({ otherUserId: app.professionalId, jobId: selectedJobId! })}
-                              className="text-xs text-cyan-400 hover:text-cyan-300 border border-cyan-500/20">
-                              Message Pro
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-20">
-                  <Users className="h-12 w-12 text-gray-700 mx-auto mb-4" />
-                  <p className="text-gray-500">No applications received yet for this job.</p>
-                </div>
-              )
-            ) : (
-              <div className="text-center py-20">
-                <p className="text-gray-500 text-sm">Select a job above to view its applications.</p>
-              </div>
-            )}
-          </div>
-        )}
+        <section className="rounded-3xl border border-border bg-card p-5 md:p-6"><div className="flex items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Your workspace</p><h2 className="mt-1 text-xl font-semibold">Quick actions</h2></div><UserRound className="h-5 w-5 text-muted-foreground" /></div><div className="mt-5 grid gap-2">{[{ href: "/jobs/new", label: "Post a job", icon: Plus }, { href: "/talent", label: "Find professionals", icon: Search }, { href: "/employer/jobs", label: "Review candidates", icon: UsersRound }, { href: "/messages", label: "Open messages", icon: MessageCircle }, { href: "/payments", label: "Manage payments", icon: WalletCards }, { href: "/notifications", label: "View notifications", icon: Bell }, { href: "/profile", label: "Manage profile", icon: UserRound }].map((item) => { const Icon = item.icon; return <Link key={item.href} href={item.href} className="flex items-center gap-3 rounded-xl border border-transparent px-3 py-3 text-sm font-medium transition hover:border-border hover:bg-background/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><Icon className="h-4 w-4 text-primary" />{item.label}<ChevronRight className="ml-auto h-4 w-4 text-muted-foreground" /></Link>; })}</div></section>
       </div>
 
-      {/* Escrow Payment Modal */}
-      {escrowTarget && (
-        <EscrowPaymentModal
-          open={!!escrowTarget}
-          jobId={escrowTarget.jobId}
-          professionalId={escrowTarget.professionalId}
-          bidAmount={escrowTarget.bidAmount}
-          jobTitle={escrowTarget.jobTitle}
-          onClose={() => setEscrowTarget(null)}
-        />
-      )}
+      <section className="rounded-3xl border border-border bg-card p-5 md:p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Portfolio activity</p><h2 className="mt-1 text-xl font-semibold">Your jobs</h2></div><Link href="/employer/jobs" className="text-sm font-medium text-primary hover:underline">View all jobs <ChevronRight className="inline h-4 w-4" /></Link></div>{dashboard.jobs.length ? <div className="mt-5 overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead className="border-b border-border text-xs uppercase tracking-[0.12em] text-muted-foreground"><tr><th className="px-3 py-3 font-medium">Job</th><th className="px-3 py-3 font-medium">Candidates</th><th className="px-3 py-3 font-medium">Budget</th><th className="px-3 py-3 font-medium">Status</th><th className="px-3 py-3 font-medium">Posted</th><th className="px-3 py-3" /></tr></thead><tbody>{dashboard.jobs.slice(0, 8).map((job) => { const status = statusMeta[job.status] ?? statusMeta.open; return <tr key={job.id} className="border-b border-border/60 last:border-0"><td className="px-3 py-4"><div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-lg">{VOCATION_ICONS[job.vocation as VocationKey] ?? "🔧"}</span><div className="min-w-0"><Link href={`/jobs/${job.id}`} className="block max-w-[250px] truncate font-semibold hover:text-primary">{job.title}</Link><span className="flex items-center gap-1 text-xs text-muted-foreground"><MapPin className="h-3 w-3" />{job.location}</span></div></div></td><td className="px-3 py-4 font-medium">{job.applicationCount}</td><td className="px-3 py-4">{formatMoney(job.budget, job.currency || "NGN")}</td><td className="px-3 py-4"><StatusBadge status={status.tone} label={status.label} /></td><td className="px-3 py-4 text-muted-foreground">{relativeDate(job.createdAt)}</td><td className="px-3 py-4 text-right"><div className="flex justify-end gap-2"><Link href={`/employer/jobs/${job.id}/candidates`}><Button size="sm" variant="outline">Manage</Button></Link>{job.status === "open" && <Button size="sm" variant="ghost" onClick={() => updateStatus.mutate({ id: job.id, status: "cancelled" })} disabled={updateStatus.isPending}><X className="mr-1 h-4 w-4" />Close</Button>}{job.status === "in_progress" && <Button size="sm" variant="ghost" onClick={() => updateStatus.mutate({ id: job.id, status: "completed" })} disabled={updateStatus.isPending}>Complete</Button>}</div></td></tr>; })}</tbody></table></div> : <div className="mt-5"><EmptyState icon={BriefcaseBusiness} title="No jobs yet" description="Post your first structured opportunity to start receiving applications." action={<Button onClick={() => setPostJobOpen(true)}><Plus className="mr-2 h-4 w-4" />Post your first job</Button>} /></div>}</section>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <section className="rounded-3xl border border-border bg-card p-5 md:p-6"><div className="flex items-center justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Candidate signal</p><h2 className="mt-1 text-xl font-semibold">Recent candidates</h2></div><Link href="/employer/jobs" className="text-sm text-primary hover:underline">Review all</Link></div>{dashboard.candidates.length ? <div className="mt-5 space-y-3">{dashboard.candidates.slice(0, 5).map((candidate) => <div key={candidate.userId} className="flex items-center gap-3 rounded-2xl border border-border/70 p-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-primary">{candidate.avatarUrl ? <img src={candidate.avatarUrl} alt="" className="h-full w-full object-cover" /> : <UserRound className="h-5 w-5" />}</div><div className="min-w-0 flex-1"><p className="truncate font-medium">{candidate.name || "Professional"}{candidate.isVerified && <ShieldCheck className="ml-1 inline h-3.5 w-3.5 text-emerald-400" />}</p><p className="truncate text-sm text-muted-foreground">{VOCATION_LABELS[candidate.vocation as VocationKey] || candidate.vocation || "Profile in progress"} · {candidate.location || "Location not specified"}</p></div><span className="text-xs text-muted-foreground">{candidate.yearsExperience != null ? `${candidate.yearsExperience} yrs` : "Experience n/s"}</span></div>)}</div> : <div className="mt-5"><EmptyState icon={UsersRound} title="No candidates yet" description="Candidates will appear here when professionals apply to your jobs." action={<Button onClick={() => setPostJobOpen(true)}>Post a job</Button>} /></div>}</section>
+
+        <section className="rounded-3xl border border-border bg-card p-5 md:p-6"><div className="flex items-center justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Talent discovery</p><h2 className="mt-1 text-xl font-semibold">Recommended professionals</h2></div><Link href="/talent" className="text-sm text-primary hover:underline">Find talent</Link></div>{dashboard.recommendedProfessionals.length ? <div className="mt-5 space-y-3">{dashboard.recommendedProfessionals.map((professional) => <Link key={professional.userId} href={`/professionals/${professional.userId}`} className="flex items-center gap-3 rounded-2xl border border-border/70 p-3 transition hover:border-primary/40"><div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-primary">{professional.avatarUrl ? <img src={professional.avatarUrl} alt="" className="h-full w-full object-cover" /> : <UserRound className="h-5 w-5" />}</div><div className="min-w-0 flex-1"><p className="truncate font-medium">{professional.name || "Professional"}{professional.isVerified && <ShieldCheck className="ml-1 inline h-3.5 w-3.5 text-emerald-400" />}</p><p className="truncate text-sm text-muted-foreground">{VOCATION_LABELS[professional.vocation as VocationKey] || professional.vocation} · {professional.location || "Location not specified"}</p></div><div className="text-right text-xs text-muted-foreground">{professional.averageRating && Number(professional.averageRating) > 0 ? <><p className="font-medium text-foreground">{Number(professional.averageRating).toFixed(1)} rating</p><p>{professional.totalReviews} reviews</p></> : <p>New profile</p>}</div></Link>)}</div> : <div className="mt-5"><EmptyState icon={Search} title="No recommendations yet" description="Find verified professionals for your next project." action={<Link href="/talent"><Button>Find professionals</Button></Link>} /></div>}</section>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-3"><section className="rounded-3xl border border-border bg-card p-5"><div className="flex items-center gap-2"><MessageCircle className="h-5 w-5 text-primary" /><h2 className="font-semibold">Recent messages</h2></div>{dashboard.messages.length ? <div className="mt-4 space-y-3">{dashboard.messages.slice(0, 4).map((message) => <Link key={message.id} href={`/messages/${message.id}`} className="block rounded-xl p-2 transition hover:bg-background/50"><div className="flex items-center justify-between gap-2"><p className="truncate text-sm font-medium">{message.latestMessage?.sender?.name || "Conversation"}</p><span className="shrink-0 text-[11px] text-muted-foreground">{relativeDate(message.latestMessage?.createdAt)}</span></div><p className="mt-1 truncate text-xs text-muted-foreground">{message.latestMessage?.content || "No messages yet"}</p></Link>)}</div> : <p className="mt-4 text-sm text-muted-foreground">Your conversations with professionals will appear here.</p>}<Link href="/messages" className="mt-4 inline-flex text-sm font-medium text-primary hover:underline">View all messages <ArrowRight className="ml-1 h-4 w-4" /></Link></section><section className="rounded-3xl border border-border bg-card p-5"><div className="flex items-center gap-2"><WalletCards className="h-5 w-5 text-primary" /><h2 className="font-semibold">Payments & escrow</h2></div><div className="mt-4 space-y-3 text-sm"><div className="flex items-center justify-between"><span className="text-muted-foreground">Active escrow</span><strong>{formatMoney(financial.activeEscrow, financial.currencies[0] || "NGN")}</strong></div><div className="flex items-center justify-between"><span className="text-muted-foreground">Pending release</span><strong>{formatMoney(financial.pendingEscrow, financial.currencies[0] || "NGN")}</strong></div><div className="flex items-center justify-between"><span className="text-muted-foreground">Released</span><strong>{formatMoney(financial.releasedEscrow, financial.currencies[0] || "NGN")}</strong></div></div><Link href="/payments" className="mt-5 inline-flex text-sm font-medium text-primary hover:underline">Manage payments <ArrowRight className="ml-1 h-4 w-4" /></Link></section><section className="rounded-3xl border border-border bg-card p-5"><div className="flex items-center gap-2"><FileText className="h-5 w-5 text-primary" /><h2 className="font-semibold">Employer profile</h2></div><div className="mt-4 flex items-center gap-3"><div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-primary">{dashboard.account.avatarUrl ? <img src={dashboard.account.avatarUrl} alt="" className="h-full w-full object-cover" /> : <UserRound className="h-5 w-5" />}</div><div className="min-w-0"><p className="truncate font-medium">{dashboard.account.name || "Employer account"}</p><p className="truncate text-sm text-muted-foreground">{dashboard.account.email || "Contact not specified"}</p></div></div><div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">{dashboard.account.isVerified ? <><ShieldCheck className="h-4 w-4 text-emerald-400" />Verified account</> : <><Clock3 className="h-4 w-4 text-amber-400" />Verification not completed</>}</div><Link href="/profile" className="mt-5 inline-flex text-sm font-medium text-primary hover:underline">Manage profile <ArrowRight className="ml-1 h-4 w-4" /></Link></section></div>
     </div>
-  );
+
+    <Dialog open={postJobOpen} onOpenChange={setPostJobOpen}><DialogContent className="max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Post a new job</DialogTitle></DialogHeader><div className="space-y-4"><div><Label htmlFor="employer-job-title">Job title</Label><Input id="employer-job-title" value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="e.g. Electrical installation for a new build" className="mt-1.5" /></div><div><Label>Vocation</Label><Select value={form.vocation} onValueChange={(vocation) => setForm({ ...form, vocation })}><SelectTrigger className="mt-1.5"><SelectValue placeholder="Select a vocation" /></SelectTrigger><SelectContent>{VOCATION_KEYS.map((key) => <SelectItem key={key} value={key}>{VOCATION_ICONS[key as VocationKey]} {VOCATION_LABELS[key as VocationKey]}</SelectItem>)}</SelectContent></Select></div><div><Label htmlFor="employer-job-description">Description</Label><Textarea id="employer-job-description" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} rows={5} placeholder="Describe the scope, requirements, and expected outcome." className="mt-1.5" /></div><div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="employer-job-budget">Budget</Label><Input id="employer-job-budget" type="number" min="1" value={form.budget} onChange={(event) => setForm({ ...form, budget: event.target.value })} placeholder="500000" className="mt-1.5" /></div><div><Label htmlFor="employer-job-deadline">Application deadline</Label><Input id="employer-job-deadline" type="date" value={form.deadline} onChange={(event) => setForm({ ...form, deadline: event.target.value })} className="mt-1.5" /></div></div><div><Label htmlFor="employer-job-location">Location</Label><Input id="employer-job-location" value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} placeholder="City, suburb, or project location" className="mt-1.5" /></div><label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={form.isUrgent} onChange={(event) => setForm({ ...form, isUrgent: event.target.checked })} className="h-4 w-4 accent-primary" />Mark this opportunity as urgent</label><Button onClick={handlePostJob} disabled={createJob.isPending} className="w-full">{createJob.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Post job</Button></div></DialogContent></Dialog>
+  </ApplicationShell>;
 }
