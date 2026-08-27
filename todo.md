@@ -1032,3 +1032,12 @@
 - [x] Update the public professional profile to consume the sanitized metadata projection without exposing private documents or pricing.
 - [x] Reconcile the inherited Professional Profile Hub checklist and record final validation/checkpoint status.
 - [x] Add additional vocation, specialization, and service-radius fields to the shared metadata contract, editor, and safe public projection.
+
+## Professional Command Center: pasted_content_27.txt
+- [x] Read and normalize every requirement in the attached specification.
+- [x] Audit the current repository against the specification and identify exact implementation gaps.
+- [x] Implement a responsive professional command center with real profile, matching, applications, messaging, notifications, finance, work, saved jobs, alerts, verification, and profile-management entry points.
+- [x] Preserve role isolation, protected tRPC queries, public/private boundaries, no-fabrication safeguards, and structured matching reasons.
+- [x] Add focused regression tests for professional role isolation, real data integration, truthful states, canonical navigation, and responsive mobile navigation.
+- [x] Run TypeScript, focused/full Vitest, client/server builds, diff checks, clean restart, HTTP smoke checks, and desktop/mobile route QA.
+- [x] Save the verified Professional Command Center checkpoint.

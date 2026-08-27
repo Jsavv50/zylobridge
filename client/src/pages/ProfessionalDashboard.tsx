@@ -1,445 +1,82 @@
-import { useState } from "react";
+import { useMemo } from "react";
 import { Link } from "wouter";
-import { trpc } from "@/lib/trpc";
-import { useAuth } from "@/_core/hooks/useAuth";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { toast } from "sonner";
-import {
-  Loader2, User, Briefcase, CheckCircle, Clock, Star,
-  MapPin, DollarSign, Edit3, Save, X, ArrowUpRight
-} from "lucide-react";
+import { ArrowUpRight, Bell, BriefcaseBusiness, CalendarClock, CheckCircle2, ChevronRight, Eye, FileCheck2, Globe2, Layers3, MapPin, MessageSquare, PiggyBank, Search, Settings2, ShieldCheck, Sparkles, Star, UserRound, WalletCards, Zap } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import JobCard from "@/components/JobCard";
-import { VOCATION_KEYS, VOCATION_LABELS, type VocationKey } from "@shared/vocations";
-import { VerificationBadge } from "@/components/VerificationBadge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { trpc } from "@/lib/trpc";
+import { parseProfileMetadata } from "@shared/profile";
+import { VOCATION_LABELS, type VocationKey } from "@shared/vocations";
 
-const APP_STATUS_STYLES: Record<string, string> = {
-  pending: "bg-yellow-500/15 text-yellow-400 border-yellow-500/25",
-  accepted: "bg-emerald-500/15 text-emerald-400 border-emerald-500/25",
-  rejected: "bg-red-500/15 text-red-400 border-red-500/25",
-  withdrawn: "bg-gray-500/15 text-gray-400 border-gray-500/25",
-};
+const sidebarGroups = [
+  { label: "Professional", items: [["Dashboard", "/dashboard", Sparkles], ["Browse Jobs", "/jobs", Search], ["Applications", "/applications", BriefcaseBusiness], ["Messages", "/messages", MessageSquare], ["Notifications", "/notifications", Bell], ["Saved Jobs", "/jobs?view=saved", Star], ["My Work", "/payments", Layers3]] },
+  { label: "Financial", items: [["Earnings & Payouts", "/payments", WalletCards]] },
+  { label: "Profile", items: [["Professional Profile", "/profile", UserRound], ["Portfolio", "/profile/edit", Layers3], ["Certifications", "/verification", FileCheck2], ["Reviews", "/profile", Star], ["Profile Analytics", "/profile", Eye]] },
+  { label: "Account", items: [["Verification", "/verification", ShieldCheck], ["Settings", "/notifications/settings", Settings2], ["Help & Support", "/how-it-works", MessageSquare]] },
+] as const;
+
+function initials(name?: string | null) { return name?.split(" ").map((part) => part[0]).join("").toUpperCase().slice(0, 2) || "ZY"; }
+function humanize(value?: string | null) { return value?.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Not set"; }
+function relativeDate(value?: Date | string | null) { if (!value) return "Not recorded"; const seconds = Math.max(1, Math.floor((Date.now() - new Date(value).getTime()) / 1000)); if (seconds < 3600) return `${Math.floor(seconds / 60) || 1}m ago`; if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`; if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`; return new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric" }); }
+function formatMinor(value: number | string | null | undefined, currency?: string | null) { if (value === null || value === undefined) return "Not available"; return new Intl.NumberFormat(undefined, { style: "currency", currency: currency === "ZAR" ? "ZAR" : "NGN", maximumFractionDigits: 2 }).format(Number(value) / 100); }
+function Section({ eyebrow, heading, action, children }: { eyebrow: string; heading: string; action?: React.ReactNode; children: React.ReactNode }) { return <section className="rounded-3xl border border-white/8 bg-[#111927]/90 p-5 shadow-[0_18px_60px_rgba(0,0,0,.14)] sm:p-6"><div className="mb-5 flex items-start justify-between gap-4"><div><p className="text-[10px] font-semibold uppercase tracking-[.18em] text-violet-300/70">{eyebrow}</p><h2 className="mt-1 text-lg font-semibold text-white">{heading}</h2></div>{action}</div>{children}</section>; }
+function EmptyState({ icon: Icon, heading, description, href, action }: { icon: React.ElementType; heading: string; description: string; href?: string; action?: string }) { return <div className="rounded-2xl border border-dashed border-white/10 bg-white/[.02] px-5 py-7 text-center"><Icon className="mx-auto h-7 w-7 text-gray-600" /><p className="mt-3 text-sm font-medium text-gray-300">{heading}</p><p className="mx-auto mt-1 max-w-md text-xs leading-5 text-gray-500">{description}</p>{href && <Link href={href}><Button size="sm" variant="outline" className="mt-4 border-white/10 bg-transparent text-gray-300">{action || "Explore"}<ArrowUpRight className="ml-2 h-3.5 w-3.5" /></Button></Link>}</div>; }
+function Metric({ icon: Icon, label, value, detail, href, color = "violet" }: { icon: React.ElementType; label: string; value: string | number; detail: string; href: string; color?: "violet" | "cyan" | "emerald" | "amber" }) { const tone = { violet: "text-violet-300 bg-violet-400/10 border-violet-400/15", cyan: "text-cyan-300 bg-cyan-400/10 border-cyan-400/15", emerald: "text-emerald-300 bg-emerald-400/10 border-emerald-400/15", amber: "text-amber-300 bg-amber-400/10 border-amber-400/15" }[color]; return <Link href={href} className="block rounded-2xl border border-white/8 bg-[#111927] p-4 transition hover:border-white/15"><div className={`flex h-9 w-9 items-center justify-center rounded-xl border ${tone}`}><Icon className="h-4 w-4" /></div><p className="mt-4 text-2xl font-semibold tracking-tight text-white">{value}</p><p className="mt-1 text-xs font-medium text-gray-300">{label}</p><p className="mt-1 text-[11px] leading-4 text-gray-500">{detail}</p></Link>; }
+function Sidebar() { return <aside className="hidden xl:block"><div className="sticky top-24 space-y-6 rounded-3xl border border-white/8 bg-[#0d1522]/80 p-4">{sidebarGroups.map((group) => <div key={group.label}><p className="px-3 text-[10px] font-semibold uppercase tracking-[.18em] text-gray-600">{group.label}</p><nav className="mt-2 space-y-1">{group.items.map(([label, href, Icon]) => <Link key={`${label}-${href}`} href={href} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${label === "Dashboard" ? "bg-violet-400/10 text-violet-200" : "text-gray-400 hover:bg-white/[.04] hover:text-white"}`} aria-current={label === "Dashboard" ? "page" : undefined}><Icon className="h-4 w-4 shrink-0" /><span>{label}</span>{label === "Dashboard" && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-violet-300" />}</Link>)}</nav></div>)}</div></aside>; }
 
 export default function ProfessionalDashboard() {
-  const { user, isAuthenticated } = useAuth();
-  const [activeTab, setActiveTab] = useState<"overview" | "browse" | "applications" | "profile">("overview");
-  const [editingProfile, setEditingProfile] = useState(false);
+  const { user, loading, isAuthenticated } = useAuth();
+  const professional = Boolean(isAuthenticated && user?.userType === "professional");
+  const recommendationInput = useMemo(() => ({ limit: 6, offset: 0 }), []);
+  const applicationInput = useMemo(() => ({ limit: 20, offset: 0, status: "all", sort: "recent" as const }), []);
+  const dashboardQuery = trpc.profiles.hub.useQuery(undefined, { enabled: professional, staleTime: 30_000 });
+  const recommendationsQuery = trpc.jobs.recommended.useQuery(recommendationInput, { enabled: professional, staleTime: 30_000 });
+  const applicationsQuery = trpc.applications.commandCenter.useQuery(applicationInput, { enabled: professional, staleTime: 30_000 });
+  const conversationsQuery = trpc.messaging.myConversations.useQuery({ limit: 4, offset: 0 }, { enabled: professional, staleTime: 30_000 });
+  const notificationsQuery = trpc.notifications.listUnread.useQuery(undefined, { enabled: professional, staleTime: 30_000 });
+  const financeQuery = trpc.finance.professionalDashboard.useQuery(undefined, { enabled: professional, staleTime: 30_000 });
+  const savedQuery = trpc.savedJobs.list.useQuery({ limit: 4, offset: 0 }, { enabled: professional, staleTime: 30_000 });
+  const alertsQuery = trpc.jobAlerts.list.useQuery(undefined, { enabled: professional, staleTime: 30_000 });
+  const interviewsQuery = trpc.marketplace.listInterviews.useQuery({ role: "professional" }, { enabled: professional, staleTime: 30_000 });
+  const engagementsQuery = trpc.marketplace.listEngagements.useQuery({ role: "professional" }, { enabled: professional, staleTime: 30_000 });
+  const offersQuery = trpc.marketplace.listOffers.useQuery({ role: "professional" }, { enabled: professional, staleTime: 30_000 });
+  const hub = dashboardQuery.data;
+  const profile = hub?.profile;
+  const metadata = useMemo(() => parseProfileMetadata(profile?.profileMetadata), [profile?.profileMetadata]);
+  const recommendations = recommendationsQuery.data?.items ?? [];
+  const applications = applicationsQuery.data;
+  const remaining = hub?.completion.remaining ?? [];
+  const firstName = user?.name?.split(" ")[0] || "there";
+  const greeting = new Date().getHours() < 12 ? "Good morning" : new Date().getHours() < 18 ? "Good afternoon" : "Good evening";
+  const currency = financeQuery.data?.currencies?.[0];
+  const activeEngagements = engagementsQuery.data?.filter((item) => item.status === "active") ?? [];
+  const pipeline = [
+    ["Applied", applications?.total ?? 0, "/applications", "violet"],
+    ["Under review", applications?.counts?.under_review ?? 0, "/applications?status=under_review", "amber"],
+    ["Interviews", applications?.counts?.interview ?? interviewsQuery.data?.length ?? 0, "/applications?status=interview", "cyan"],
+    ["Offers", offersQuery.data?.length ?? 0, "/applications?status=accepted", "emerald"],
+    ["Hired", applications?.counts?.accepted ?? 0, "/applications?status=accepted", "emerald"],
+  ] as const;
+  const careerRecommendations = remaining.slice(0, 3).map((item) => ({ item, href: item === "Qualifications" ? "/verification" : "/profile/edit", action: item === "Portfolio" ? "Add work samples" : `Complete ${item.toLowerCase()}`, benefit: item === "Portfolio" ? "Give clients tangible proof of your work." : "Improve the profile signal employers use to evaluate fit." }));
+  const anyError = dashboardQuery.error || recommendationsQuery.error || applicationsQuery.error;
 
-  const utils = trpc.useUtils();
-  const { data: profile, isLoading: profileLoading } = trpc.profiles.me.useQuery(undefined, {
-    enabled: !!user && user.userType === "professional",
-  });
-  const { data: myApplications, isLoading: appsLoading } = trpc.applications.myApplications.useQuery(undefined, {
-    enabled: !!user && user.userType === "professional",
-  });
-  const { data: applicationCenter } = trpc.applications.commandCenter.useQuery({ limit: 1, offset: 0, status: "all", sort: "recent" }, {
-    enabled: !!user && user.userType === "professional",
-  });
-  const { data: openJobs, isLoading: jobsLoading } = trpc.jobs.list.useQuery({ status: "open", limit: 20 }, {
-    enabled: !!user && user.userType === "professional",
-  });
+  if (loading || (professional && (dashboardQuery.isLoading || applicationsQuery.isLoading))) return <div className="min-h-screen bg-[#080d16] text-white"><Navbar /><main className="mx-auto max-w-7xl px-4 py-12"><div className="h-10 w-56 animate-pulse rounded-xl bg-white/[.06]" /><div className="mt-8 grid gap-4 sm:grid-cols-4">{Array.from({ length: 4 }).map((_, index) => <div key={index} className="h-28 animate-pulse rounded-2xl bg-white/[.05]" />)}</div><div className="mt-6 h-80 animate-pulse rounded-3xl bg-white/[.05]" /></main></div>;
+  if (!isAuthenticated || !user) return <div className="min-h-screen bg-[#080d16] text-white"><Navbar /><main className="mx-auto flex min-h-[70vh] max-w-xl flex-col items-center justify-center px-6 text-center"><ShieldCheck className="h-10 w-10 text-violet-300" /><h1 className="mt-5 text-2xl font-semibold">Sign in to continue</h1><p className="mt-3 text-sm leading-6 text-gray-400">Your professional dashboard is available after authentication.</p><Link href="/sign-in"><Button className="mt-6 bg-violet-600 hover:bg-violet-500">Sign in</Button></Link></main></div>;
+  if (!professional) return <div className="min-h-screen bg-[#080d16] text-white"><Navbar /><main className="mx-auto flex min-h-[70vh] max-w-xl flex-col items-center justify-center px-6 text-center"><ShieldCheck className="h-10 w-10 text-violet-300" /><h1 className="mt-5 text-2xl font-semibold">Professional workspace required</h1><p className="mt-3 text-sm leading-6 text-gray-400">This command center is reserved for professional accounts. Your current account experience remains unchanged.</p><Link href="/onboarding"><Button className="mt-6 bg-violet-600 hover:bg-violet-500">Set up a professional profile</Button></Link></main></div>;
+  if (anyError) return <div className="min-h-screen bg-[#080d16] text-white"><Navbar /><main className="mx-auto flex min-h-[70vh] max-w-xl flex-col items-center justify-center px-6 text-center"><ShieldCheck className="h-10 w-10 text-amber-300" /><h1 className="mt-5 text-2xl font-semibold">We could not load your workspace</h1><p className="mt-3 text-sm leading-6 text-gray-400">Your data is safe. Retry the dashboard or use the navigation to continue working.</p><Button className="mt-6 bg-violet-600 hover:bg-violet-500" onClick={() => { void dashboardQuery.refetch(); void recommendationsQuery.refetch(); void applicationsQuery.refetch(); }}>Retry dashboard</Button></main></div>;
 
-  // Profile form
-  const [profileForm, setProfileForm] = useState({
-    vocation: profile?.vocation ?? "",
-    bio: profile?.bio ?? "",
-    skills: profile?.skills ?? "",
-    certifications: profile?.certifications ?? "",
-    portfolioUrl: profile?.portfolioUrl ?? "",
-    hourlyRate: profile?.hourlyRate ?? "",
-    location: profile?.location ?? "",
-    yearsExperience: profile?.yearsExperience?.toString() ?? "",
-    isAvailable: profile?.isAvailable ?? true,
-  });
-
-  const { mutate: upsertProfile, isPending: savingProfile } = trpc.profiles.upsert.useMutation({
-    onSuccess: () => {
-      toast.success("Profile saved!");
-      setEditingProfile(false);
-      utils.profiles.me.invalidate();
-    },
-    onError: (err) => toast.error(err.message),
-  });
-
-  const { mutate: withdrawApp } = trpc.applications.updateStatus.useMutation({
-    onSuccess: () => {
-      toast.success("Application withdrawn.");
-      utils.applications.myApplications.invalidate();
-    },
-    onError: (err) => toast.error(err.message),
-  });
-
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-[#0d1117] flex items-center justify-center">
-        <p className="text-gray-400">Please sign in to access your dashboard.</p>
-      </div>
-    );
-  }
-
-  if (user?.userType !== "professional") {
-    return (
-      <div className="min-h-screen bg-[#0d1117] flex flex-col items-center justify-center gap-4">
-        <p className="text-gray-400">This dashboard is for professionals only.</p>
-        <Link href="/onboarding"><Button variant="outline" className="border-white/10 text-gray-400 bg-transparent">Set Up Profile</Button></Link>
-      </div>
-    );
-  }
-
-  const appStats = {
-    total: applicationCenter?.total ?? myApplications?.length ?? 0,
-    pending: applicationCenter?.counts?.under_review ?? myApplications?.filter((a) => a.status === "pending").length ?? 0,
-    accepted: applicationCenter?.counts?.accepted ?? myApplications?.filter((a) => a.status === "accepted").length ?? 0,
-  };
-
-  const handleSaveProfile = () => {
-    upsertProfile({
-      vocation: profileForm.vocation || undefined,
-      bio: profileForm.bio || undefined,
-      skills: profileForm.skills || undefined,
-      certifications: profileForm.certifications || undefined,
-      portfolioUrl: profileForm.portfolioUrl || undefined,
-      hourlyRate: profileForm.hourlyRate ? Number(profileForm.hourlyRate) : undefined,
-      location: profileForm.location || undefined,
-      yearsExperience: profileForm.yearsExperience ? Number(profileForm.yearsExperience) : undefined,
-      isAvailable: profileForm.isAvailable,
-    });
-  };
-
-  return (
-    <div className="min-h-screen bg-[#0d1117] text-white">
-      <Navbar />
-
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-extrabold text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-              Professional Dashboard
-            </h1>
-            <p className="text-gray-500 text-sm mt-1">Welcome back, {user?.name}</p>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap justify-end">
-            {profile && (
-              <span className={`text-xs font-medium px-3 py-1 rounded-full border ${
-                profile.isAvailable
-                  ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/25"
-                  : "bg-gray-500/15 text-gray-400 border-gray-500/25"
-              }`}>
-                {profile.isAvailable ? "Available" : "Unavailable"}
-              </span>
-            )}
-            <VerificationBadge isVerified={!!user?.isVerified} size="md" showLabel />
-            {!user?.isVerified && (
-              <Link href="/verification">
-                <Button size="sm" variant="outline" className="text-xs border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10">
-                  Get Verified
-                </Button>
-              </Link>
-            )}
-            <Link href="/messages">
-              <Button size="sm" variant="outline" className="text-xs border-white/10 text-gray-300">
-                Messages
-              </Button>
-            </Link>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex gap-1 mb-6 bg-[#131a26] rounded-xl p-1 w-fit border border-white/5 flex-wrap">
-          {(["overview", "browse", "applications", "profile"] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all capitalize ${
-                activeTab === tab ? "bg-violet-600 text-white" : "text-gray-400 hover:text-white"
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-
-        {/* Overview Tab */}
-        {activeTab === "overview" && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-              {[
-                { label: "Total Applications", value: appStats.total, filter: "all", icon: Briefcase, color: "violet" },
-                { label: "Pending", value: appStats.pending, filter: "under_review", icon: Clock, color: "yellow" },
-                { label: "Accepted", value: appStats.accepted, filter: "accepted", icon: CheckCircle, color: "emerald" },
-              ].map(({ label, value, filter, icon: Icon, color }) => (
-                <Link key={label} href={`/applications${filter === "all" ? "" : `?status=${filter}`}`} className="block rounded-xl border border-white/8 bg-[#131a26] p-5 transition hover:border-violet-400/40">
-                  <div className={`h-9 w-9 rounded-lg bg-${color}-500/15 border border-${color}-500/25 flex items-center justify-center mb-3`}>
-                    <Icon className={`h-4.5 w-4.5 text-${color}-400`} />
-                  </div>
-                  <p className="text-2xl font-extrabold text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{value}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{label}</p>
-                </Link>
-              ))}
-            </div>
-
-            {/* Profile Summary */}
-            {profile ? (
-              <div className="rounded-xl border border-white/8 bg-[#131a26] p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-semibold text-white">Your Profile</h3>
-                  <button onClick={() => setActiveTab("profile")} className="text-xs text-violet-400 hover:text-violet-300">
-                    Edit Profile →
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Vocation</p>
-                    <p className="text-white font-medium">{VOCATION_LABELS[profile.vocation as VocationKey]}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Hourly Rate</p>
-                    <p className="text-white font-medium">{profile.hourlyRate ? `$${profile.hourlyRate}/hr` : "Not set"}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Location</p>
-                    <p className="text-white font-medium">{profile.location ?? "Not set"}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Rating</p>
-                    <p className="text-white font-medium flex items-center gap-1">
-                      <Star className="h-3.5 w-3.5 text-amber-400" />
-                      {Number(profile.averageRating).toFixed(1)} ({profile.totalReviews} reviews)
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-6 text-center">
-                <p className="text-gray-300 mb-3">Complete your profile to start applying for jobs.</p>
-                <Button size="sm" onClick={() => setActiveTab("profile")}
-                  style={{ background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)" }}>
-                  Set Up Profile
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Browse Jobs Tab */}
-        {activeTab === "browse" && (
-          <div>
-            {jobsLoading ? (
-              <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-violet-400" /></div>
-            ) : openJobs && openJobs.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {openJobs.map((job) => (
-                  <JobCard key={job.id} id={job.id} title={job.title} vocation={job.vocation}
-                    location={job.location} budget={job.budget} status={job.status}
-                    isUrgent={job.isUrgent} createdAt={job.createdAt} description={job.description} />
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-20">
-                <p className="text-gray-500">No open jobs available right now. Check back soon!</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Applications Tab */}
-        {activeTab === "applications" && (
-          <div>
-            {appsLoading ? (
-              <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-violet-400" /></div>
-            ) : myApplications && myApplications.length > 0 ? (
-              <div className="space-y-4">
-                {myApplications.map((app) => (
-                  <div key={app.id} className="rounded-xl border border-white/8 bg-[#131a26] p-5">
-                    <div className="flex items-start justify-between gap-4 mb-3">
-                      <div>
-                        <p className="text-sm font-semibold text-white">Job #{app.jobId}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">Applied {new Date(app.createdAt).toLocaleDateString()}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-violet-300">${Number(app.bidAmount).toLocaleString()}</span>
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${APP_STATUS_STYLES[app.status]}`}>
-                          {app.status.charAt(0).toUpperCase() + app.status.slice(1)}
-                        </span>
-                      </div>
-                    </div>
-                    <p className="text-sm text-gray-400 leading-relaxed line-clamp-2 mb-3">{app.coverLetter}</p>
-                    <div className="flex gap-2">
-                      <Link href={`/jobs/${app.jobId}`}>
-                        <Button size="sm" variant="ghost" className="text-xs text-gray-400 hover:text-white border border-white/8">
-                          View Job
-                        </Button>
-                      </Link>
-                      {app.status === "pending" && (
-                        <Button size="sm" variant="ghost"
-                          onClick={() => withdrawApp({ id: app.id, status: "withdrawn" })}
-                          className="text-xs text-red-400 hover:text-red-300 border border-red-500/20">
-                          Withdraw
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-20">
-                <Briefcase className="h-12 w-12 text-gray-700 mx-auto mb-4" />
-                <p className="text-gray-500 mb-4">No applications yet. Browse jobs to get started.</p>
-                <Button size="sm" onClick={() => setActiveTab("browse")}
-                  style={{ background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)" }}>
-                  Browse Jobs
-                </Button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Profile Tab */}
-        {activeTab === "profile" && (
-          <div className="max-w-2xl">
-            <div className="rounded-xl border border-white/8 bg-[#131a26] p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="font-semibold text-white">Professional Profile</h3>
-                {!editingProfile ? (
-                  <Button size="sm" variant="ghost" onClick={() => {
-                    setProfileForm({
-                      vocation: profile?.vocation ?? "",
-                      bio: profile?.bio ?? "",
-                      skills: profile?.skills ?? "",
-                      certifications: profile?.certifications ?? "",
-                      portfolioUrl: profile?.portfolioUrl ?? "",
-                      hourlyRate: profile?.hourlyRate ?? "",
-                      location: profile?.location ?? "",
-                      yearsExperience: profile?.yearsExperience?.toString() ?? "",
-                      isAvailable: profile?.isAvailable ?? true,
-                    });
-                    setEditingProfile(true);
-                  }}
-                    className="text-violet-400 hover:text-violet-300 border border-violet-500/20">
-                    <Edit3 className="h-3.5 w-3.5 mr-1.5" />
-                    Edit
-                  </Button>
-                ) : (
-                  <div className="flex gap-2">
-                    <Button size="sm" onClick={handleSaveProfile} disabled={savingProfile}
-                      className="text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white border-0">
-                      {savingProfile ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Save className="h-3.5 w-3.5 mr-1" />}
-                      Save
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setEditingProfile(false)}
-                      className="text-gray-400 hover:text-white border border-white/8">
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              {editingProfile ? (
-                <div className="space-y-4">
-                  <div>
-                    <Label className="text-gray-300 text-sm">Vocation *</Label>
-                    <Select value={profileForm.vocation} onValueChange={(v) => setProfileForm({ ...profileForm, vocation: v })}>
-                      <SelectTrigger className="mt-1.5 bg-[#1c2740] border-white/10 text-gray-300">
-                        <SelectValue placeholder="Select your vocation" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-[#1c2740] border-white/10">
-                        {VOCATION_KEYS.map((key) => (
-                          <SelectItem key={key} value={key} className="text-gray-300">
-                            {VOCATION_LABELS[key as VocationKey]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-gray-300 text-sm">Bio</Label>
-                    <Textarea value={profileForm.bio} onChange={(e) => setProfileForm({ ...profileForm, bio: e.target.value })}
-                      placeholder="Tell clients about yourself and your experience..."
-                      rows={3} className="mt-1.5 bg-[#1c2740] border-white/10 text-white placeholder:text-gray-600 resize-none" />
-                  </div>
-                  <div>
-                    <Label className="text-gray-300 text-sm">Skills</Label>
-                    <Input value={profileForm.skills} onChange={(e) => setProfileForm({ ...profileForm, skills: e.target.value })}
-                      placeholder="e.g. Residential wiring, Panel upgrades, Code compliance"
-                      className="mt-1.5 bg-[#1c2740] border-white/10 text-white placeholder:text-gray-600" />
-                  </div>
-                  <div>
-                    <Label className="text-gray-300 text-sm">Certifications</Label>
-                    <Input value={profileForm.certifications} onChange={(e) => setProfileForm({ ...profileForm, certifications: e.target.value })}
-                      placeholder="e.g. Master Electrician License, OSHA 30"
-                      className="mt-1.5 bg-[#1c2740] border-white/10 text-white placeholder:text-gray-600" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label className="text-gray-300 text-sm">Hourly Rate (USD)</Label>
-                      <div className="relative mt-1.5">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
-                        <Input type="number" value={profileForm.hourlyRate}
-                          onChange={(e) => setProfileForm({ ...profileForm, hourlyRate: e.target.value })}
-                          placeholder="75"
-                          className="pl-7 bg-[#1c2740] border-white/10 text-white placeholder:text-gray-600" />
-                      </div>
-                    </div>
-                    <div>
-                      <Label className="text-gray-300 text-sm">Years Experience</Label>
-                      <Input type="number" value={profileForm.yearsExperience}
-                        onChange={(e) => setProfileForm({ ...profileForm, yearsExperience: e.target.value })}
-                        placeholder="5"
-                        className="mt-1.5 bg-[#1c2740] border-white/10 text-white placeholder:text-gray-600" />
-                    </div>
-                  </div>
-                  <div>
-                    <Label className="text-gray-300 text-sm">Location</Label>
-                    <Input value={profileForm.location} onChange={(e) => setProfileForm({ ...profileForm, location: e.target.value })}
-                      placeholder="e.g. Houston, TX"
-                      className="mt-1.5 bg-[#1c2740] border-white/10 text-white placeholder:text-gray-600" />
-                  </div>
-                  <div>
-                    <Label className="text-gray-300 text-sm">Portfolio URL</Label>
-                    <Input value={profileForm.portfolioUrl} onChange={(e) => setProfileForm({ ...profileForm, portfolioUrl: e.target.value })}
-                      placeholder="https://yourportfolio.com"
-                      className="mt-1.5 bg-[#1c2740] border-white/10 text-white placeholder:text-gray-600" />
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <input type="checkbox" id="available" checked={profileForm.isAvailable}
-                      onChange={(e) => setProfileForm({ ...profileForm, isAvailable: e.target.checked })}
-                      className="h-4 w-4 rounded border-white/20 bg-[#1c2740] accent-violet-500" />
-                    <Label htmlFor="available" className="text-gray-300 text-sm cursor-pointer">
-                      Available for new work
-                    </Label>
-                  </div>
-                </div>
-              ) : profile ? (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div><p className="text-xs text-gray-500 mb-1">Vocation</p><p className="text-sm text-white">{VOCATION_LABELS[profile.vocation as VocationKey]}</p></div>
-                    <div><p className="text-xs text-gray-500 mb-1">Hourly Rate</p><p className="text-sm text-white">{profile.hourlyRate ? `$${profile.hourlyRate}/hr` : "—"}</p></div>
-                    <div><p className="text-xs text-gray-500 mb-1">Location</p><p className="text-sm text-white">{profile.location ?? "—"}</p></div>
-                    <div><p className="text-xs text-gray-500 mb-1">Experience</p><p className="text-sm text-white">{profile.yearsExperience ? `${profile.yearsExperience} years` : "—"}</p></div>
-                  </div>
-                  {profile.bio && <div><p className="text-xs text-gray-500 mb-1">Bio</p><p className="text-sm text-gray-300 leading-relaxed">{profile.bio}</p></div>}
-                  {profile.skills && <div><p className="text-xs text-gray-500 mb-1">Skills</p><p className="text-sm text-gray-300">{profile.skills}</p></div>}
-                  {profile.certifications && <div><p className="text-xs text-gray-500 mb-1">Certifications</p><p className="text-sm text-gray-300">{profile.certifications}</p></div>}
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <User className="h-10 w-10 text-gray-700 mx-auto mb-3" />
-                  <p className="text-gray-500 text-sm mb-4">No profile set up yet.</p>
-                  <Button size="sm" onClick={() => setEditingProfile(true)}
-                    style={{ background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)" }}>
-                    Create Profile
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  return <div className="min-h-screen bg-[#080d16] text-white"><Navbar /><main className="mx-auto max-w-[1560px] px-4 pb-24 pt-6 sm:px-6 lg:px-8 lg:pb-10 lg:pt-8"><div className="mb-6 flex items-center gap-2 text-sm text-gray-500"><Link href="/" className="hover:text-gray-200">Home</Link><ChevronRight className="h-3.5 w-3.5" /><span className="text-gray-300">Professional Dashboard</span></div><div className="grid gap-6 xl:grid-cols-[240px_minmax(0,1fr)]"><Sidebar /><div className="min-w-0 space-y-6">
+    <header className="relative overflow-hidden rounded-[2rem] border border-violet-400/15 bg-gradient-to-br from-[#18233b] via-[#111927] to-[#0b111c] p-6 sm:p-8"><div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-violet-500/15 blur-3xl" /><div className="relative flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between"><div><div className="flex items-center gap-3"><Avatar className="h-12 w-12 border-2 border-violet-300/30"><AvatarImage src={user.avatarUrl || undefined} alt="" /><AvatarFallback className="bg-violet-600 font-semibold">{initials(user.name)}</AvatarFallback></Avatar><div><p className="text-xs font-semibold uppercase tracking-[.18em] text-violet-300/80">Professional command center</p><h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">{greeting}, {firstName}</h1></div></div><p className="mt-5 max-w-2xl text-base text-gray-300 sm:text-lg">Ready for your next opportunity?</p><p className="mt-2 max-w-2xl text-sm leading-6 text-gray-500">{recommendations.length ? `${recommendations.length} live opportunities are available, ${applications?.counts?.under_review ?? 0} application${(applications?.counts?.under_review ?? 0) === 1 ? " is" : "s are"} awaiting review, and your profile is ${hub?.completion.percentage ?? 0}% complete.` : `Your profile is ${hub?.completion.percentage ?? 0}% complete. Keep your marketplace signals current.`}</p><div className="mt-6 flex flex-wrap gap-3"><Link href="/jobs"><Button className="bg-violet-600 hover:bg-violet-500"><Search className="mr-2 h-4 w-4" />Browse jobs</Button></Link><Link href={hub?.completion.percentage === 100 ? "/profile" : "/profile/edit"}><Button variant="outline" className="border-white/10 bg-transparent text-gray-200 hover:text-white">{hub?.completion.percentage === 100 ? "Review profile" : "Complete profile"}<ArrowUpRight className="ml-2 h-4 w-4" /></Button></Link></div></div><div className="rounded-2xl border border-white/10 bg-black/10 p-4 lg:min-w-[260px]"><div className="flex items-center justify-between"><span className="text-xs text-gray-400">Profile strength</span><span className="text-lg font-semibold text-white">{hub?.completion.percentage ?? 0}%</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-cyan-400" style={{ width: `${hub?.completion.percentage ?? 0}%` }} /></div><p className="mt-3 text-xs leading-5 text-gray-500">{remaining.length ? `${remaining.length} profile signals remain.` : "All tracked profile signals are complete."}</p></div></div></header>
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4"><Metric icon={BriefcaseBusiness} label="Applications" value={applications?.total ?? 0} detail="All submitted applications" href="/applications" /><Metric icon={CalendarClock} label="Interviews" value={pipeline[2][1]} detail="Scheduled or in pipeline" href="/applications?status=interview" color="cyan" /><Metric icon={CheckCircle2} label="Accepted work" value={applications?.counts?.accepted ?? 0} detail="Accepted applications" href="/applications?status=accepted" color="emerald" /><Metric icon={Layers3} label="Completed jobs" value={hub?.completedJobs ?? 0} detail="Recorded completed work" href="/payments" color="amber" /></div>
+    <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,.65fr)]"><Section eyebrow="Opportunity engine" heading="Recommended jobs for you" action={<Link href="/jobs" className="text-xs text-violet-300">View all jobs <ArrowUpRight className="ml-1 inline h-3 w-3" /></Link>}>{recommendations.length ? <div className="grid gap-3 md:grid-cols-2">{recommendations.slice(0, 4).map((job) => <JobCard key={job.id} id={job.id} title={job.title} vocation={job.vocation} location={job.location} budget={job.budget} status={job.status} isUrgent={job.isUrgent} createdAt={job.createdAt} description={job.description} matchScore={job.matchScore} matchReasons={job.matchReasons} applicationState={job.applicationState === "applied" || job.applicationState === "shortlisted" || job.applicationState === "under_review" ? job.applicationState : null} />)}</div> : <EmptyState icon={Search} heading="No recommended jobs yet" description="New opportunities will appear when open jobs align with your professional profile." href="/jobs" action="Browse jobs" />}</Section><div className="space-y-6"><Section eyebrow="Transparent matching" heading="Zylobridge Match"><div className="rounded-2xl border border-violet-400/15 bg-violet-400/[.05] p-4">{recommendations[0] ? <><div className="flex items-center justify-between"><div><p className="text-xs text-gray-500">Rule-based compatibility</p><p className="mt-1 text-xl font-semibold text-white">{recommendations[0].matchScore}% match</p></div><Sparkles className="h-5 w-5 text-violet-300" /></div><p className="mt-4 text-sm font-medium text-gray-200">{recommendations[0].title}</p><ul className="mt-3 space-y-2">{recommendations[0].matchReasons?.slice(0, 3).map((reason) => <li key={reason.label} className="flex gap-2 text-xs leading-5 text-gray-400"><CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-300" />{reason.detail}</li>)}</ul><Link href={`/jobs/${recommendations[0].id}`} className="mt-4 inline-flex items-center text-xs font-medium text-violet-300">View opportunity <ArrowUpRight className="ml-1 h-3.5 w-3.5" /></Link></> : <p className="text-sm leading-6 text-gray-500">A compatibility explanation will appear when a relevant open job is available.</p>}</div></Section><Section eyebrow="Application pipeline" heading="Your progress"><div className="space-y-2">{pipeline.map(([label, value, href, color], index) => <Link key={label} href={href} className="flex items-center gap-3 rounded-xl border border-white/6 bg-white/[.02] p-3 hover:border-white/15"><span className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs font-semibold ${color === "emerald" ? "bg-emerald-400/10 text-emerald-300" : color === "amber" ? "bg-amber-400/10 text-amber-300" : color === "cyan" ? "bg-cyan-400/10 text-cyan-300" : "bg-violet-400/10 text-violet-300"}`}>{value}</span><span className="text-sm text-gray-300">{label}</span>{index < pipeline.length - 1 && <ChevronRight className="ml-auto h-4 w-4 text-gray-700" />}</Link>)}</div></Section></div></div>
+    <div className="grid gap-6 2xl:grid-cols-2"><Section eyebrow="Active work" heading="Current engagements">{activeEngagements.length ? <div className="space-y-3">{activeEngagements.slice(0, 3).map((engagement) => <div key={engagement.id} className="rounded-2xl border border-white/8 bg-white/[.02] p-4"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-semibold text-white">Engagement #{engagement.id}</p><p className="mt-1 text-xs text-gray-500">{humanize(engagement.status)}</p></div><Badge className="border-emerald-400/20 bg-emerald-400/10 text-emerald-300">Active</Badge></div><Link href="/payments"><Button size="sm" className="mt-4 bg-violet-600/90 hover:bg-violet-500">Open work</Button></Link></div>)}</div> : <EmptyState icon={BriefcaseBusiness} heading="No active projects yet" description="Accepted work will appear here with its live engagement context." href="/jobs" action="Browse jobs" />}</Section><Section eyebrow="Schedule" heading="Upcoming">{interviewsQuery.data?.length ? <div className="space-y-3">{interviewsQuery.data.slice(0, 3).map((interview) => <div key={interview.id} className="flex items-start gap-3 rounded-2xl border border-white/8 bg-white/[.02] p-4"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-cyan-400/10 text-cyan-300"><CalendarClock className="h-4 w-4" /></div><div><p className="text-sm font-medium text-white">Interview scheduled</p><p className="mt-1 text-xs text-gray-400">{new Date(interview.scheduledAt).toLocaleString()}</p></div></div>)}</div> : <EmptyState icon={CalendarClock} heading="Your calendar is clear" description="Supported scheduling events will appear here when they exist." href="/applications" action="Review applications" />}</Section></div>
+    <div className="grid gap-6 2xl:grid-cols-3"><Section eyebrow="Trust & reputation" heading="Verification and reputation" action={<Link href="/verification" className="text-xs text-violet-300">View verification <ArrowUpRight className="ml-1 inline h-3 w-3" /></Link>}><div className="grid gap-3 sm:grid-cols-3"><div className="rounded-2xl border border-white/8 bg-white/[.02] p-4"><ShieldCheck className="h-5 w-5 text-emerald-300" /><p className="mt-3 text-sm font-medium text-white">Identity</p><p className="mt-1 text-xs text-gray-500">{hub?.trust.identityVerified ? "Verified on Zylobridge" : "Verification not complete"}</p></div><div className="rounded-2xl border border-white/8 bg-white/[.02] p-4"><FileCheck2 className="h-5 w-5 text-violet-300" /><p className="mt-3 text-sm font-medium text-white">Professional checks</p><p className="mt-1 text-xs text-gray-500">{hub?.trust.approvedVerifications ?? 0} verified · {hub?.trust.totalVerifications ?? 0} submitted</p></div><div className="rounded-2xl border border-white/8 bg-white/[.02] p-4"><Star className="h-5 w-5 text-amber-300" /><p className="mt-3 text-sm font-medium text-white">Reputation</p><p className="mt-1 text-xs text-gray-500">{hub?.trust.reviewCount ? `${hub.trust.averageRating?.toFixed(1) ?? "—"} / 5 · ${hub.trust.reviewCount} reviews` : "Build your reputation with completed work."}</p></div></div></Section><Section eyebrow="Earnings" heading="Earnings snapshot" action={<Link href="/payments" className="text-xs text-violet-300">View payouts <ArrowUpRight className="ml-1 inline h-3 w-3" /></Link>}>{currency ? <div className="grid gap-4 sm:grid-cols-2"><div><p className="text-2xl font-semibold text-white">{formatMinor(currency.totalEarningsMinor, currency.currency)}</p><p className="mt-1 text-xs text-gray-500">Total earned · {currency.currency}</p></div><div><p className="text-2xl font-semibold text-emerald-300">{formatMinor(currency.availableBalanceMinor, currency.currency)}</p><p className="mt-1 text-xs text-gray-500">Available for payout</p></div><div><p className="text-xl font-semibold text-amber-300">{formatMinor(currency.pendingEarningsMinor, currency.currency)}</p><p className="mt-1 text-xs text-gray-500">Pending</p></div><div><p className="text-xl font-semibold text-gray-200">{currency.currentMonthEarningsMinor ? formatMinor(currency.currentMonthEarningsMinor, currency.currency) : "Not recorded"}</p><p className="mt-1 text-xs text-gray-500">This month</p></div></div> : <EmptyState icon={PiggyBank} heading="No earnings recorded yet" description="Your earnings will appear after you complete paid work through Zylobridge." href="/jobs" action="Find work" />}</Section><Section eyebrow="Profile performance" heading="Marketplace insights"><div className="rounded-2xl border border-white/8 bg-white/[.02] p-4"><div className="flex items-center gap-3"><Globe2 className="h-5 w-5 text-cyan-300" /><div><p className="text-sm font-medium text-white">Insights coming soon</p><p className="mt-1 text-xs leading-5 text-gray-500">Profile views, search appearances, employer interactions, vocation demand, and market-rate comparisons will appear when those events are available.</p></div></div></div></Section></div>
+    <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.25fr)_minmax(0,.75fr)]"><Section eyebrow="Conversations" heading="Recent messages" action={<Link href="/messages" className="text-xs text-violet-300">View all messages <ArrowUpRight className="ml-1 inline h-3 w-3" /></Link>}>{conversationsQuery.data?.length ? <div className="space-y-2">{conversationsQuery.data.map((conversation) => { const otherName = conversation.professionalId === user.id ? conversation.clientName : conversation.professionalName; const otherAvatar = conversation.professionalId === user.id ? conversation.clientAvatarUrl : conversation.professionalAvatarUrl; return <Link key={conversation.id} href={`/messages/${conversation.id}`} className="flex items-center gap-3 rounded-xl border border-white/6 bg-white/[.02] p-3 hover:border-violet-400/25"><Avatar className="h-9 w-9"><AvatarImage src={otherAvatar || undefined} alt="" /><AvatarFallback className="bg-violet-500/20 text-xs text-violet-200">{initials(otherName)}</AvatarFallback></Avatar><div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-3"><p className="truncate text-sm font-medium text-gray-200">{otherName || "Marketplace participant"}</p><span className="shrink-0 text-[11px] text-gray-600">{relativeDate(conversation.lastMessageAt)}</span></div><p className="mt-1 truncate text-xs text-gray-500">{conversation.lastMessagePreview || "Open conversation"}</p></div>{Number(conversation.unreadCount) > 0 && <span className="h-2 w-2 rounded-full bg-violet-300" />}</Link>; })}</div> : <EmptyState icon={MessageSquare} heading="Your conversations will appear here" description="Messages connected to applications and jobs stay in your private workspace." href="/messages" action="Open messages" />}</Section><Section eyebrow="Updates" heading="Notifications" action={<Link href="/notifications" className="text-xs text-violet-300">View all notifications <ArrowUpRight className="ml-1 inline h-3 w-3" /></Link>}>{notificationsQuery.data?.length ? <div className="space-y-2">{notificationsQuery.data.map((notification) => <Link key={notification.id} href="/notifications" className="flex items-start gap-3 rounded-xl border border-white/6 bg-white/[.02] p-3 hover:border-violet-400/25"><Bell className="mt-0.5 h-4 w-4 shrink-0 text-violet-300" /><div className="min-w-0"><p className="text-sm font-medium text-gray-200">{notification.title}</p><p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">{notification.content}</p><p className="mt-1 text-[11px] text-gray-600">{relativeDate(notification.createdAt)}</p></div></Link>)}</div> : <EmptyState icon={Bell} heading="You are all caught up" description="New marketplace updates will appear here." href="/notifications" action="Open notifications" />}</Section></div>
+    <div className="grid gap-6 2xl:grid-cols-3"><Section eyebrow="Profile identity" heading="Skills & vocation" action={<Link href="/profile/edit" className="text-xs text-violet-300">Edit skills <ArrowUpRight className="ml-1 inline h-3 w-3" /></Link>}><p className="text-sm font-medium text-white">{profile ? (VOCATION_LABELS[profile.vocation as VocationKey] ?? profile.vocation) : "Primary vocation not set"}</p>{metadata.additionalVocations?.length ? <p className="mt-2 text-xs text-gray-400">Also works as {metadata.additionalVocations.join(", ")}</p> : null}{metadata.specializations?.length ? <div className="mt-4 flex flex-wrap gap-2">{metadata.specializations.map((skill) => <span key={skill} className="rounded-full border border-violet-400/15 bg-violet-400/[.06] px-3 py-1.5 text-xs text-violet-200">{skill}</span>)}</div> : null}<p className="mt-4 text-sm leading-6 text-gray-400">{profile?.skills || "Add skills to explain the work you do best."}</p></Section><Section eyebrow="Proof of work" heading="Portfolio preview" action={<Link href="/profile" className="text-xs text-violet-300">View portfolio <ArrowUpRight className="ml-1 inline h-3 w-3" /></Link>}>{hub?.portfolio.length ? <div className="space-y-3">{hub.portfolio.slice(0, 3).map((item) => <div key={item.id} className="rounded-xl border border-white/8 bg-white/[.02] p-3"><p className="text-sm font-medium text-white">{item.title}</p><p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">{item.description || "No project description provided."}</p></div>)}</div> : <EmptyState icon={Layers3} heading="Show clients what you can do" description="Add real projects to strengthen your professional profile." href="/profile/edit" action="Add portfolio project" />}</Section><Section eyebrow="Career recommendations" heading="Your next best actions"><div className="space-y-3">{careerRecommendations.length ? careerRecommendations.map((recommendation) => <Link key={recommendation.item} href={recommendation.href} className="block rounded-xl border border-white/8 bg-white/[.02] p-3 hover:border-violet-400/25"><div className="flex items-start gap-3"><Zap className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" /><div><p className="text-sm font-medium text-gray-200">{recommendation.action}</p><p className="mt-1 text-xs leading-5 text-gray-500">{recommendation.benefit}</p></div><ArrowUpRight className="ml-auto h-4 w-4 shrink-0 text-gray-600" /></div></Link>) : <div className="rounded-xl border border-emerald-400/15 bg-emerald-400/[.05] p-4"><p className="text-sm font-medium text-emerald-200">Your tracked profile signals are complete.</p><p className="mt-1 text-xs leading-5 text-gray-500">Keep your availability and work history current.</p></div>}</div></Section></div>
+    <div className="grid gap-6 2xl:grid-cols-3"><Section eyebrow="Saved work" heading="Saved jobs" action={<Link href="/jobs?view=saved" className="text-xs text-violet-300">View saved jobs <ArrowUpRight className="ml-1 inline h-3 w-3" /></Link>}>{savedQuery.data?.items.length ? <div className="space-y-2">{savedQuery.data.items.slice(0, 3).map((job) => <Link key={job.id} href={`/jobs/${job.id}`} className="flex items-center justify-between gap-3 rounded-xl border border-white/6 bg-white/[.02] p-3 hover:border-violet-400/25"><div className="min-w-0"><p className="truncate text-sm font-medium text-gray-200">{job.title}</p><p className="mt-1 text-xs text-gray-500">{job.location} · {job.currency || "NGN"} {Number(job.budget).toLocaleString()}</p></div><ChevronRight className="h-4 w-4 shrink-0 text-gray-600" /></Link>)}</div> : <EmptyState icon={Star} heading="You have not saved any jobs yet" description="Save promising opportunities while you compare scope, location, and budget." href="/jobs" action="Browse jobs" />}</Section><Section eyebrow="Alerts" heading="Your job alerts" action={<Link href="/jobs" className="text-xs text-violet-300">Manage alerts <ArrowUpRight className="ml-1 inline h-3 w-3" /></Link>}>{alertsQuery.data?.length ? <div className="space-y-2">{alertsQuery.data.slice(0, 3).map((alert) => <div key={alert.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/6 bg-white/[.02] p-3"><div className="min-w-0"><p className="truncate text-sm font-medium text-gray-200">{alert.name}</p><p className="mt-1 truncate text-xs text-gray-500">{[alert.vocation, alert.location, alert.q].filter(Boolean).join(" · ") || "Marketplace criteria"}</p></div><Badge className={alert.isActive ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300" : "border-white/10 bg-white/[.04] text-gray-500"}>{alert.isActive ? "Active" : "Paused"}</Badge></div>)}</div> : <EmptyState icon={Bell} heading="No job alerts configured" description="Create an alert when you know the kind of opportunity you want to hear about." href="/jobs" action="Find opportunities" />}</Section><Section eyebrow="Employer activity" heading="Profile activity"><EmptyState icon={Eye} heading="No employer activity recorded" description="Employer views, saves, invitations, and contact events will appear when supported activity data exists." /></Section></div>
+    <Section eyebrow="Quick access" heading="Move through your workspace"><div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">{[[Search, "Find jobs", "Discover work", "/jobs"], [UserRound, "Edit profile", "Keep it current", "/profile/edit"], [BriefcaseBusiness, "Applications", "Track progress", "/applications"], [MessageSquare, "Messages", "Stay connected", "/messages"], [WalletCards, "Payments", "View earnings", "/payments"], [ShieldCheck, "Verification", "Build trust", "/verification"]].map(([Icon, label, detail, href]) => <Link key={label as string} href={href as string} className="rounded-2xl border border-white/8 bg-white/[.02] p-4 transition hover:border-violet-400/30"><Icon className="h-5 w-5 text-violet-300" /><p className="mt-3 text-sm font-medium text-white">{label as string}</p><p className="mt-1 text-xs text-gray-500">{detail as string}</p></Link>)}</div></Section>
+  </div></div></main><nav className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-5 gap-1 rounded-2xl border border-white/10 bg-[#101722]/95 p-2 shadow-2xl backdrop-blur lg:hidden"><Link href="/dashboard" className="flex flex-col items-center gap-1 rounded-xl bg-violet-400/10 px-2 py-2 text-[10px] text-violet-200"><Sparkles className="h-4 w-4" />Home</Link><Link href="/jobs" className="flex flex-col items-center gap-1 rounded-xl px-2 py-2 text-[10px] text-gray-400"><Search className="h-4 w-4" />Jobs</Link><Link href="/applications" className="flex flex-col items-center gap-1 rounded-xl px-2 py-2 text-[10px] text-gray-400"><BriefcaseBusiness className="h-4 w-4" />Applications</Link><Link href="/messages" className="flex flex-col items-center gap-1 rounded-xl px-2 py-2 text-[10px] text-gray-400"><MessageSquare className="h-4 w-4" />Messages</Link><Link href="/profile" className="flex flex-col items-center gap-1 rounded-xl px-2 py-2 text-[10px] text-gray-400"><UserRound className="h-4 w-4" />Profile</Link></nav></div>;
 }
