@@ -1,0 +1,5 @@
+# Applications to Job Details Visual QA
+
+The `/applications` and `/jobs/3` routes were captured at 1280×720. The Applications route rendered the branded professional shell and its application command center with status metrics, filters, and loading-safe content. The Job Details route rendered the branded shell with a structured loading skeleton while the authenticated state and job query resolved. No blank page, horizontal overflow, or browser-console error was observed in the captures.
+
+The production relationship query verified that application 3 references job 3 and that job 3 exists with status `open`. The traced root cause was not a missing database relationship: the initial JobDetail render could issue the public job query while the shared auth bootstrap was still unresolved, receive a not-found response for a professional-only/closed state, and keep that stale error because the component combined both query error flags. The Applications page also did not preserve the application-specific `from` context in its View Job link.

@@ -1067,3 +1067,12 @@
 - [x] Preserve role-based authorization, privacy boundaries, no-fabrication safeguards, existing API semantics, and responsive navigation.
 - [x] Add focused regression tests and validate TypeScript, full Vitest, client/server builds, runtime health, and responsive route QA.
 - [x] Save the verified Employer Dashboard checkpoint.
+
+## Attached specification: pasted_content_33.txt
+- [x] Read and normalize the complete Applications-to-Job Details bug-fix specification.
+- [x] Reproduce and record the professional Applications → View Job → `/jobs/:id` flow, including request, response, authenticated user, application ID, job ID, and database relationship where available.
+- [x] Audit application-to-job fields, View Job URL construction, Job Details route parameter parsing, API procedure, visibility, status, and authorization.
+- [x] Implement relationship-aware historical job access for legitimate professional applications without weakening private-job authorization.
+- [x] Add precise not-found, unauthorized, closed, expired, and retry states while preserving Apply/View Application behavior and source-context navigation.
+- [x] Add regression coverage for open, closed, expired, deleted, unauthorized, invalid-ID, network-failure, and unauthenticated cases; validate TypeScript, full Vitest, client/server builds, runtime, and cache behavior.
+- [x] Save the verified Applications-to-Job Details fix checkpoint.

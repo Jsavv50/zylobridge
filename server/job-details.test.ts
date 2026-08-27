@@ -13,7 +13,8 @@ const migration = readFileSync(resolve(process.cwd(), "drizzle/0017_job_reports.
 describe("professional job details workspace", () => {
   it("supports context-aware navigation from every professional entry point", () => {
     expect(page).toContain("Back to Find Jobs");
-    expect(page).toContain("Back to Applications");
+    expect(page).toContain("Back to Application");
+    expect(page).toContain("Back to My Applications");
     expect(page).toContain("Back to Dashboard");
     expect(page).toContain("Back to Notifications");
     expect(page).toContain("const backHref");
@@ -54,6 +55,27 @@ describe("professional job details workspace", () => {
     expect(router).toContain("reason: z.enum([\"suspicious\", \"misleading\", \"inappropriate\", \"duplicate\", \"other\"])");
     expect(schema).toContain('pgTable("job_reports"');
     expect(migration).toContain('CREATE TABLE IF NOT EXISTS "job_reports"');
+  });
+
+  it("uses the authoritative application job ID and preserves application context", () => {
+    const applicationsPage = readFileSync(resolve(process.cwd(), "client/src/pages/ProfessionalApplications.tsx"), "utf8");
+    expect(applicationsPage).toContain("/jobs/${application.job.id}?from=${encodeURIComponent(`/applications/${application.id}`)}");
+    expect(applicationDetail).toContain("/jobs/${application.job.id}?from=${encodeURIComponent(\"/applications\")}");
+    expect(db).toContain("eq(applications.jobId, jobId)");
+    expect(db).toContain("eq(applications.professionalId, professionalId)");
+  });
+
+  it("allows legitimate historical application access without exposing unrelated closed jobs", () => {
+    expect(db).toContain('if (job.status !== "open" && !application) return undefined;');
+    expect(page).toContain("authLoading");
+    expect(page).toContain("selectedQuery");
+    expect(page).toContain("This job is no longer accepting applications.");
+    expect(page).toContain("Job no longer available");
+    expect(page).toContain("You don't have access to this opportunity");
+    expect(page).toContain("We couldn't load this job");
+    expect(page).toContain("Back to Application");
+    expect(page).toContain("Application submitted");
+    expect(page).toContain("Applications are closed for this opportunity.");
   });
 
   it("does not reintroduce fabricated client data or placeholder metrics", () => {
