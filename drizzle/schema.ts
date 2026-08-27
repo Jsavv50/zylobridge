@@ -216,6 +216,19 @@ export const applications = pgTable("applications", {
 export type Application = typeof applications.$inferSelect;
 export type InsertApplication = typeof applications.$inferInsert;
 
+// ─── Saved Jobs ───────────────────────────────────────────────────────────────
+export const savedJobs = pgTable("saved_jobs", {
+  id: serial("id").primaryKey(),
+  jobId: integer("jobId").notNull(),
+  professionalId: integer("professionalId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  jobProfessionalUnique: uniqueIndex("saved_jobs_job_professional_unique").on(table.jobId, table.professionalId),
+  professionalCreatedAtIdx: index("saved_jobs_professional_created_at_idx").on(table.professionalId, table.createdAt),
+}));
+export type SavedJob = typeof savedJobs.$inferSelect;
+export type InsertSavedJob = typeof savedJobs.$inferInsert;
+
 // ─── Reviews ──────────────────────────────────────────────────────────────────
 export const reviews = pgTable("reviews", {
   id: serial("id").primaryKey(),

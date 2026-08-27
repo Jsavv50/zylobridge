@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useParams } from "wouter";
-import { ArrowLeft, CalendarDays, CheckCircle2, Clock3, DollarSign, Loader2, MapPin, ShieldCheck, Star, Zap } from "lucide-react";
+import { ArrowLeft, CalendarDays, CheckCircle2, Clock3, DollarSign, Loader2, MapPin, Share2, ShieldCheck, Star, Zap } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
@@ -26,6 +26,8 @@ function formatDate(value: Date | string | null | undefined) {
 export default function JobDetail() {
   const { id } = useParams<{ id: string }>();
   const { user, isAuthenticated } = useAuth();
+  const from = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("from") : null;
+  const backHref = from?.startsWith("/jobs") ? from : "/jobs";
   const [showApplication, setShowApplication] = useState(false);
   const [coverLetter, setCoverLetter] = useState("");
   const [bidAmount, setBidAmount] = useState("");
@@ -40,6 +42,12 @@ export default function JobDetail() {
       setBidAmount("");
     },
     onError: (error) => toast.error(error.message || "We couldn't submit your application."),
+  });
+
+  const savedStatus = trpc.savedJobs.status.useQuery({ jobId: Number(id) }, { enabled: isAuthenticated && user?.userType === "professional" && Number.isInteger(Number(id)) });
+  const toggleSaved = trpc.savedJobs.toggle.useMutation({
+    onSuccess: () => void savedStatus.refetch(),
+    onError: (error) => toast.error(error.message || "We couldn't update saved jobs."),
   });
 
   const submitReview = trpc.reviews.create.useMutation({
@@ -77,8 +85,8 @@ export default function JobDetail() {
 
   return (
     <ApplicationShell>
-      <div className="mb-5"><Link href="/jobs" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" />Back to job discovery</Link></div>
-      <PageHeader title={job.title} description={`${VOCATION_LABELS[vocation] ?? job.vocation} · posted ${formatDate(job.createdAt)}`} action={<StatusBadge status={meta.tone} label={meta.label} />} />
+      <div className="mb-5"><Link href={backHref} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" />Back to job discovery</Link></div>
+      <PageHeader title={job.title} description={`${VOCATION_LABELS[vocation] ?? job.vocation} · posted ${formatDate(job.createdAt)}`} action={<div className="flex flex-wrap items-center justify-end gap-2"><StatusBadge status={meta.tone} label={meta.label} />{isAuthenticated && user?.userType === "professional" && <Button variant="outline" size="sm" onClick={() => toggleSaved.mutate({ jobId: job.id, saved: !savedStatus.data?.saved })} disabled={toggleSaved.isPending}><span aria-hidden="true">☆</span>{savedStatus.data?.saved ? "Saved" : "Save job"}</Button>}<Button variant="outline" size="sm" onClick={() => { if (navigator.clipboard) { void navigator.clipboard.writeText(window.location.href).then(() => toast.success("Job link copied.")); } else { toast.info("Copy this page URL to share the job."); } }}><Share2 className="mr-1.5 h-4 w-4" />Share</Button></div>} />
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] items-start">
         <main className="space-y-6 min-w-0">
           <section className="rounded-2xl border border-border bg-card p-6 md:p-8">

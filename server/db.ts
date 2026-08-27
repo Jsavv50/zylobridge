@@ -6,10 +6,12 @@ import {
   users,
   jobs,
   applications,
+  savedJobs,
   profiles,
   reviews,
   InsertJob,
   InsertApplication,
+  InsertSavedJob,
   InsertProfile,
   InsertReview,
   conversations,
@@ -337,6 +339,7 @@ export type JobSearchFilters = {
   status?: "open" | "in_progress" | "completed" | "cancelled";
   minBudget?: number;
   maxBudget?: number;
+  isUrgent?: boolean;
   sort?: "newest" | "budget_desc" | "deadline";
   limit?: number;
   offset?: number;
@@ -356,6 +359,7 @@ export async function searchJobs(filters: JobSearchFilters) {
   if (filters.location) conditions.push(sql`${jobs.location} ILIKE ${`%${filters.location.trim()}%`}` as any);
   if (filters.minBudget !== undefined) conditions.push(gte(jobs.budget, String(filters.minBudget)));
   if (filters.maxBudget !== undefined) conditions.push(lte(jobs.budget, String(filters.maxBudget)));
+  if (filters.isUrgent !== undefined) conditions.push(eq(jobs.isUrgent, filters.isUrgent));
 
   const limit = clampPageSize(filters.limit);
   const offset = clampOffset(filters.offset);
@@ -560,6 +564,74 @@ export async function getJobCount() {
   if (!db) return 0;
   const result = await db.select({ count: sql<number>`count(*)` }).from(jobs);
   return Number(result[0]?.count ?? 0);
+}
+
+// ─── Saved Jobs ────────────────────────────────────────────────────────────────
+export async function isJobSaved(jobId: number, professionalId: number) {
+  const db = await getDb();
+  if (!db) return false;
+  const [saved] = await db.select({ id: savedJobs.id })
+    .from(savedJobs)
+    .where(and(eq(savedJobs.jobId, jobId), eq(savedJobs.professionalId, professionalId)))
+    .limit(1);
+  return Boolean(saved);
+}
+
+export async function saveJob(data: InsertSavedJob) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.insert(savedJobs).values(data).onConflictDoNothing({ target: [savedJobs.jobId, savedJobs.professionalId] });
+  return { saved: true };
+}
+
+export async function unsaveJob(jobId: number, professionalId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.delete(savedJobs).where(and(eq(savedJobs.jobId, jobId), eq(savedJobs.professionalId, professionalId)));
+  return { saved: false };
+}
+
+export async function getSavedJobIds(professionalId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.select({ jobId: savedJobs.jobId })
+    .from(savedJobs)
+    .where(eq(savedJobs.professionalId, professionalId))
+    .orderBy(desc(savedJobs.createdAt));
+  return rows.map((row) => row.jobId);
+}
+
+export async function getSavedJobsByProfessionalId(professionalId: number, limit = MAX_PAGE_SIZE, offset = 0) {
+  const db = await getDb();
+  if (!db) return { items: [], nextOffset: null, hasMore: false };
+  const rows = await db.select({
+    job: jobs,
+    clientName: users.name,
+    clientVerified: users.isVerified,
+    organizationName: organizations.name,
+    organizationSlug: organizations.slug,
+  })
+    .from(savedJobs)
+    .innerJoin(jobs, eq(savedJobs.jobId, jobs.id))
+    .leftJoin(users, eq(jobs.clientId, users.id))
+    .leftJoin(organizations, eq(jobs.organizationId, organizations.id))
+    .where(eq(savedJobs.professionalId, professionalId))
+    .orderBy(desc(savedJobs.createdAt))
+    .limit(clampPageSize(limit) + 1)
+    .offset(clampOffset(offset));
+  const pageSize = clampPageSize(limit);
+  const hasMore = rows.length > pageSize;
+  return {
+    items: (hasMore ? rows.slice(0, pageSize) : rows).map((row) => ({
+      ...row.job,
+      clientName: row.clientName ?? undefined,
+      clientVerified: Boolean(row.clientVerified),
+      organizationName: row.organizationName ?? undefined,
+      organizationSlug: row.organizationSlug ?? undefined,
+    })),
+    nextOffset: hasMore ? clampOffset(offset) + pageSize : null,
+    hasMore,
+  };
 }
 
 // ─── Applications ─────────────────────────────────────────────────────────────

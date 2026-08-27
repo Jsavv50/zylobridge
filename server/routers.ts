@@ -30,6 +30,11 @@ import {
   updateJob,
   deleteJob,
   getJobCount,
+  isJobSaved,
+  saveJob,
+  unsaveJob,
+  getSavedJobIds,
+  getSavedJobsByProfessionalId,
   createApplication,
   hasActiveApplication,
   getApplicationById,
@@ -417,6 +422,7 @@ export const appRouter = router({
         status: z.enum(["open", "in_progress", "completed", "cancelled"]).optional().default("open"),
         minBudget: z.number().nonnegative().optional(),
         maxBudget: z.number().nonnegative().optional(),
+        isUrgent: z.boolean().optional(),
         sort: z.enum(["newest", "budget_desc", "deadline"]).optional().default("newest"),
         limit: z.number().int().min(1).max(MAX_PAGE_SIZE).optional().default(20),
         offset: z.number().int().nonnegative().optional().default(0),
@@ -495,6 +501,37 @@ export const appRouter = router({
         if (!canManage) throw new TRPCError({ code: "FORBIDDEN" });
         await deleteJob(input.id);
         return { success: true };
+      }),
+  }),
+
+  // ── Saved Jobs ─────────────────────────────────────────────────────────────
+  savedJobs: router({
+    list: protectedProcedure
+      .input(z.object({ limit: z.number().int().min(1).max(MAX_PAGE_SIZE).optional().default(MAX_PAGE_SIZE), offset: z.number().int().nonnegative().optional().default(0) }).optional())
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.userType !== "professional") throw new TRPCError({ code: "FORBIDDEN", message: "Only professionals can manage saved jobs." });
+        return getSavedJobsByProfessionalId(ctx.user.id, input?.limit, input?.offset);
+      }),
+    ids: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user.userType !== "professional") return [];
+      return getSavedJobIds(ctx.user.id);
+    }),
+    status: protectedProcedure
+      .input(z.object({ jobId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.userType !== "professional") return { saved: false };
+        const job = await getJobById(input.jobId);
+        if (!job || job.status !== "open") return { saved: false };
+        return { saved: await isJobSaved(input.jobId, ctx.user.id) };
+      }),
+    toggle: protectedProcedure
+      .input(z.object({ jobId: z.number().int().positive(), saved: z.boolean() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.userType !== "professional") throw new TRPCError({ code: "FORBIDDEN", message: "Only professionals can save jobs." });
+        const job = await getJobById(input.jobId);
+        if (!job || job.status !== "open") throw new TRPCError({ code: "NOT_FOUND", message: "Open job not found." });
+        if (input.saved) return saveJob({ jobId: input.jobId, professionalId: ctx.user.id });
+        return unsaveJob(input.jobId, ctx.user.id);
       }),
   }),
 
