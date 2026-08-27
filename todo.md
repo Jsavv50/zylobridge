@@ -1049,3 +1049,5 @@
 - [x] Add or update focused regression tests for the specification requirements.
 - [x] Run TypeScript, full Vitest, client/server builds, diff checks, and responsive/runtime validation.
 - [x] Save the verified implementation checkpoint.
+- [x] Drop only the newly created, unused `job_reports` table after explicit user confirmation.
+- [x] Revalidate the restored repository and save the final reversal checkpoint.
