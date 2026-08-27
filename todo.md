@@ -988,3 +988,13 @@
 - [x] Add responsive UI, loading/error/empty states, accessibility, and no-fabrication safeguards
 - [x] Add focused regression coverage and run full TypeScript, Vitest, client/server builds, and responsive verification
 - [x] Save the verified Application Command Center checkpoint
+
+## Professional Messages Workspace: pasted_content_24.txt
+- [x] Audit the existing /messages route, messaging UI, tRPC procedures, schema, realtime, notifications, profiles, jobs, applications, payments, safety controls, and responsive shell
+- [x] Define a truthful conversation context contract for participant, employer, job, application, and workflow state without fabricated data
+- [x] Add server-backed conversation search/filtering and safe context/detail queries with authorization
+- [x] Improve realtime delivery, duplicate-event handling, connection states, read state, and send-failure recovery without false statuses
+- [x] Build the responsive marketplace-native messaging workspace with inbox, conversation, and job/application context panels
+- [x] Add supported attachments, safety/reporting controls, and only logically valid workflow actions using existing infrastructure
+- [x] Add focused messaging regression coverage and run full TypeScript, Vitest, client/server builds, security, and responsive verification
+- [x] Save the verified Professional Messages checkpoint

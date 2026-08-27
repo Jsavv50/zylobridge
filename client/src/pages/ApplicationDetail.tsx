@@ -19,7 +19,7 @@ export default function ApplicationDetail() {
   const [, navigate] = useLocation();
   const applicationQuery = trpc.applications.detail.useQuery({ id: Number(id) }, { enabled: Number(id) > 0 });
   const application = applicationQuery.data;
-  const message = trpc.messaging.getOrCreateConversation.useMutation({ onSuccess: (conversation) => navigate(`/messages?conv=${conversation.id}`), onError: () => toast.error("We couldn't open the employer conversation.") });
+  const message = trpc.messaging.getOrCreateConversation.useMutation({ onSuccess: (conversation) => navigate(`/messages/${conversation.id}`), onError: () => toast.error("We couldn't open the employer conversation.") });
   if (applicationQuery.isLoading) return <ApplicationShell role="professional"><div className="grid gap-4"><div className="h-10 w-48 animate-pulse rounded-lg bg-muted" /><div className="h-96 animate-pulse rounded-2xl border border-border bg-card" /></div></ApplicationShell>;
   if (applicationQuery.isError || !application) return <ApplicationShell role="professional"><EmptyState title="Application not found" description="This application may not exist or is not available to your account." action={<Link href="/applications"><Button variant="outline"><ArrowLeft className="mr-2 h-4 w-4" />Back to applications</Button></Link>} /></ApplicationShell>;
   const stage = application.stage;

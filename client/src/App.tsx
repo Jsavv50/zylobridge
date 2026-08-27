@@ -74,6 +74,7 @@ function Router() {
       <Route path="/enterprise/invitations/accept" component={EnterpriseInvitation} />
       <Route path="/dashboard/admin" component={AdminDashboard} />
       <Route path="/dashboard/super-admin" component={AdminDashboard} />
+      <Route path="/messages/:id" component={Messaging} />
       <Route path="/messages" component={Messaging} />
       <Route path="/notifications" component={Notifications} />
       <Route path="/notifications/settings" component={NotificationSettings} />

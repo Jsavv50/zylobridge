@@ -1,64 +1,31 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
+import { format, formatDistanceToNow } from "date-fns";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Send, MessageSquare, Loader2 } from "lucide-react";
+import { ArrowLeft, BriefcaseBusiness, CheckCheck, Clock3, ExternalLink, Flag, Loader2, MessageSquare, RefreshCw, Search, Send, ShieldCheck, Wifi, WifiOff } from "lucide-react";
 import ZylobridgeLogo from "@/components/ZylobridgeLogo";
 import { getLoginUrl } from "@/const";
-import { formatDistanceToNow } from "date-fns";
 import { getSupabaseBrowserClient, initSupabaseRealtimeAuth } from "@/lib/supabase";
+import { formatJobBudget } from "@shared/currency";
 
-interface Message {
-  id: number;
-  conversationId: number;
-  senderId: number;
-  content: string;
-  isRead: boolean;
-  createdAt: Date;
-}
-
-interface Conversation {
-  id: number;
-  jobId: number;
-  clientId: number;
-  professionalId: number;
-  lastMessageAt: Date;
-  createdAt: Date;
-  unreadCount?: number;
-  clientName?: string | null;
-  clientAvatarUrl?: string | null;
-  professionalName?: string | null;
-  professionalAvatarUrl?: string | null;
-  jobTitle?: string | null;
-  jobLocation?: string | null;
-}
-
-function conversationParticipant(conversation: Conversation, userId?: number) {
-  const isClient = conversation.clientId === userId;
-  const name = (isClient ? conversation.professionalName : conversation.clientName)?.trim();
-  return name || (isClient ? "Professional" : "Employer");
-}
-
-function conversationParticipantAvatar(conversation: Conversation, userId?: number) {
-  return conversation.clientId === userId ? conversation.professionalAvatarUrl : conversation.clientAvatarUrl;
-}
-
-function conversationInitials(name: string) {
-  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "ZY";
-}
-
-function conversationJobLabel(conversation: Conversation) {
-  const title = conversation.jobTitle?.trim();
-  if (title) return title;
-  return "Marketplace conversation";
-}
-
+interface Message { id: number; conversationId: number; senderId: number; content: string; isRead: boolean; createdAt: Date; }
+interface Conversation { id: number; jobId: number; clientId: number; professionalId: number; lastMessageAt: Date; createdAt: Date; unreadCount?: number | string | null; clientName?: string | null; clientAvatarUrl?: string | null; clientVerified?: boolean | null; professionalName?: string | null; professionalAvatarUrl?: string | null; professionalVerified?: boolean | null; jobTitle?: string | null; jobLocation?: string | null; jobStatus?: string | null; lastMessagePreview?: string | null; lastMessageSenderId?: number | null; }
+type InboxFilter = "all" | "unread" | "jobs";
 type RealtimeStatus = "CONNECTING" | "CONNECTED" | "ERROR";
+
+function participantName(conversation: Conversation, userId?: number) { return ((conversation.clientId === userId ? conversation.professionalName : conversation.clientName)?.trim() || (conversation.clientId === userId ? "Professional" : "Employer")); }
+function participantAvatar(conversation: Conversation, userId?: number) { return conversation.clientId === userId ? conversation.professionalAvatarUrl : conversation.clientAvatarUrl; }
+function participantVerified(conversation: Conversation, userId?: number) { return Boolean(conversation.clientId === userId ? conversation.professionalVerified : conversation.clientVerified); }
+function initials(name: string) { return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "ZY"; }
+function unreadCount(value: Conversation["unreadCount"]) { return Number(value ?? 0); }
+function statusLabel(status?: string | null) { return status === "in_progress" ? "Active job" : status === "completed" ? "Completed" : status === "cancelled" ? "Cancelled" : "Open opportunity"; }
 
 export default function Messaging() {
   const { user, isAuthenticated, loading } = useAuth();
@@ -66,395 +33,86 @@ export default function Messaging() {
   const [selectedConvId, setSelectedConvId] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<InboxFilter>("all");
   const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>("CONNECTING");
+  const [realtimeAttempt, setRealtimeAttempt] = useState(0);
+  const [showContext, setShowContext] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const { data: conversations, refetch: refetchConversations } = trpc.messaging.myConversations.useQuery(
-    undefined,
-    { enabled: isAuthenticated }
-  );
-  const markAsReadMutation = trpc.messaging.markAsRead.useMutation({
-    onSuccess: () => void refetchConversations(),
-  });
+  const conversationIdFromPath = useMemo(() => {
+    const match = location.match(/^\/messages\/(\d+)/);
+    if (match) return Number(match[1]);
+    return Number(new URLSearchParams(location.split("?")[1] ?? "").get("conv"));
+  }, [location]);
+  const conversationsQuery = trpc.messaging.myConversations.useQuery({ limit: 50, offset: 0, search: search.trim() || undefined, unreadOnly: filter === "unread", jobsOnly: filter === "jobs" }, { enabled: isAuthenticated, refetchOnWindowFocus: false });
+  const conversations = (conversationsQuery.data ?? []) as Conversation[];
+  const selectedConversation = conversations.find((conversation) => conversation.id === selectedConvId);
+  const contextQuery = trpc.messaging.context.useQuery({ conversationId: selectedConvId! }, { enabled: isAuthenticated && Boolean(selectedConvId && user?.userType === "professional"), retry: 1 });
+  const markAsReadMutation = trpc.messaging.markAsRead.useMutation({ onSuccess: () => void conversationsQuery.refetch() });
+  const sendMessageMutation = trpc.messaging.sendMessage.useMutation({ onSuccess: (newMsg) => { setMessages((prev) => prev.some((message) => message.id === newMsg.id) ? prev : [...prev, { ...newMsg, createdAt: new Date(newMsg.createdAt) }]); setInputValue(""); void conversationsQuery.refetch(); }, onError: () => undefined });
+  const messagesQuery = trpc.messaging.getMessages.useQuery({ conversationId: selectedConvId! }, { enabled: Boolean(selectedConvId), retry: 1 });
 
   useEffect(() => {
-    if (!conversations?.length) return;
-    const requestedId = Number(new URLSearchParams(location.split("?")[1] ?? "").get("conv"));
-    if (Number.isInteger(requestedId) && conversations.some((conversation) => conversation.id === requestedId)) {
-      setSelectedConvId(requestedId);
-    } else {
-      setSelectedConvId(null);
-    }
-  }, [conversations, location]);
+    if (!conversations.length) { setSelectedConvId(null); return; }
+    if (Number.isInteger(conversationIdFromPath) && conversations.some((conversation) => conversation.id === conversationIdFromPath)) setSelectedConvId(conversationIdFromPath);
+    else if (!selectedConvId || !conversations.some((conversation) => conversation.id === selectedConvId)) setSelectedConvId(null);
+  }, [conversations, conversationIdFromPath]);
+  useEffect(() => { if (selectedConvId) markAsReadMutation.mutate({ conversationId: selectedConvId }); }, [selectedConvId]);
+  useEffect(() => { if (messagesQuery.data) setMessages(messagesQuery.data.map((message) => ({ ...message, createdAt: new Date(message.createdAt) }))); }, [messagesQuery.data]);
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   useEffect(() => {
-    if (selectedConvId) markAsReadMutation.mutate({ conversationId: selectedConvId });
-  }, [selectedConvId]);
-
-  const { data: fetchedMessages, isLoading: messagesLoading } = trpc.messaging.getMessages.useQuery(
-    { conversationId: selectedConvId! },
-    { enabled: !!selectedConvId }
-  );
-
-  // Sync fetched messages into local state
-  useEffect(() => {
-    if (fetchedMessages) {
-      setMessages(fetchedMessages.map((m) => ({ ...m, createdAt: new Date(m.createdAt) })));
-    }
-  }, [fetchedMessages]);
-
-  const refetchConversationsRef = useRef(refetchConversations);
-
-  useEffect(() => {
-    refetchConversationsRef.current = refetchConversations;
-  }, [refetchConversations]);
-
-  // Realtime starts only after the centralized auth provider confirms a
-  // server-accepted session. Cleanup is synchronous so a channel cannot be
-  // left behind if the conversation changes while token auth is pending.
-  useEffect(() => {
-    if (!isAuthenticated || !selectedConvId) {
-      setRealtimeStatus("CONNECTING");
-      return;
-    }
-
-    let isActive = true;
+    if (!isAuthenticated || !selectedConvId) { setRealtimeStatus("CONNECTING"); return; }
+    let active = true;
     let channel: ReturnType<ReturnType<typeof getSupabaseBrowserClient>["channel"]> | null = null;
     const conversationId = selectedConvId;
-    const channelName = `private-conversation-${conversationId}`;
     setRealtimeStatus("CONNECTING");
-
-    const setupRealtimeChannel = async () => {
+    void (async () => {
       try {
-        const authSuccess = await initSupabaseRealtimeAuth();
-        if (!isActive) return;
-
-        if (!authSuccess) {
-          setRealtimeStatus("ERROR");
-          console.warn("[Messaging] Realtime authentication failed before subscription");
-          return;
-        }
-
+        if (!await initSupabaseRealtimeAuth() || !active) { setRealtimeStatus("ERROR"); return; }
         const supabase = getSupabaseBrowserClient();
-        channel = supabase.channel(channelName, {
-          config: {
-            private: true,
-          },
-        });
+        channel = supabase.channel(`private-conversation-${conversationId}`, { config: { private: true } });
+        channel.on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `conversationId=eq.${conversationId}` }, (payload) => {
+          if (!active) return;
+          const incoming = payload.new as Partial<Message>;
+          if (!incoming.id || incoming.conversationId !== conversationId) return;
+          setMessages((prev) => prev.some((message) => message.id === incoming.id) ? prev : [...prev, { id: incoming.id!, conversationId, senderId: incoming.senderId!, content: incoming.content ?? "", isRead: Boolean(incoming.isRead), createdAt: new Date(incoming.createdAt ?? Date.now()) }]);
+          void conversationsQuery.refetch();
+        }).subscribe((status) => { if (!active) return; setRealtimeStatus(status === "SUBSCRIBED" ? "CONNECTED" : status === "CHANNEL_ERROR" || status === "TIMED_OUT" ? "ERROR" : "CONNECTING"); });
+      } catch { if (active) setRealtimeStatus("ERROR"); }
+    })();
+    return () => { active = false; if (channel) void getSupabaseBrowserClient().removeChannel(channel); };
+  }, [isAuthenticated, selectedConvId, realtimeAttempt]);
 
-        channel
-          .on(
-            "postgres_changes",
-            {
-              event: "INSERT",
-              schema: "public",
-              table: "messages",
-              filter: `conversationId=eq.${conversationId}`,
-            },
-            (payload) => {
-              if (!isActive) return;
-              const newMsg = payload.new as any;
-              if (newMsg && newMsg.id && newMsg.conversationId === conversationId) {
-                setMessages((prev) => {
-                  if (prev.some((m) => m.id === newMsg.id)) return prev;
-                  return [
-                    ...prev,
-                    {
-                      id: newMsg.id,
-                      conversationId: newMsg.conversationId,
-                      senderId: newMsg.senderId,
-                      content: newMsg.content,
-                      isRead: newMsg.isRead ?? false,
-                      createdAt: new Date(newMsg.createdAt),
-                    },
-                  ];
-                });
-                void refetchConversationsRef.current();
-              }
-            },
-          )
-          .subscribe((status, err) => {
-            if (!isActive) return;
-            if (status === "SUBSCRIBED") {
-              setRealtimeStatus("CONNECTED");
-              console.log(`[Messaging] Realtime channel ${channelName} SUBSCRIBED`);
-            } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-              setRealtimeStatus("ERROR");
-              console.warn(`[Messaging] Realtime channel ${channelName} status: ${status}`, err);
-            } else if (status === "CLOSED") {
-              // CLOSED is normal during teardown/rejoin and must not turn a
-              // healthy active connection into a false connection error.
-              console.debug(`[Messaging] Realtime channel ${channelName} CLOSED`);
-            }
-          });
-      } catch (error) {
-        if (!isActive) return;
-        setRealtimeStatus("ERROR");
-        console.error("[Messaging] Realtime setup error:", String(error));
-      }
-    };
+  const selectConversation = (id: number) => { setSelectedConvId(id); setShowContext(false); navigate(`/messages/${id}`); };
+  const sendMessage = useCallback(() => { const content = inputValue.trim(); if (!content || !selectedConvId || sendMessageMutation.isPending) return; sendMessageMutation.mutate({ conversationId: selectedConvId, content }); }, [inputValue, selectedConvId, sendMessageMutation]);
+  const retryMessage = () => { if (inputValue.trim()) sendMessage(); };
+  const goBackToInbox = () => { setSelectedConvId(null); navigate("/messages"); };
 
-    void setupRealtimeChannel();
+  if (loading) return <div className="min-h-screen bg-background p-6"><div className="mx-auto max-w-6xl animate-pulse space-y-4"><div className="h-8 w-40 rounded bg-muted" /><div className="h-[620px] rounded-2xl bg-muted/40" /></div></div>;
+  if (!isAuthenticated) return <div className="min-h-screen bg-background px-4 py-6"><div className="mx-auto max-w-6xl"><ZylobridgeLogo compact /></div><div className="flex min-h-[calc(100vh-100px)] items-center justify-center"><div className="space-y-4 text-center"><MessageSquare className="mx-auto h-16 w-16 text-primary" /><h2 className="text-2xl font-bold text-foreground">Sign in to access messages</h2><Button asChild><a href={getLoginUrl()}>Sign In</a></Button></div></div></div>;
 
-    return () => {
-      isActive = false;
-      if (channel) {
-        const supabase = getSupabaseBrowserClient();
-        void supabase.removeChannel(channel);
-      }
-      setRealtimeStatus("CONNECTING");
-    };
-  }, [isAuthenticated, selectedConvId]);
+  const realtimeCopy = realtimeStatus === "CONNECTED" ? "Connected" : realtimeStatus === "ERROR" ? "Unable to connect" : "Connecting securely…";
+  const activeParticipant = selectedConversation ? participantName(selectedConversation, user?.id) : "Conversation";
+  const activeVerified = selectedConversation ? participantVerified(selectedConversation, user?.id) : false;
 
-  // Auto-scroll to bottom
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  const sendMessageMutation = trpc.messaging.sendMessage.useMutation({
-    onSuccess: (newMsg) => {
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === newMsg.id)) return prev;
-        return [
-          ...prev,
-          {
-            id: newMsg.id,
-            conversationId: newMsg.conversationId,
-            senderId: newMsg.senderId,
-            content: newMsg.content,
-            isRead: newMsg.isRead ?? false,
-            createdAt: new Date(newMsg.createdAt),
-          },
-        ];
-      });
-      setInputValue("");
-      refetchConversations();
-    },
-  });
-
-  const sendMessage = useCallback(() => {
-    if (!inputValue.trim() || !selectedConvId || sendMessageMutation.isPending) return;
-    sendMessageMutation.mutate({
-      conversationId: selectedConvId,
-      content: inputValue.trim(),
-    });
-  }, [inputValue, selectedConvId, sendMessageMutation]);
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-background px-4 py-6">
-        <div className="mx-auto flex max-w-6xl justify-start">
-          <ZylobridgeLogo compact />
-        </div>
-        <div className="flex min-h-[calc(100vh-100px)] items-center justify-center">
-          <div className="text-center space-y-4">
-          <MessageSquare className="h-16 w-16 text-primary mx-auto" />
-          <h2 className="text-2xl font-bold text-foreground">Sign in to access messages</h2>
-          <Button asChild>
-            <a href={getLoginUrl()}>Sign In</a>
-          </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-background pt-8 md:pt-12">
-      <div className="mx-auto max-w-6xl px-4 py-6 md:px-6 md:py-8">
-        <div className="mb-6 flex flex-col gap-5">
-          <div className="flex items-center justify-between gap-4">
-            <ZylobridgeLogo compact />
-            <div className="flex items-center gap-2" aria-live="polite">
-              <div
-                className={`h-2 w-2 rounded-full ${
-                  realtimeStatus === "CONNECTED"
-                    ? "bg-green-500"
-                    : realtimeStatus === "ERROR"
-                    ? "bg-red-500"
-                    : "bg-amber-500 animate-pulse"
-                }`}
-              />
-              <span className="text-sm text-muted-foreground">
-                {realtimeStatus === "CONNECTED"
-                  ? "Connected"
-                  : realtimeStatus === "ERROR"
-                  ? "Connection error"
-                  : "Connecting..."}
-              </span>
-            </div>
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Workspace communication</p>
-            <h1 className="mt-1 text-3xl font-bold text-foreground">Messages</h1>
-          </div>
-        </div>
-
-        <div className="grid min-h-0 grid-cols-1 gap-0 overflow-hidden rounded-xl border border-border md:grid-cols-3 h-[calc(100svh-150px)] min-h-[360px] md:h-[min(600px,calc(100svh-190px))] md:min-h-[480px]">
-          {/* Conversation List */}
-          <div className={`${selectedConvId ? "hidden md:flex" : "flex"} min-h-0 flex-col border-b border-border bg-card md:border-b-0 md:border-r`}>
-            <div className="p-4 border-b border-border">
-              <h2 className="font-semibold text-foreground">Conversations</h2>
-            </div>
-            <ScrollArea className="flex-1">
-              {!conversations || conversations.length === 0 ? (
-                <div className="p-6 text-center text-muted-foreground">
-                  <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                  <p className="text-sm">No conversations yet.</p>
-                  <p className="text-xs mt-1">Start a conversation from a job page.</p>
-                </div>
-              ) : (
-                conversations.map((conv: Conversation) => {
-                  const isSelected = conv.id === selectedConvId;
-                  const participantName = conversationParticipant(conv, user?.id);
-                  const participantAvatar = conversationParticipantAvatar(conv, user?.id);
-                  const jobLabel = conversationJobLabel(conv);
-                  return (
-                    <button
-                      key={conv.id}
-                      onClick={() => { setSelectedConvId(conv.id); navigate(`/messages?conv=${conv.id}`); }}
-                      className={`w-full p-4 text-left hover:bg-accent/50 transition-colors border-b border-border/50 ${
-                        isSelected ? "bg-primary/10 border-l-2 border-l-primary" : conv.unreadCount ? "bg-primary/5" : ""
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-9 w-9">
-                          <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">
-                            {participantAvatar ? <img src={participantAvatar} alt="" className="h-full w-full rounded-full object-cover" /> : conversationInitials(participantName)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <span className={`text-sm truncate ${conv.unreadCount ? "font-bold text-foreground" : "font-medium text-foreground"}`}>
-                              {participantName}
-                            </span>
-                            {Boolean(conv.unreadCount) && <Badge className="ml-2 shrink-0 bg-primary text-primary-foreground">{conv.unreadCount! > 99 ? "99+" : conv.unreadCount}</Badge>}
-                            <span className="ml-2 shrink-0 text-xs text-muted-foreground">
-                              {formatDistanceToNow(new Date(conv.lastMessageAt), { addSuffix: true })}
-                            </span>
-                          </div>
-                          <p className="truncate text-xs text-muted-foreground" title={jobLabel}>
-                            {jobLabel}{conv.jobLocation ? ` · ${conv.jobLocation}` : ""}
-                          </p>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })
-              )}
-            </ScrollArea>
-          </div>
-
-          {/* Message Thread */}
-          <div className={`${selectedConvId ? "flex" : "hidden md:flex"} min-h-0 flex-col bg-background md:col-span-2`}>
-            {!selectedConvId ? (
-              <div className="flex-1 flex items-center justify-center">
-                <div className="text-center text-muted-foreground">
-                  <MessageSquare className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                  <p className="font-medium">Select a conversation</p>
-                  <p className="text-sm mt-1">Choose a conversation from the left to start messaging.</p>
-                </div>
-              </div>
-            ) : (
-              <>
-                {/* Header */}
-                {(() => {
-                  const selectedConversation = conversations?.find((conversation: Conversation) => conversation.id === selectedConvId);
-                  if (!selectedConversation) return null;
-                  const participantName = conversationParticipant(selectedConversation, user?.id);
-                  const participantAvatar = conversationParticipantAvatar(selectedConversation, user?.id);
-                  const jobLabel = conversationJobLabel(selectedConversation);
-                  return <div className="border-b border-border bg-card p-4">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <Button variant="ghost" size="icon" className="shrink-0 md:hidden" onClick={() => { setSelectedConvId(null); navigate("/messages"); }} aria-label="Back to conversations"><ArrowLeft className="h-4 w-4" /></Button>
-                      <Avatar className="h-9 w-9 shrink-0">
-                        {participantAvatar && <img src={participantAvatar} alt="" className="h-full w-full rounded-full object-cover" />}
-                        <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">{conversationInitials(participantName)}</AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-foreground" title={participantName}>{participantName}</p>
-                        <p className="truncate text-xs text-muted-foreground" title={jobLabel}>{jobLabel}{selectedConversation.jobLocation ? ` · ${selectedConversation.jobLocation}` : ""}</p>
-                      </div>
-                    </div>
-                  </div>;
-                })()}
-
-                {/* Messages */}
-                <ScrollArea className="flex-1 p-4">
-                  {messagesLoading ? (
-                    <div className="flex justify-center py-8">
-                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                    </div>
-                  ) : messages.length === 0 ? (
-                    <div className="text-center text-muted-foreground py-8">
-                      <p className="text-sm">No messages yet. Start the conversation!</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {messages.map((msg) => {
-                        const isMine = msg.senderId === user?.id;
-                        return (
-                          <div key={msg.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
-                            <div
-                              className={`max-w-[min(85%,34rem)] break-words rounded-2xl px-4 py-2.5 sm:max-w-[70%] ${
-                                isMine
-                                  ? "bg-primary text-primary-foreground rounded-br-sm"
-                                  : "bg-card border border-border text-foreground rounded-bl-sm"
-                              }`}
-                            >
-                              <p className="text-sm leading-relaxed">{msg.content}</p>
-                              <p className={`text-xs mt-1 ${isMine ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
-                                {formatDistanceToNow(new Date(msg.createdAt), { addSuffix: true })}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                      <div ref={messagesEndRef} />
-                    </div>
-                  )}
-                </ScrollArea>
-
-                {/* Input */}
-                <div className="p-4 border-t border-border bg-card">
-                  <div className="flex gap-2">
-                    <Input
-                      aria-label="Message text"
-                      value={inputValue}
-                      onChange={(e) => setInputValue(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      placeholder="Type a message..."
-                      className="flex-1"
-                    />
-                    <Button aria-label="Send message" onClick={sendMessage} disabled={!inputValue.trim() || sendMessageMutation.isPending}>
-                      {sendMessageMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Send className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+  return <div className="min-h-screen bg-background text-foreground">
+    <div className="mx-auto max-w-[1500px] px-3 py-4 sm:px-5 sm:py-6 lg:px-7">
+      <div className="mb-4 flex items-center justify-between gap-3"><div className="flex items-center gap-3"><ZylobridgeLogo compact /><div className="hidden border-l border-border pl-3 sm:block"><p className="text-xs text-muted-foreground">Professional workspace</p><h1 className="text-lg font-semibold">Messages</h1></div></div><div className="flex items-center gap-2 text-xs text-muted-foreground" aria-live="polite">{realtimeStatus === "CONNECTED" ? <Wifi className="h-3.5 w-3.5 text-emerald-400" /> : realtimeStatus === "ERROR" ? <WifiOff className="h-3.5 w-3.5 text-destructive" /> : <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-400" />}<span>{realtimeCopy}</span>{realtimeStatus === "ERROR" && <Button size="sm" variant="outline" onClick={() => setRealtimeAttempt((attempt) => attempt + 1)}>Retry</Button>}</div></div>
+      <div className="grid min-h-[calc(100svh-120px)] overflow-hidden rounded-2xl border border-border bg-card shadow-sm lg:grid-cols-[300px_minmax(0,1fr)_320px]">
+        <aside className={`${selectedConvId ? "hidden lg:flex" : "flex"} min-h-0 flex-col border-b border-border lg:border-b-0 lg:border-r`} aria-label="Conversation inbox">
+          <div className="border-b border-border p-4"><div className="mb-3 flex items-center justify-between"><div><p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Inbox</p><h2 className="mt-1 text-lg font-semibold">Messages</h2></div><Badge variant="outline">{conversations.length}</Badge></div><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input aria-label="Search conversations" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search messages…" className="pl-9" /></div><div className="mt-3 flex gap-1.5 overflow-x-auto" role="tablist" aria-label="Conversation filters">{([{ id: "all", label: "All" }, { id: "unread", label: "Unread" }, { id: "jobs", label: "Jobs" }] as const).map((item) => <button key={item.id} type="button" role="tab" aria-selected={filter === item.id} onClick={() => setFilter(item.id)} className={`whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${filter === item.id ? "border-primary/50 bg-primary/10 text-primary" : "border-border text-muted-foreground hover:text-foreground"}`}>{item.label}</button>)}</div></div>
+          <ScrollArea className="min-h-0 flex-1">{conversationsQuery.isLoading ? <div className="space-y-2 p-3">{[1, 2, 3, 4].map((item) => <div key={item} className="h-20 animate-pulse rounded-xl bg-muted/50" />)}</div> : conversationsQuery.isError ? <div className="space-y-3 p-5 text-center"><WifiOff className="mx-auto h-8 w-8 text-muted-foreground" /><p className="text-sm font-medium">Unable to load conversations</p><Button size="sm" variant="outline" onClick={() => void conversationsQuery.refetch()}><RefreshCw className="mr-2 h-3.5 w-3.5" />Try again</Button></div> : !conversations.length ? <div className="space-y-3 p-6 text-center"><MessageSquare className="mx-auto h-9 w-9 text-muted-foreground/50" /><p className="text-sm font-medium">No conversations yet</p><p className="text-xs leading-relaxed text-muted-foreground">Your professional conversations will appear here after you apply for a job or an employer contacts you.</p><Button size="sm" onClick={() => navigate("/jobs")}>Browse jobs</Button></div> : <div className="p-2">{conversations.map((conversation) => { const name = participantName(conversation, user?.id); const unread = unreadCount(conversation.unreadCount); return <button key={conversation.id} type="button" onClick={() => selectConversation(conversation.id)} className={`w-full rounded-xl p-3 text-left transition hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${conversation.id === selectedConvId ? "bg-primary/10" : unread ? "bg-primary/[0.04]" : ""}`}><div className="flex gap-3"><Avatar className="h-10 w-10 shrink-0"><AvatarFallback className="bg-primary/15 text-xs font-semibold text-primary">{participantAvatar(conversation, user?.id) ? <img src={participantAvatar(conversation, user?.id)!} alt="" className="h-full w-full rounded-full object-cover" /> : initials(name)}</AvatarFallback></Avatar><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><span className={`truncate text-sm ${unread ? "font-bold" : "font-semibold"}`}>{name}</span><span className="shrink-0 text-[10px] text-muted-foreground">{formatDistanceToNow(new Date(conversation.lastMessageAt), { addSuffix: true })}</span></div><div className="mt-0.5 flex items-center gap-1.5">{participantVerified(conversation, user?.id) && <ShieldCheck className="h-3 w-3 shrink-0 text-emerald-400" />}<span className="truncate text-xs text-muted-foreground">{conversation.jobTitle || "Marketplace conversation"}</span></div><div className="mt-1 flex items-center justify-between gap-2"><p className={`truncate text-xs ${unread ? "font-medium text-foreground" : "text-muted-foreground"}`}>{conversation.lastMessagePreview || "No messages yet"}</p>{unread > 0 && <Badge className="h-5 min-w-5 shrink-0 justify-center px-1.5 text-[10px]">{unread > 99 ? "99+" : unread}</Badge>}</div></div></div></button>; })}</div>}</ScrollArea>
+        </aside>
+        <main className={`${selectedConvId ? "flex" : "hidden lg:flex"} min-h-0 min-w-0 flex-col bg-background`} aria-label="Active conversation">
+          {!selectedConversation ? <div className="flex flex-1 items-center justify-center p-8 text-center"><div className="max-w-sm space-y-3"><MessageSquare className="mx-auto h-12 w-12 text-muted-foreground/40" /><h2 className="text-lg font-semibold">Select a conversation</h2><p className="text-sm text-muted-foreground">Choose a conversation from your inbox to view messages and job details.</p></div></div> : <><header className="flex items-center gap-3 border-b border-border bg-card p-4"><Button variant="ghost" size="icon" className="shrink-0 lg:hidden" onClick={goBackToInbox} aria-label="Back to messages"><ArrowLeft className="h-4 w-4" /></Button><Avatar className="h-10 w-10 shrink-0"><AvatarFallback className="bg-primary/15 text-primary">{initials(activeParticipant)}</AvatarFallback></Avatar><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><h2 className="truncate font-semibold">{activeParticipant}</h2>{activeVerified && <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-400" aria-label="Verified participant" />}</div><p className="truncate text-xs text-muted-foreground">{selectedConversation.jobTitle || "Marketplace conversation"}{selectedConversation.jobLocation ? ` · ${selectedConversation.jobLocation}` : ""}</p></div><Button variant="outline" size="sm" className="shrink-0" onClick={() => setShowContext((value) => !value)}>{showContext ? "Hide context" : "View context"}</Button></header>
+            <ScrollArea className="min-h-0 flex-1 p-4 sm:p-6"><div className="mx-auto max-w-3xl space-y-4">{messagesQuery.isLoading ? <div className="space-y-3">{[1, 2, 3].map((item) => <div key={item} className={`h-16 animate-pulse rounded-2xl bg-muted/50 ${item === 2 ? "ml-auto max-w-[70%]" : "max-w-[60%]"}`} />)}</div> : messagesQuery.isError ? <div className="py-12 text-center"><p className="text-sm font-medium">We couldn't load this conversation.</p><Button className="mt-3" size="sm" variant="outline" onClick={() => void messagesQuery.refetch()}><RefreshCw className="mr-2 h-3.5 w-3.5" />Try again</Button></div> : !messages.length ? <div className="py-12 text-center"><MessageSquare className="mx-auto h-9 w-9 text-muted-foreground/40" /><p className="mt-3 text-sm font-medium">Start the conversation</p><p className="mt-1 text-xs text-muted-foreground">Keep project agreements and payments inside Zylobridge.</p></div> : messages.map((message, index) => { const mine = message.senderId === user?.id; const previous = messages[index - 1]; const dayChanged = !previous || format(new Date(previous.createdAt), "yyyy-MM-dd") !== format(new Date(message.createdAt), "yyyy-MM-dd"); return <div key={message.id}>{dayChanged && <div className="my-5 flex items-center gap-3 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground"><span className="h-px flex-1 bg-border" /><span>{format(new Date(message.createdAt), "PPP")}</span><span className="h-px flex-1 bg-border" /></div>}<div className={`flex ${mine ? "justify-end" : "justify-start"}`}><div className={`max-w-[88%] rounded-2xl px-4 py-3 sm:max-w-[70%] ${mine ? "rounded-br-sm bg-primary text-primary-foreground" : "rounded-bl-sm border border-border bg-card"}`}><p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{message.content}</p><div className={`mt-1.5 flex items-center justify-end gap-1 text-[10px] ${mine ? "text-primary-foreground/70" : "text-muted-foreground"}`}><span>{format(new Date(message.createdAt), "p")}</span>{mine && <CheckCheck className={`h-3 w-3 ${message.isRead ? "text-sky-300" : ""}`} aria-label={message.isRead ? "Read" : "Sent"} />}</div></div></div></div>; })}<div ref={messagesEndRef} /></div></ScrollArea>
+            <div className="border-t border-border bg-card p-3 sm:p-4"><div className="mx-auto max-w-3xl">{sendMessageMutation.isError && <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive"><span>Message couldn't be sent. Your text is preserved.</span><Button size="sm" variant="outline" onClick={retryMessage}>Retry</Button></div>}<div className="flex items-end gap-2"><Textarea aria-label="Message text" value={inputValue} onChange={(event) => setInputValue(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); sendMessage(); } }} placeholder="Write a professional message…" className="min-h-11 resize-none" rows={1} disabled={sendMessageMutation.isPending} /><Button aria-label="Send message" onClick={sendMessage} disabled={!inputValue.trim() || sendMessageMutation.isPending} className="h-11 w-11 shrink-0 px-0">{sendMessageMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</Button></div><div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-muted-foreground"><span>Enter to send · Shift + Enter for a new line</span><span>Keep sensitive financial information out of chat.</span></div></div></div>
+          </>}
+        </main>
+        <aside className={`${selectedConvId && showContext ? "fixed inset-3 z-40 flex rounded-2xl border border-border shadow-2xl lg:static lg:inset-auto lg:z-auto lg:rounded-none lg:border-0 lg:shadow-none" : "hidden lg:flex"} min-h-0 flex-col border-t border-border bg-card lg:border-l lg:border-t-0`} aria-label="Job and application context" role={selectedConvId && showContext ? "dialog" : undefined}><div className="flex items-center justify-between border-b border-border p-4"><div><p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Context</p><h2 className="mt-1 font-semibold">Marketplace details</h2></div><Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setShowContext(false)} aria-label="Close context"><ArrowLeft className="h-4 w-4" /></Button></div>{!selectedConvId ? <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-muted-foreground">Select a job conversation to view its context.</div> : contextQuery.isLoading ? <div className="space-y-3 p-4">{[1, 2, 3, 4].map((item) => <div key={item} className="h-20 animate-pulse rounded-xl bg-muted/50" />)}</div> : contextQuery.isError ? <div className="space-y-3 p-5 text-center"><p className="text-sm font-medium">Context unavailable</p><p className="text-xs text-muted-foreground">This conversation’s job or application details are unavailable.</p><Button size="sm" variant="outline" onClick={() => void contextQuery.refetch()}><RefreshCw className="mr-2 h-3.5 w-3.5" />Try again</Button></div> : contextQuery.data ? <ScrollArea className="min-h-0 flex-1"><div className="space-y-5 p-4"><section className="space-y-3"><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground"><BriefcaseBusiness className="h-3.5 w-3.5" />Job</div><div><h3 className="font-semibold leading-snug">{contextQuery.data.job.title}</h3><p className="mt-1 text-sm text-muted-foreground">{contextQuery.data.job.location || "Location not specified"}</p><p className="mt-2 text-xs text-muted-foreground">{statusLabel(contextQuery.data.job.status)}</p><div className="mt-3 grid grid-cols-2 gap-2 text-xs"><div className="rounded-lg border border-border bg-background/50 p-2"><p className="text-muted-foreground">Budget</p><p className="mt-1 font-medium text-foreground">{formatJobBudget(contextQuery.data.job.budget, contextQuery.data.job.currency)}</p></div><div className="rounded-lg border border-border bg-background/50 p-2"><p className="text-muted-foreground">Deadline</p><p className="mt-1 font-medium text-foreground">{contextQuery.data.job.deadline ? new Date(contextQuery.data.job.deadline).toLocaleDateString() : "Not specified"}</p></div></div></div><Button asChild variant="outline" className="w-full"><a href={`/jobs/${contextQuery.data.job.id}`}>View job <ExternalLink className="ml-2 h-3.5 w-3.5" /></a></Button></section><section className="space-y-3 border-t border-border pt-5"><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground"><ShieldCheck className="h-3.5 w-3.5" />Employer</div><div><p className="font-semibold">{contextQuery.data.employer?.name || "Employer"}</p>{contextQuery.data.employer?.isVerified && <p className="mt-1 flex items-center gap-1 text-xs text-emerald-400"><ShieldCheck className="h-3 w-3" />Verified employer</p>}</div></section>{contextQuery.data.application && <section className="space-y-3 border-t border-border pt-5"><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground"><Clock3 className="h-3.5 w-3.5" />Application</div><p className="text-sm">Application <span className="font-semibold capitalize">{contextQuery.data.application.status.replaceAll("_", " ")}</span></p><Button asChild className="w-full"><a href={`/applications/${contextQuery.data.application.id}`}>View application <ExternalLink className="ml-2 h-3.5 w-3.5" /></a></Button></section>}{contextQuery.data.escrow && <section className="space-y-3 border-t border-border pt-5"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Payment</p><p className="text-sm capitalize">Escrow {contextQuery.data.escrow.status}</p><Button asChild variant="outline" className="w-full"><a href={`/payments?jobId=${contextQuery.data.job.id}`}>View payments</a></Button></section>}<section className="space-y-3 border-t border-border pt-5"><div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground"><Flag className="h-3.5 w-3.5" />Safety</div><p className="text-xs leading-relaxed text-muted-foreground">Stay safe: keep payments and project agreements inside Zylobridge.</p><Button variant="outline" className="w-full" onClick={() => window.alert("Please contact Zylobridge support with the conversation ID if you need to report this conversation.")}>Report conversation</Button></section></div></ScrollArea> : null}</aside>
       </div>
     </div>
-  );
+  </div>;
 }

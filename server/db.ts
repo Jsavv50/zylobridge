@@ -1149,9 +1149,25 @@ export async function getConversationById(id: number) {
   return conversation;
 }
 
-export async function getConversationsByUserId(userId: number, limit = MAX_PAGE_SIZE, offset = 0) {
+export type ConversationListFilters = { search?: string; unreadOnly?: boolean; jobsOnly?: boolean };
+
+export async function getConversationsByUserId(userId: number, limit = MAX_PAGE_SIZE, offset = 0, filters: ConversationListFilters = {}) {
   const db = await getDb();
   if (!db) return [];
+  const membership = or(eq(conversations.clientId, userId), eq(conversations.professionalId, userId));
+  const conditions = [membership];
+  if (filters.unreadOnly) conditions.push(sql`EXISTS (SELECT 1 FROM messages unread_messages WHERE unread_messages."conversationId" = ${conversations.id} AND unread_messages."isRead" = false AND unread_messages."senderId" <> ${userId})` as any);
+  if (filters.jobsOnly) conditions.push(sql`${conversations.jobId} IS NOT NULL` as any);
+  if (filters.search?.trim()) {
+    const term = `%${filters.search.trim().toLowerCase()}%`;
+    conditions.push(or(
+      sql`LOWER(COALESCE(${conversationClient.name}, '')) LIKE ${term}`,
+      sql`LOWER(COALESCE(${conversationProfessional.name}, '')) LIKE ${term}`,
+      sql`LOWER(COALESCE(${jobs.title}, '')) LIKE ${term}`,
+      sql`LOWER(COALESCE(${jobs.location}, '')) LIKE ${term}`,
+      sql`EXISTS (SELECT 1 FROM messages searched_messages WHERE searched_messages."conversationId" = ${conversations.id} AND LOWER(searched_messages."content") LIKE ${term})`,
+    ) as any);
+  }
   return db.select({
     id: conversations.id,
     jobId: conversations.jobId,
@@ -1161,21 +1177,41 @@ export async function getConversationsByUserId(userId: number, limit = MAX_PAGE_
     createdAt: conversations.createdAt,
     clientName: conversationClient.name,
     clientAvatarUrl: conversationClient.avatarUrl,
+    clientVerified: conversationClient.isVerified,
     professionalName: conversationProfessional.name,
     professionalAvatarUrl: conversationProfessional.avatarUrl,
+    professionalVerified: conversationProfessional.isVerified,
     jobTitle: jobs.title,
     jobLocation: jobs.location,
+    jobStatus: jobs.status,
+    lastMessagePreview: sql<string | null>`(SELECT ${messages.content} FROM messages WHERE ${messages.conversationId} = ${conversations.id} ORDER BY ${messages.createdAt} DESC LIMIT 1)`,
+    lastMessageSenderId: sql<number | null>`(SELECT ${messages.senderId} FROM messages WHERE ${messages.conversationId} = ${conversations.id} ORDER BY ${messages.createdAt} DESC LIMIT 1)`,
     unreadCount: sql<number>`count(case when ${messages.isRead} = false and ${messages.senderId} <> ${userId} then 1 end)`,
   }).from(conversations)
     .leftJoin(jobs, eq(jobs.id, conversations.jobId))
     .leftJoin(conversationClient, eq(conversationClient.id, conversations.clientId))
     .leftJoin(conversationProfessional, eq(conversationProfessional.id, conversations.professionalId))
     .leftJoin(messages, eq(messages.conversationId, conversations.id))
-    .where(or(eq(conversations.clientId, userId), eq(conversations.professionalId, userId)))
-    .groupBy(conversations.id, conversations.jobId, conversations.clientId, conversations.professionalId, conversations.lastMessageAt, conversations.createdAt, conversationClient.name, conversationClient.avatarUrl, conversationProfessional.name, conversationProfessional.avatarUrl, jobs.title, jobs.location)
+    .where(and(...conditions))
+    .groupBy(conversations.id, conversations.jobId, conversations.clientId, conversations.professionalId, conversations.lastMessageAt, conversations.createdAt, conversationClient.name, conversationClient.avatarUrl, conversationClient.isVerified, conversationProfessional.name, conversationProfessional.avatarUrl, conversationProfessional.isVerified, jobs.title, jobs.location, jobs.status)
     .orderBy(desc(conversations.lastMessageAt))
     .limit(clampPageSize(limit, MAX_PAGE_SIZE))
     .offset(clampOffset(offset));
+}
+
+export async function getProfessionalConversationContext(conversationId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [conversation] = await db.select({ conversation: conversations, job: jobs, employer: conversationClient }).from(conversations)
+    .innerJoin(jobs, eq(jobs.id, conversations.jobId))
+    .leftJoin(conversationClient, eq(conversationClient.id, conversations.clientId))
+    .where(and(eq(conversations.id, conversationId), eq(conversations.professionalId, userId)))
+    .limit(1);
+  if (!conversation) return undefined;
+  const application = await getApplicationByJobAndProfessionalId(conversation.conversation.jobId, userId);
+  const [reviewCount] = application ? await db.select({ count: sql<number>`count(*)` }).from(reviews).where(and(eq(reviews.jobId, conversation.conversation.jobId), eq(reviews.revieweeId, conversation.conversation.clientId))) : [{ count: 0 }];
+  const escrow = await getEscrowByJobId(conversation.conversation.jobId);
+  return { ...conversation, application: application ?? null, reviewCount: Number(reviewCount?.count ?? 0), escrow: escrow ?? null };
 }
 
 export async function markConversationMessagesRead(conversationId: number, userId: number) {

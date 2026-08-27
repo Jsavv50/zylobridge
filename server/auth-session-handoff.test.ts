@@ -57,8 +57,8 @@ describe("production auth session handoff architecture", () => {
     const supabase = readProjectFile("client/src/lib/supabase.ts");
 
     expect(messaging).toContain("await initSupabaseRealtimeAuth()");
-    expect(messaging).toContain("config: {\n            private: true,");
-    expect(messaging).toContain("[isAuthenticated, selectedConvId]");
+    expect(messaging).toContain("config: { private: true }");
+    expect(messaging).toContain("[isAuthenticated, selectedConvId, realtimeAttempt]");
     expect(messaging).not.toContain("[isAuthenticated, selectedConvId, refetchConversations]");
     expect(supabase).toContain('credentials: "include"');
     expect(supabase).toContain("disconnectSupabaseRealtime");

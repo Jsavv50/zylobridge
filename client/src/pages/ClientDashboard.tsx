@@ -100,7 +100,7 @@ export default function ClientDashboard() {
   const { mutate: startConversation } = trpc.messaging.getOrCreateConversation.useMutation({
     onSuccess: (conv: { id: number }) => {
       toast.success("Conversation started!");
-      window.location.href = `/messages?conv=${conv.id}`;
+      window.location.href = `/messages/${conv.id}`;
     },
     onError: (err: { message: string }) => toast.error(err.message),
   });

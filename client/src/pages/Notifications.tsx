@@ -8,7 +8,7 @@ import { ApplicationShell, EmptyState, PageHeader, StatusBadge } from "@/compone
 function referenceHref(referenceType: string | null, referenceId: string | null) {
   if (!referenceId) return "/notifications";
   if (referenceType === "job") return `/jobs/${referenceId}`;
-  if (referenceType === "message") return referenceId ? `/messages?conv=${encodeURIComponent(referenceId)}` : "/messages";
+  if (referenceType === "message") return referenceId && /^\d+$/.test(referenceId) ? `/messages/${encodeURIComponent(referenceId)}` : "/messages";
   if (referenceType === "application") return /^\d+$/.test(referenceId) ? `/applications/${referenceId}` : "/applications";
   if (referenceType === "enterprise" || referenceType === "organization") return "/enterprise";
   return "/notifications";

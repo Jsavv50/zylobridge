@@ -37,9 +37,9 @@ describe("integrated marketplace workflow", () => {
     expect(db).toContain("leftJoin(jobs, eq(jobs.id, conversations.jobId))");
     expect(db).toContain("professionalName: conversationProfessional.name");
     expect(db).toContain("jobTitle: jobs.title");
-    expect(messaging).toContain('const name = (isClient ? conversation.professionalName : conversation.clientName)?.trim()');
-    expect(messaging).toContain('return "Marketplace conversation"');
-    expect(messaging).toContain("{participantName}");
+    expect(messaging).toContain('function participantName(conversation: Conversation, userId?: number)');
+    expect(messaging).toContain('conversation.jobTitle || "Marketplace conversation"');
+    expect(messaging).toContain("{activeParticipant}");
     expect(messaging).not.toContain("Job #{conv.jobId}");
   });
 
@@ -54,10 +54,10 @@ describe("integrated marketplace workflow", () => {
 
   it("supports mobile list-to-thread navigation and safe viewport sizing", () => {
     const messaging = read("client/src/pages/Messaging.tsx");
-    expect(messaging).toContain('navigate(`/messages?conv=${conv.id}`)');
+    expect(messaging).toContain('navigate(`/messages/${id}`)');
     expect(messaging).toContain('navigate("/messages")');
-    expect(messaging).toContain('h-[calc(100svh-150px)]');
+    expect(messaging).toContain('min-h-[calc(100svh-120px)]');
     expect(messaging).toContain("break-words");
-    expect(messaging).toContain('aria-label="Back to conversations"');
+    expect(messaging).toContain('aria-label="Back to messages"');
   });
 });

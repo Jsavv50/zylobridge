@@ -56,6 +56,7 @@ import {
   getAdminStats,
   getOrCreateConversation,
   getConversationsByUserId,
+  getProfessionalConversationContext,
   getMessagesByConversationId,
   getUnreadMessageCount,
   createMessage,
@@ -817,9 +818,18 @@ export const appRouter = router({
       }),
 
     myConversations: protectedProcedure
-      .input(z.object({ limit: z.number().int().min(1).max(MAX_PAGE_SIZE).optional().default(MAX_PAGE_SIZE), offset: z.number().int().nonnegative().optional().default(0) }).optional())
+      .input(z.object({ limit: z.number().int().min(1).max(MAX_PAGE_SIZE).optional().default(MAX_PAGE_SIZE), offset: z.number().int().nonnegative().optional().default(0), search: z.string().trim().max(120).optional(), unreadOnly: z.boolean().optional().default(false), jobsOnly: z.boolean().optional().default(false) }).optional())
       .query(async ({ ctx, input }) => {
-        return getConversationsByUserId(ctx.user.id, input?.limit, input?.offset);
+        return getConversationsByUserId(ctx.user.id, input?.limit, input?.offset, { search: input?.search, unreadOnly: input?.unreadOnly, jobsOnly: input?.jobsOnly });
+      }),
+
+    context: protectedProcedure
+      .input(z.object({ conversationId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.userType !== "professional" && ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") throw new TRPCError({ code: "FORBIDDEN", message: "Professional conversation context is unavailable for this account." });
+        const context = await getProfessionalConversationContext(input.conversationId, ctx.user.id);
+        if (!context) throw new TRPCError({ code: "NOT_FOUND", message: "Conversation context not found." });
+        return context;
       }),
 
     getMessages: protectedProcedure
