@@ -55,6 +55,7 @@ import {
   professionalBankAccounts,
   organizations,
   organizationMembers,
+  notifications,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { deriveApplicationStage, type ApplicationStage } from "../shared/applicationLifecycle";
@@ -2138,4 +2139,102 @@ export async function calculateCandidateMatch(jobId: number, professionalId: num
     breakdown,
     reasons,
   };
+}
+
+
+export type ProfessionalWorkFilter = {
+  search?: string;
+  status?: "all" | "active" | "starting" | "awaiting_client" | "in_review" | "completed" | "cancelled";
+  sort?: "updated" | "deadline" | "started" | "value" | "progress";
+  limit?: number;
+  offset?: number;
+};
+
+function deriveProfessionalWorkStatus(engagement: typeof engagements.$inferSelect, milestonesForWork: Array<typeof milestones.$inferSelect>) {
+  if (engagement.status === "completed") return "completed" as const;
+  if (engagement.status === "cancelled") return "cancelled" as const;
+  if (milestonesForWork.some((milestone) => milestone.status === "submitted" || milestone.status === "release_pending")) return "awaiting_client" as const;
+  if (milestonesForWork.some((milestone) => milestone.status === "disputed")) return "in_review" as const;
+  if (engagement.startDate.getTime() > Date.now()) return "starting" as const;
+  return "active" as const;
+}
+
+export async function getProfessionalWorkCommandCenter(professionalId: number, filters: ProfessionalWorkFilter = {}) {
+  const db = await getDb();
+  if (!db) return null;
+  const limit = clampPageSize(filters.limit, 20);
+  const offset = clampOffset(filters.offset);
+  const engagementRows = await db.select({
+    engagement: engagements,
+    job: jobs,
+    client: { id: users.id, name: users.name, avatarUrl: users.avatarUrl, isVerified: users.isVerified },
+  }).from(engagements)
+    .innerJoin(jobs, eq(jobs.id, engagements.jobId))
+    .leftJoin(users, eq(users.id, engagements.employerId))
+    .where(eq(engagements.professionalId, professionalId))
+    .orderBy(desc(engagements.updatedAt))
+    .limit(100);
+  const engagementIds = engagementRows.map((row) => row.engagement.id);
+  const jobIds = engagementRows.map((row) => row.job.id);
+  const [milestoneRows, transactionRows, payoutRows, conversationRows, notificationRows] = await Promise.all([
+    engagementIds.length ? db.select().from(milestones).where(inArray(milestones.engagementId, engagementIds)).orderBy(asc(milestones.dueDate), asc(milestones.createdAt)) : Promise.resolve([]),
+    engagementIds.length ? db.select().from(paymentTransactions).where(inArray(paymentTransactions.engagementId, engagementIds)).orderBy(desc(paymentTransactions.updatedAt)).limit(200) : Promise.resolve([]),
+    engagementIds.length ? db.select().from(payouts).where(inArray(payouts.engagementId, engagementIds)).orderBy(desc(payouts.updatedAt)).limit(200) : Promise.resolve([]),
+    jobIds.length ? db.select().from(conversations).where(and(eq(conversations.professionalId, professionalId), inArray(conversations.jobId, jobIds))).orderBy(desc(conversations.lastMessageAt)).limit(100) : Promise.resolve([]),
+    db.select().from(notifications).where(and(eq(notifications.userId, professionalId), eq(notifications.isRead, false))).orderBy(desc(notifications.createdAt)).limit(50),
+  ]);
+  const milestonesByEngagement = new Map<number, typeof milestoneRows>();
+  for (const milestone of milestoneRows) milestonesByEngagement.set(milestone.engagementId, [...(milestonesByEngagement.get(milestone.engagementId) ?? []), milestone]);
+  const transactionsByEngagement = new Map<number, typeof transactionRows>();
+  for (const transaction of transactionRows) transactionsByEngagement.set(transaction.engagementId, [...(transactionsByEngagement.get(transaction.engagementId) ?? []), transaction]);
+  const payoutsByEngagement = new Map<number, typeof payoutRows>();
+  for (const payout of payoutRows) payoutsByEngagement.set(payout.engagementId, [...(payoutsByEngagement.get(payout.engagementId) ?? []), payout]);
+  const conversationIds = conversationRows.map((conversation) => conversation.id);
+  const unreadRows = conversationIds.length ? await db.select({ conversationId: messages.conversationId, count: sql<number>`count(*)` }).from(messages).where(and(inArray(messages.conversationId, conversationIds), eq(messages.isRead, false), sql`${messages.senderId} <> ${professionalId}`)).groupBy(messages.conversationId) : [];
+  const unreadByConversation = new Map(unreadRows.map((row) => [row.conversationId, Number(row.count)]));
+  const conversationsByJob = new Map<number, typeof conversationRows>();
+  for (const conversation of conversationRows) conversationsByJob.set(conversation.jobId, [...(conversationsByJob.get(conversation.jobId) ?? []), conversation]);
+  const now = Date.now();
+  const work = engagementRows.map(({ engagement, job, client }) => {
+    const workMilestones = milestonesByEngagement.get(engagement.id) ?? [];
+    const workTransactions = transactionsByEngagement.get(engagement.id) ?? [];
+    const workPayouts = payoutsByEngagement.get(engagement.id) ?? [];
+    const conversation = conversationsByJob.get(job.id)?.[0] ?? null;
+    const completedMilestones = workMilestones.filter((milestone) => ["approved", "released"].includes(milestone.status)).length;
+    const progress = workMilestones.length ? Math.round((completedMilestones / workMilestones.length) * 100) : engagement.status === "completed" ? 100 : 0;
+    const status = deriveProfessionalWorkStatus(engagement, workMilestones);
+    const nextMilestone = workMilestones.find((milestone) => !["approved", "released", "cancelled"].includes(milestone.status)) ?? null;
+    const amountPaidMinor = workTransactions.filter((transaction) => ["payment_confirmed", "funded"].includes(transaction.status)).reduce((sum, transaction) => sum + Number(transaction.amountMinor), 0);
+    const amountInEscrowMinor = workMilestones.filter((milestone) => ["funded", "in_progress", "submitted", "approved", "release_pending"].includes(milestone.status)).reduce((sum, milestone) => sum + Number(milestone.amountMinor), 0);
+    const amountPaidOutMinor = workPayouts.filter((payout) => payout.status === "payout_completed").reduce((sum, payout) => sum + Number(payout.netAmountMinor), 0);
+    const unreadMessages = conversation ? (unreadByConversation.get(conversation.id) ?? 0) : 0;
+    const daysUntilDeadline = job.deadline ? Math.ceil((new Date(job.deadline).getTime() - now) / 86_400_000) : null;
+    return { engagement, job, client, status, progress, completedMilestones, milestoneCount: workMilestones.length, nextMilestone, milestones: workMilestones, conversation, unreadMessages, amountPaidMinor, amountInEscrowMinor, amountPaidOutMinor, amountPendingMinor: Math.max(0, Number(engagement.compensation) * 100 - amountPaidMinor - amountPaidOutMinor), daysUntilDeadline };
+  }).filter((item) => {
+    const search = filters.search?.trim().toLowerCase();
+    if (search && !`${item.job.title} ${item.job.location ?? ""} ${item.client?.name ?? ""}`.toLowerCase().includes(search)) return false;
+    if (filters.status && filters.status !== "all" && item.status !== filters.status) return false;
+    return true;
+  });
+  const sorted = [...work].sort((a, b) => {
+    if (filters.sort === "deadline") return (a.daysUntilDeadline ?? Number.MAX_SAFE_INTEGER) - (b.daysUntilDeadline ?? Number.MAX_SAFE_INTEGER);
+    if (filters.sort === "started") return b.engagement.startDate.getTime() - a.engagement.startDate.getTime();
+    if (filters.sort === "value") return Number(b.engagement.compensation) - Number(a.engagement.compensation);
+    if (filters.sort === "progress") return b.progress - a.progress;
+    return b.engagement.updatedAt.getTime() - a.engagement.updatedAt.getTime();
+  });
+  const paged = sorted.slice(offset, offset + limit);
+  const attention = paged.flatMap((item) => {
+    const items: Array<{ type: string; title: string; detail: string; workId: number; href: string }> = [];
+    if (item.daysUntilDeadline !== null && item.daysUntilDeadline <= 3 && item.daysUntilDeadline >= 0) items.push({ type: "deadline", title: item.daysUntilDeadline === 0 ? "Due today" : `Due in ${item.daysUntilDeadline} days`, detail: item.job.title, workId: item.engagement.id, href: `/my-work/${item.engagement.id}` });
+    if (item.status === "awaiting_client") items.push({ type: "review", title: "Client review pending", detail: item.nextMilestone?.title ?? item.job.title, workId: item.engagement.id, href: `/my-work/${item.engagement.id}` });
+    if (item.nextMilestone?.status === "in_progress") items.push({ type: "milestone", title: "Milestone ready for progress", detail: item.nextMilestone.title, workId: item.engagement.id, href: `/my-work/${item.engagement.id}` });
+    return items;
+  }).slice(0, 8);
+  return { items: paged, total: sorted.length, offset, limit, attention, unreadNotifications: notificationRows.length, summary: { active: work.filter((item) => item.status === "active" || item.status === "starting").length, awaitingClient: work.filter((item) => item.status === "awaiting_client").length, completed: work.filter((item) => item.status === "completed").length, earningsInProgressMinor: work.reduce((sum, item) => sum + item.amountInEscrowMinor + item.amountPendingMinor, 0), currencies: Array.from(new Set(work.map((item) => item.job.currency ?? "NGN"))) } };
+}
+
+export async function getProfessionalWorkWorkspace(professionalId: number, engagementId: number) {
+  const result = await getProfessionalWorkCommandCenter(professionalId, { limit: 100 });
+  return result?.items.find((item) => item.engagement.id === engagementId) ?? null;
 }

@@ -1093,3 +1093,13 @@
 - [x] Implement the permanent end-to-end fix with safe server-side instrumentation and non-sensitive user-facing errors.
 - [x] Add regression coverage for valid, invalid, missing, closed, nullable-relation, authorized, retry, and end-to-end navigation cases.
 - [x] Run full tests, TypeScript, client/server builds, runtime and production checks; inspect logs and save the verified checkpoint.
+
+## Attached specification: pasted_content_35.txt
+- [x] Read and normalize the complete My Work operating-system specification.
+- [x] Audit current professional navigation, engagements, jobs, applications, tasks, milestones, updates, files, messaging, payments, escrow, notifications, activity, storage, and reusable components.
+- [x] Identify the canonical active-work lifecycle event and reuse existing architecture wherever possible.
+- [x] Implement `/my-work` as a real-data professional command center with actionable summaries, priorities, filters, active work, payment visibility, activity, and truthful states.
+- [x] Implement a supported dedicated work workspace route or explicitly scope unsupported tabs to real functionality, with strict ownership authorization.
+- [x] Audit task, milestone, update, and file coverage; reuse existing milestone/storage/message/payment systems and explicitly scope unsupported task/update/file workflows to truthful states.
+- [x] Add focused regression tests and validate privacy, role isolation, no-fabrication safeguards, responsive UX, TypeScript, full Vitest, client/server builds, runtime, and deployment flows.
+- [x] Save the verified My Work checkpoint.

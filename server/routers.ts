@@ -124,6 +124,8 @@ import {
   getProfessionalMarketplaceActivity,
   getProfessionalFinancialDashboard,
   getProfessionalJobDetails,
+  getProfessionalWorkCommandCenter,
+  getProfessionalWorkWorkspace,
   createJobReport,
   getProfessionalFinancialTransactions,
   getProfessionalPayouts,
@@ -1982,6 +1984,22 @@ export const appRouter = router({
           organizer: "Zylobridge Marketplace <noreply@zylobridge.com>",
         });
         return { icsContent: ics };
+      }),
+  }),
+  myWork: router({
+    commandCenter: protectedProcedure
+      .input(z.object({ search: z.string().max(80).optional(), status: z.enum(["all", "active", "starting", "awaiting_client", "in_review", "completed", "cancelled"]).optional(), sort: z.enum(["updated", "deadline", "started", "value", "progress"]).optional(), limit: z.number().int().min(1).max(MAX_PAGE_SIZE).optional(), offset: z.number().int().min(0).optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.userType !== "professional" && ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") throw new TRPCError({ code: "FORBIDDEN", message: "My Work is available to professional accounts." });
+        return getProfessionalWorkCommandCenter(ctx.user.id, input ?? {});
+      }),
+    workspace: protectedProcedure
+      .input(z.object({ engagementId: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.userType !== "professional" && ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") throw new TRPCError({ code: "FORBIDDEN", message: "Workspaces are available to professional accounts." });
+        const workspace = await getProfessionalWorkWorkspace(ctx.user.id, input.engagementId);
+        if (!workspace) throw new TRPCError({ code: "NOT_FOUND", message: "Work workspace not found." });
+        return workspace;
       }),
   }),
   notifications: router({

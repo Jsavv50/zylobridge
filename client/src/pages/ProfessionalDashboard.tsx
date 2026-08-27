@@ -12,7 +12,7 @@ import { parseProfileMetadata } from "@shared/profile";
 import { VOCATION_LABELS, type VocationKey } from "@shared/vocations";
 
 const sidebarGroups = [
-  { label: "Professional", items: [["Dashboard", "/dashboard", Sparkles], ["Browse Jobs", "/jobs", Search], ["Applications", "/applications", BriefcaseBusiness], ["Messages", "/messages", MessageSquare], ["Notifications", "/notifications", Bell], ["Saved Jobs", "/jobs?view=saved", Star], ["My Work", "/payments", Layers3]] },
+  { label: "Professional", items: [["Dashboard", "/dashboard", Sparkles], ["Browse Jobs", "/jobs", Search], ["Applications", "/applications", BriefcaseBusiness], ["Messages", "/messages", MessageSquare], ["Notifications", "/notifications", Bell], ["Saved Jobs", "/jobs?view=saved", Star], ["My Work", "/my-work", Layers3]] },
   { label: "Financial", items: [["Earnings & Payouts", "/payments", WalletCards]] },
   { label: "Profile", items: [["Professional Profile", "/profile", UserRound], ["Portfolio", "/profile/edit", Layers3], ["Certifications", "/verification", FileCheck2], ["Reviews", "/profile", Star], ["Profile Analytics", "/profile", Eye]] },
   { label: "Account", items: [["Verification", "/verification", ShieldCheck], ["Settings", "/notifications/settings", Settings2], ["Help & Support", "/how-it-works", MessageSquare]] },
