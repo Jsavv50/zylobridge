@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Send, MessageSquare, Loader2 } from "lucide-react";
+import { ArrowLeft, Send, MessageSquare, Loader2 } from "lucide-react";
 import ZylobridgeLogo from "@/components/ZylobridgeLogo";
 import { getLoginUrl } from "@/const";
 import { formatDistanceToNow } from "date-fns";
@@ -62,7 +62,7 @@ type RealtimeStatus = "CONNECTING" | "CONNECTED" | "ERROR";
 
 export default function Messaging() {
   const { user, isAuthenticated, loading } = useAuth();
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const [selectedConvId, setSelectedConvId] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
@@ -82,6 +82,8 @@ export default function Messaging() {
     const requestedId = Number(new URLSearchParams(location.split("?")[1] ?? "").get("conv"));
     if (Number.isInteger(requestedId) && conversations.some((conversation) => conversation.id === requestedId)) {
       setSelectedConvId(requestedId);
+    } else {
+      setSelectedConvId(null);
     }
   }, [conversations, location]);
 
@@ -303,9 +305,9 @@ export default function Messaging() {
           </div>
         </div>
 
-        <div className="grid min-h-0 grid-cols-1 gap-0 overflow-hidden rounded-xl border border-border md:grid-cols-3 h-[min(600px,calc(100vh-190px))] min-h-[480px]">
+        <div className="grid min-h-0 grid-cols-1 gap-0 overflow-hidden rounded-xl border border-border md:grid-cols-3 h-[calc(100svh-150px)] min-h-[360px] md:h-[min(600px,calc(100svh-190px))] md:min-h-[480px]">
           {/* Conversation List */}
-          <div className="flex min-h-0 flex-col border-b border-border bg-card md:border-b-0 md:border-r">
+          <div className={`${selectedConvId ? "hidden md:flex" : "flex"} min-h-0 flex-col border-b border-border bg-card md:border-b-0 md:border-r`}>
             <div className="p-4 border-b border-border">
               <h2 className="font-semibold text-foreground">Conversations</h2>
             </div>
@@ -325,7 +327,7 @@ export default function Messaging() {
                   return (
                     <button
                       key={conv.id}
-                      onClick={() => setSelectedConvId(conv.id)}
+                      onClick={() => { setSelectedConvId(conv.id); navigate(`/messages?conv=${conv.id}`); }}
                       className={`w-full p-4 text-left hover:bg-accent/50 transition-colors border-b border-border/50 ${
                         isSelected ? "bg-primary/10 border-l-2 border-l-primary" : conv.unreadCount ? "bg-primary/5" : ""
                       }`}
@@ -359,7 +361,7 @@ export default function Messaging() {
           </div>
 
           {/* Message Thread */}
-          <div className="flex min-h-0 flex-col bg-background md:col-span-2">
+          <div className={`${selectedConvId ? "flex" : "hidden md:flex"} min-h-0 flex-col bg-background md:col-span-2`}>
             {!selectedConvId ? (
               <div className="flex-1 flex items-center justify-center">
                 <div className="text-center text-muted-foreground">
@@ -379,6 +381,7 @@ export default function Messaging() {
                   const jobLabel = conversationJobLabel(selectedConversation);
                   return <div className="border-b border-border bg-card p-4">
                     <div className="flex min-w-0 items-center gap-3">
+                      <Button variant="ghost" size="icon" className="shrink-0 md:hidden" onClick={() => { setSelectedConvId(null); navigate("/messages"); }} aria-label="Back to conversations"><ArrowLeft className="h-4 w-4" /></Button>
                       <Avatar className="h-9 w-9 shrink-0">
                         {participantAvatar && <img src={participantAvatar} alt="" className="h-full w-full rounded-full object-cover" />}
                         <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">{conversationInitials(participantName)}</AvatarFallback>
@@ -408,7 +411,7 @@ export default function Messaging() {
                         return (
                           <div key={msg.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
                             <div
-                              className={`max-w-[70%] rounded-2xl px-4 py-2.5 ${
+                              className={`max-w-[min(85%,34rem)] break-words rounded-2xl px-4 py-2.5 sm:max-w-[70%] ${
                                 isMine
                                   ? "bg-primary text-primary-foreground rounded-br-sm"
                                   : "bg-card border border-border text-foreground rounded-bl-sm"
@@ -431,13 +434,14 @@ export default function Messaging() {
                 <div className="p-4 border-t border-border bg-card">
                   <div className="flex gap-2">
                     <Input
+                      aria-label="Message text"
                       value={inputValue}
                       onChange={(e) => setInputValue(e.target.value)}
                       onKeyDown={handleKeyDown}
                       placeholder="Type a message..."
                       className="flex-1"
                     />
-                    <Button onClick={sendMessage} disabled={!inputValue.trim() || sendMessageMutation.isPending}>
+                    <Button aria-label="Send message" onClick={sendMessage} disabled={!inputValue.trim() || sendMessageMutation.isPending}>
                       {sendMessageMutation.isPending ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (

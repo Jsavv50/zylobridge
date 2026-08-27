@@ -51,4 +51,13 @@ describe("integrated marketplace workflow", () => {
     expect(routers).toContain("const jobLabel = job?.title?.trim() || \"a marketplace job\";");
     expect(routers).toContain("regarding ${jobLabel}");
   });
+
+  it("supports mobile list-to-thread navigation and safe viewport sizing", () => {
+    const messaging = read("client/src/pages/Messaging.tsx");
+    expect(messaging).toContain('navigate(`/messages?conv=${conv.id}`)');
+    expect(messaging).toContain('navigate("/messages")');
+    expect(messaging).toContain('h-[calc(100svh-150px)]');
+    expect(messaging).toContain("break-words");
+    expect(messaging).toContain('aria-label="Back to conversations"');
+  });
 });

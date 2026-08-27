@@ -907,3 +907,12 @@
 - [x] Add regression coverage for participant isolation, job context, legacy fallbacks, logo integration, and unread/read behavior
 - [x] Run full tests, TypeScript, production builds, responsive checks, and safe live verification
 - [x] Save and publish the verified Messages update
+
+## Phase 92: Messages Responsive Identity Update
+- [x] Audit current responsive Messages layout and participant identity behavior
+- [x] Implement flexible desktop, tablet, and mobile list-to-thread layout with back navigation
+- [x] Ensure actual corresponding user names are shown with safe legacy fallbacks
+- [x] Preserve authorization, unread/read state, realtime messaging, and notification context
+- [x] Add regression coverage for responsive behavior and participant-name resolution
+- [x] Run full tests, TypeScript, production builds, and safe live route verification
+- [x] Save and publish the verified responsive identity update
