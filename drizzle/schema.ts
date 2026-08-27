@@ -11,6 +11,7 @@ import {
   index,
   uniqueIndex,
   bigint,
+  jsonb,
 } from "drizzle-orm/pg-core";
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
@@ -163,6 +164,8 @@ export const profiles = pgTable("profiles", {
   latitude: numeric("latitude", { precision: 10, scale: 8 }),
   longitude: numeric("longitude", { precision: 11, scale: 8 }),
   serviceRadiusKm: integer("serviceRadiusKm").default(50),
+  /** Optional structured marketplace profile metadata; private fields are never exposed by public queries. */
+  profileMetadata: jsonb("profileMetadata"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 }, (table) => ({

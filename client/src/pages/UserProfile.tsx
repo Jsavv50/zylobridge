@@ -1,611 +1,113 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
-  User,
-  Mail,
-  Phone,
-  Shield,
-  ShieldCheck,
-  LogOut,
-  Settings,
-  Briefcase,
-  Calendar,
-  Clock,
-  ChevronRight,
-  Edit3,
-  CheckCircle,
-  AlertCircle,
-  Copy,
-  Check,
-  Star,
-  MessageSquare,
-  ShoppingBag,
-  LayoutDashboard,
-  Building2,
-  Lock,
+  AlertCircle, ArrowUpRight, BriefcaseBusiness, Calendar, Check, CheckCircle2, ChevronRight,
+  Clock3, Edit3, Eye, EyeOff, FileCheck2, Globe2, GraduationCap, Layers3, LogOut,
+  Mail, MapPin, MessageSquare, Phone, Settings2, Shield, ShieldCheck, Sparkles, Star,
+  UserRound, WalletCards,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
+import { parseProfileMetadata, type ProfileAvailabilityStatus } from "@shared/profile";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function formatDate(date: Date | string | null | undefined): string {
-  if (!date) return "—";
-  return new Date(date).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+function initials(name?: string | null) { return name?.split(" ").map((part) => part[0]).join("").toUpperCase().slice(0, 2) || "ZY"; }
+function date(value?: Date | string | null) { return value ? new Date(value).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "Not set"; }
+function title(value?: string | null) { return value?.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Not set"; }
+function availability(value?: ProfileAvailabilityStatus, isAvailable?: boolean) {
+  if (value === "available_now" || (value === undefined && isAvailable)) return "Available now";
+  if (value === "available_from") return "Available from a future date";
+  if (value === "currently_working") return "Currently engaged";
+  if (value === "emergency_only") return "Emergency work only";
+  if (value === "not_available" || isAvailable === false) return "Not available";
+  return "Availability not set";
 }
 
-function formatRelativeTime(date: Date | string | null | undefined): string {
-  if (!date) return "—";
-  const ms = Date.now() - new Date(date).getTime();
-  const minutes = Math.floor(ms / 60000);
-  if (minutes < 1) return "Just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  return formatDate(date);
+function Section({ title: heading, eyebrow, action, children }: { title: string; eyebrow?: string; action?: React.ReactNode; children: React.ReactNode }) {
+  return <section className="rounded-3xl border border-white/8 bg-[#111927]/85 p-5 sm:p-6 shadow-[0_18px_60px_rgba(0,0,0,.16)]">
+    <div className="flex items-start justify-between gap-4 mb-5"><div><p className="text-[10px] uppercase tracking-[.18em] text-violet-300/70 font-semibold">{eyebrow}</p><h2 className="mt-1 text-lg font-semibold text-white">{heading}</h2></div>{action}</div>{children}
+  </section>;
 }
-
-function getInitials(name: string | null | undefined): string {
-  if (!name) return "?";
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+function EmptyState({ icon: Icon, title: heading, description, href = "/profile/edit" }: { icon: React.ElementType; title: string; description: string; href?: string }) {
+  return <div className="rounded-2xl border border-dashed border-white/10 bg-white/[.02] px-5 py-7 text-center"><Icon className="mx-auto h-7 w-7 text-gray-500" /><p className="mt-3 text-sm font-medium text-gray-300">{heading}</p><p className="mx-auto mt-1 max-w-md text-xs leading-5 text-gray-500">{description}</p><Link href={href}><Button variant="outline" size="sm" className="mt-4 border-white/10 bg-transparent text-gray-300 hover:text-white"><Edit3 className="mr-2 h-3.5 w-3.5" />Complete profile</Button></Link></div>;
 }
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  color = "violet",
-}: {
-  icon: React.ElementType;
-  label: string;
-  value: string | number;
-  color?: "violet" | "emerald" | "blue" | "amber";
-}) {
-  const colors = {
-    violet: "bg-violet-500/10 text-violet-400 border-violet-500/20",
-    emerald: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-    blue: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-    amber: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-  };
-  return (
-    <div className="rounded-2xl border border-white/8 bg-[#131a26]/60 p-5 flex items-center gap-4">
-      <div className={`w-11 h-11 rounded-xl border flex items-center justify-center shrink-0 ${colors[color]}`}>
-        <Icon className="h-5 w-5" />
-      </div>
-      <div className="min-w-0">
-        <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">{label}</p>
-        <p className="text-lg font-bold text-white mt-0.5 truncate">{value}</p>
-      </div>
-    </div>
-  );
+function Metric({ label, value, icon: Icon }: { label: string; value: string | number; icon: React.ElementType }) {
+  return <div className="rounded-2xl border border-white/8 bg-[#111927] p-4"><Icon className="h-4 w-4 text-violet-300" /><p className="mt-3 text-xl font-semibold text-white">{value}</p><p className="mt-1 text-[11px] text-gray-500">{label}</p></div>;
 }
-
-function InfoRow({
-  icon: Icon,
-  label,
-  value,
-  copyable = false,
-  badge,
-}: {
-  icon: React.ElementType;
-  label: string;
-  value: string | null | undefined;
-  copyable?: boolean;
-  badge?: React.ReactNode;
-}) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = () => {
-    if (!value) return;
-    navigator.clipboard.writeText(value).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-      toast.success("Copied to clipboard");
-    });
-  };
-
-  return (
-    <div className="flex items-center gap-4 py-4 border-b border-white/6 last:border-0">
-      <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
-        <Icon className="h-4 w-4 text-gray-400" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-xs text-gray-500 font-medium">{label}</p>
-        <div className="flex items-center gap-2 mt-0.5">
-          <p className="text-sm text-white font-medium truncate">{value || "Not set"}</p>
-          {badge}
-        </div>
-      </div>
-      {copyable && value && (
-        <button
-          onClick={handleCopy}
-          className="shrink-0 p-1.5 rounded-lg hover:bg-white/8 transition-colors text-gray-500 hover:text-gray-300"
-          aria-label="Copy to clipboard"
-        >
-          {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-        </button>
-      )}
-    </div>
-  );
-}
-
-function QuickActionCard({
-  icon: Icon,
-  title,
-  description,
-  href,
-  accent = false,
-}: {
-  icon: React.ElementType;
-  title: string;
-  description: string;
-  href: string;
-  accent?: boolean;
-}) {
-  return (
-    <Link href={href}>
-      <div
-        className={`group rounded-2xl border p-5 cursor-pointer transition-all duration-200 hover:border-violet-500/40 hover:bg-white/4 ${
-          accent
-            ? "border-violet-500/30 bg-violet-500/5"
-            : "border-white/8 bg-[#131a26]/60"
-        }`}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center shrink-0">
-            <Icon className="h-5 w-5 text-violet-400" />
-          </div>
-          <ChevronRight className="h-4 w-4 text-gray-600 group-hover:text-gray-400 transition-colors mt-1 shrink-0" />
-        </div>
-        <div className="mt-3">
-          <p className="text-sm font-semibold text-white">{title}</p>
-          <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{description}</p>
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function UserProfile() {
   const [, navigate] = useLocation();
-  const { user, loading, isLoggingOut, isAuthenticated, logout } = useAuth({
-    redirectOnUnauthenticated: true,
-    redirectPath: "/sign-in",
-  });
+  const { user, loading, isLoggingOut, isAuthenticated, logout } = useAuth({ redirectOnUnauthenticated: true, redirectPath: "/sign-in" });
+  const hubQuery = trpc.profiles.hub.useQuery(undefined, { enabled: isAuthenticated });
+  const utils = trpc.useUtils();
+  const [headline, setHeadline] = useState("");
+  const [visibility, setVisibility] = useState<"visible" | "hidden">("visible");
+  const [availabilityStatus, setAvailabilityStatus] = useState<ProfileAvailabilityStatus>("available_now");
+  const metadataMutation = trpc.profiles.updateMetadata.useMutation({ onSuccess: async () => { toast.success("Marketplace settings saved."); await utils.profiles.hub.invalidate(); }, onError: (error) => toast.error(error.message) });
 
-  const handleSignOut = async () => {
-    try {
-      await logout();
-      toast.success("You have been signed out.");
-      navigate("/");
-    } catch {
-      toast.error("Sign out failed. Please try again.");
-    }
-  };
+  const hub = hubQuery.data;
+  const profile = hub?.profile;
+  const metadata = useMemo(() => parseProfileMetadata(profile?.profileMetadata), [profile?.profileMetadata]);
+  useEffect(() => { setHeadline(metadata.headline || ""); setVisibility(metadata.visibility || "visible"); setAvailabilityStatus(metadata.availabilityStatus || (profile?.isAvailable ? "available_now" : "not_available")); }, [metadata, profile?.isAvailable]);
 
-  // ── Loading state ──────────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#0a0f1a] flex flex-col">
-        <Navbar />
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center space-y-4">
-            <div className="w-16 h-16 rounded-full border-2 border-violet-500/30 border-t-violet-500 animate-spin mx-auto" />
-            <p className="text-gray-400 text-sm">Loading your profile…</p>
-          </div>
-        </div>
-        <Footer />
+  if (loading || (isAuthenticated && hubQuery.isLoading)) return <div className="min-h-screen bg-[#080d16] text-white"><Navbar /><div className="flex min-h-[65vh] items-center justify-center"><div className="text-center"><div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-violet-400/30 border-t-violet-400" /><p className="mt-4 text-sm text-gray-400">Preparing your profile hub…</p></div></div></div>;
+  if (!isAuthenticated || !user) return null;
+
+  const saveControls = () => metadataMutation.mutate({ headline: headline.trim() || undefined, visibility, availabilityStatus });
+  const completion = hub?.completion;
+  const reviewCount = hub?.trust.reviewCount ?? 0;
+  const isProfessional = user.userType === "professional";
+  const visibilityLabel = visibility === "visible" ? "Visible in professional search" : "Hidden from professional search";
+
+  return <div className="min-h-screen bg-[#080d16] text-white"><Navbar />
+    <main className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2 text-sm text-gray-500"><Link href="/" className="hover:text-gray-200">Home</Link><ChevronRight className="h-3.5 w-3.5" /><span className="text-gray-300">Profile Hub</span></div><div className="flex gap-2"><Link href="/profile/edit"><Button variant="outline" size="sm" className="border-white/10 bg-transparent text-gray-300 hover:text-white"><Edit3 className="mr-2 h-3.5 w-3.5" />Edit profile</Button></Link>{user.userType === "professional" && <Link href={`/professionals/${user.id}`}><Button size="sm" className="bg-violet-600 hover:bg-violet-500"><Eye className="mr-2 h-3.5 w-3.5" />View public profile</Button></Link>}</div></div>
+
+      <div className="mb-6 overflow-hidden rounded-[2rem] border border-white/8 bg-gradient-to-br from-[#17223a] via-[#111927] to-[#0b111c]">
+        <div className="h-28 bg-[radial-gradient(circle_at_15%_30%,rgba(124,58,237,.34),transparent_38%),radial-gradient(circle_at_85%_10%,rgba(37,99,235,.24),transparent_36%)]" />
+        <div className="-mt-12 flex flex-col gap-5 px-5 pb-6 sm:flex-row sm:items-end sm:justify-between sm:px-7"><div className="flex items-end gap-4"><Avatar className="h-24 w-24 border-4 border-[#0b111c] shadow-2xl"><AvatarImage src={user.avatarUrl || undefined} alt="" /><AvatarFallback className="bg-gradient-to-br from-violet-600 to-blue-600 text-2xl font-bold">{initials(user.name)}</AvatarFallback></Avatar><div className="pb-1"><div className="flex flex-wrap items-center gap-2"><h1 className="text-2xl font-semibold tracking-tight text-white">{user.name || "Your professional identity"}</h1>{user.isVerified && <Badge className="border-emerald-400/20 bg-emerald-400/10 text-emerald-300"><ShieldCheck className="mr-1 h-3 w-3" />Verified</Badge>}</div><p className="mt-1 text-sm text-gray-400">{metadata.headline || title(profile?.vocation) || "Professional Marketplace Profile"}</p><div className="mt-2 flex flex-wrap gap-3 text-xs text-gray-500"><span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{profile?.location || "Location not set"}</span><span className={`inline-flex items-center gap-1 ${metadata.availabilityStatus === "available_now" || (metadata.availabilityStatus === undefined && profile?.isAvailable) ? "text-emerald-300" : "text-gray-400"}`}><Clock3 className="h-3.5 w-3.5" />{availability(metadata.availabilityStatus, profile?.isAvailable)}</span><span className="inline-flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />Member since {date(user.createdAt)}</span></div><div className="mt-3 flex flex-wrap gap-3 text-xs text-gray-500"><span>{reviewCount > 0 ? `${hub?.trust.averageRating?.toFixed(1) ?? "—"} / 5 · ${reviewCount} review${reviewCount === 1 ? "" : "s"}` : "No reviews yet"}</span><span>{hub?.completedJobs ? `${hub.completedJobs} completed job${hub.completedJobs === 1 ? "" : "s"}` : "Completed work not yet recorded"}</span></div></div></div><div className="rounded-2xl border border-white/10 bg-black/10 p-4 sm:min-w-[230px]"><div className="flex items-center justify-between gap-3"><span className="text-xs text-gray-400">Profile completion</span><span className="text-sm font-semibold text-white">{completion?.percentage ?? 0}%</span></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-blue-400" style={{ width: `${completion?.percentage ?? 0}%` }} /></div><p className="mt-2 text-[11px] text-gray-500">{completion?.remaining?.length ? `${completion.remaining.length} items can strengthen your profile.` : "Your profile is complete."}</p></div></div>
       </div>
-    );
-  }
 
-  // ── Unauthenticated guard (redirect handled by useAuth) ────────────────────
-  if (!isAuthenticated || !user) {
-    return null;
-  }
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="min-w-0 space-y-6">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4"><Metric icon={Star} label="Average rating" value={reviewCount > 0 ? hub?.trust.averageRating ?? "—" : "—"} /><Metric icon={MessageSquare} label="Reviews received" value={reviewCount} /><Metric icon={BriefcaseBusiness} label="Completed work" value={hub?.completedJobs ?? "—"} /><Metric icon={Layers3} label="Portfolio projects" value={hub?.portfolio.length ?? 0} /></div>
 
-  const initials = getInitials(user.name);
-  const roleLabel = user.role === "SUPER_ADMIN" ? "Super Administrator" : user.role === "admin" ? "Administrator" : "Member";
-  const userTypeLabel =
-    user.role === "SUPER_ADMIN"
-      ? "Super Admin"
-      : user.userType === "professional"
-      ? "Trade Professional"
-      : user.userType === "client"
-      ? "Client / Contractor"
-      : user.userType === "enterprise"
-      ? "Enterprise"
-      : "Account not configured";
-  const loginMethodLabel =
-    user.loginMethod === "google"
-      ? "Google"
-      : user.loginMethod === "email"
-      ? "Email OTP"
-      : user.loginMethod === "phone"
-      ? "Phone OTP"
-      : user.loginMethod || "Unknown";
+          <Section eyebrow="Professional identity" title="Your marketplace positioning" action={<Link href="/profile/edit" className="text-xs text-violet-300 hover:text-violet-200">Edit details <ArrowUpRight className="ml-1 inline h-3 w-3" /></Link>}>
+            {profile ? <div className="grid gap-5 md:grid-cols-2"><div><p className="text-xs uppercase tracking-wide text-gray-500">Headline</p><p className="mt-2 text-sm leading-6 text-gray-200">{metadata.headline || "Add a concise headline that explains the work you do."}</p><p className="mt-5 text-xs uppercase tracking-wide text-gray-500">About</p><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-400">{profile.bio || "Your professional story is not set yet."}</p></div><div className="space-y-4"><div className="flex items-center justify-between border-b border-white/6 pb-3"><span className="text-sm text-gray-400">Primary vocation</span><span className="text-sm font-medium text-white">{title(profile.vocation)}</span></div><div className="flex items-center justify-between border-b border-white/6 pb-3"><span className="text-sm text-gray-400">Experience</span><span className="text-sm font-medium text-white">{profile.yearsExperience ?? "—"}{profile.yearsExperience !== null && profile.yearsExperience !== undefined ? " years" : ""}</span></div><div className="flex items-center justify-between border-b border-white/6 pb-3"><span className="text-sm text-gray-400">Availability</span><span className="text-sm font-medium text-emerald-300">{availability(metadata.availabilityStatus, profile.isAvailable)}</span></div><div><p className="text-xs uppercase tracking-wide text-gray-500">Skills</p><p className="mt-2 text-sm leading-6 text-gray-300">{profile.skills || "No skills added yet."}</p></div></div></div> : <EmptyState icon={UserRound} title="Create your professional profile" description="Choose your vocation, add your story, and make your work discoverable to the right clients." />}
+          </Section>
 
-  return (
-    <div className="min-h-screen bg-[#0a0f1a] flex flex-col">
-      <Navbar />
+          <Section eyebrow="Career proof" title="Experience & qualifications" action={<Link href="/profile/edit" className="text-xs text-violet-300 hover:text-violet-200">Manage records <ArrowUpRight className="ml-1 inline h-3 w-3" /></Link>}>
+            <div className="grid gap-6 lg:grid-cols-2"><div><h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-200"><BriefcaseBusiness className="h-4 w-4 text-violet-300" />Experience</h3>{hub?.experience.length ? <div className="space-y-4">{hub.experience.slice(0, 4).map((item) => <div key={item.id} className="border-l border-violet-400/30 pl-4"><p className="text-sm font-medium text-white">{item.title}</p><p className="mt-1 text-xs text-gray-400">{item.companyName}{item.location ? ` · ${item.location}` : ""}</p><p className="mt-1 text-[11px] text-gray-500">{date(item.startDate)} — {item.isCurrent ? "Present" : date(item.endDate)}</p></div>)}</div> : <p className="text-sm text-gray-500">No experience records added.</p>}</div><div><h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-200"><GraduationCap className="h-4 w-4 text-violet-300" />Qualifications</h3>{hub?.qualifications.length ? <div className="space-y-3">{hub.qualifications.slice(0, 4).map((item) => <div key={item.id} className="rounded-xl border border-white/8 bg-white/[.02] p-3"><p className="text-sm font-medium text-white">{item.title}</p><p className="mt-1 text-xs text-gray-400">{item.issuingOrg}</p><p className="mt-1 text-[11px] text-gray-500">Issued {date(item.issueDate)}{item.credentialId ? ` · ${item.credentialId}` : ""}</p></div>)}</div> : <p className="text-sm text-gray-500">No qualifications added.</p>}</div></div>
+          </Section>
 
-      <main className="flex-1 py-10 px-4">
-        <div className="max-w-5xl mx-auto space-y-8">
+          <Section eyebrow="Work profile" title="Where and how you work" action={<Link href="/profile/edit" className="text-xs text-violet-300 hover:text-violet-200">Edit preferences <ArrowUpRight className="ml-1 inline h-3 w-3" /></Link>}>
+            <div className="grid gap-6 lg:grid-cols-2"><div><h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-200"><MapPin className="h-4 w-4 text-violet-300" />Service area</h3><p className="text-sm text-gray-300">{profile?.location || "Primary location not set"}</p>{metadata.serviceAreas?.length ? <div className="mt-3 flex flex-wrap gap-2">{metadata.serviceAreas.map((area) => <span key={area} className="rounded-full border border-white/10 bg-white/[.03] px-3 py-1.5 text-xs text-gray-300">{area}</span>)}</div> : <p className="mt-2 text-xs leading-5 text-gray-500">Add preferred suburbs or service locations to improve future matching.</p>}<p className="mt-3 text-xs text-gray-500">{metadata.willingToTravel ? "Willing to travel beyond the listed service area." : "Travel preference not set."}</p></div><div><h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-200"><Calendar className="h-4 w-4 text-violet-300" />Work preferences</h3>{metadata.employmentTypes?.length || metadata.preferredProjectTypes?.length || metadata.preferredJobSize || metadata.paymentStructure ? <div className="space-y-3 text-sm"><div><span className="text-gray-500">Job types</span><p className="mt-1 text-gray-300">{metadata.employmentTypes?.map(title).join(", ") || "Not set"}</p></div><div><span className="text-gray-500">Project types</span><p className="mt-1 text-gray-300">{metadata.preferredProjectTypes?.join(", ") || "Not set"}</p></div><div className="flex flex-wrap gap-3"><span><span className="text-gray-500">Size:</span> {title(metadata.preferredJobSize)}</span><span><span className="text-gray-500">Payment:</span> {title(metadata.paymentStructure)}</span></div></div> : <p className="text-sm leading-6 text-gray-500">Optional job preferences help the marketplace surface more relevant opportunities.</p>}</div></div><div className="mt-6 grid gap-6 border-t border-white/8 pt-5 lg:grid-cols-3"><div><p className="text-xs uppercase tracking-wide text-gray-500">Languages</p><p className="mt-2 text-sm text-gray-300">{metadata.languages?.map((item) => `${item.language} · ${title(item.proficiency)}`).join(", ") || "Not set"}</p></div><div><p className="text-xs uppercase tracking-wide text-gray-500">Equipment & capabilities</p><p className="mt-2 text-sm text-gray-300">{metadata.equipment?.join(", ") || "Not set"}{metadata.transportation ? ` · ${metadata.transportation}` : ""}</p></div><div><p className="text-xs uppercase tracking-wide text-gray-500">Rates</p><p className="mt-2 text-sm text-gray-300">{metadata.rateVisibility === "public" && (metadata.dailyRate || metadata.startingProjectRate) ? `${metadata.dailyRate ? `Daily ${metadata.dailyRate.toLocaleString()}` : ""}${metadata.dailyRate && metadata.startingProjectRate ? " · " : ""}${metadata.startingProjectRate ? `From ${metadata.startingProjectRate.toLocaleString()}` : ""}` : profile?.hourlyRate && metadata.rateVisibility !== "private" ? `Hourly ${Number(profile.hourlyRate).toLocaleString()}` : "Private or not set"}</p><p className="mt-1 text-[11px] text-gray-500">Final pricing varies by project scope.</p></div></div>
+          </Section>
 
-          {/* ── Breadcrumb ─────────────────────────────────────────────────── */}
-          <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-sm text-gray-500">
-            <Link href="/" className="hover:text-gray-300 transition-colors">Home</Link>
-            <ChevronRight className="h-3.5 w-3.5" />
-            <span className="text-gray-300 font-medium">My Profile</span>
-          </nav>
+          <Section eyebrow="Marketplace signals" title="Match readiness & activity"><div className="grid gap-4 sm:grid-cols-3"><Metric icon={Sparkles} label="Active applications" value={hub?.activity.activeApplications ?? 0} /><Metric icon={CheckCircle2} label="Shortlisted opportunities" value={hub?.activity.shortlistedJobs ?? 0} /><Metric icon={Globe2} label="New opportunities this week" value={hub?.activity.newOpportunities ?? 0} /></div><div className="mt-5 rounded-2xl border border-violet-400/15 bg-violet-400/[.05] p-4"><div className="flex items-start gap-3"><Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-violet-300" /><div><p className="text-sm font-medium text-white">Profile match readiness: {completion?.percentage ?? 0}%</p><p className="mt-1 text-xs leading-5 text-gray-400">This transparent readiness indicator uses only completed profile fields. It is not a promise of job matches or employer activity.</p>{completion?.remaining?.length ? <p className="mt-2 text-xs text-violet-200">Next opportunities to strengthen your profile: {completion.remaining.slice(0, 3).join(", ")}.</p> : null}</div></div></div><p className="mt-4 text-xs text-gray-500">Profile view and employer-search analytics will appear here as those events become available.</p></Section>
 
-          {/* ── Profile Hero ───────────────────────────────────────────────── */}
-          <div className="rounded-3xl border border-white/8 bg-gradient-to-br from-[#131a26] to-[#0d1320] overflow-hidden">
-            {/* Banner */}
-            <div
-              className="h-32 w-full"
-              style={{
-                background:
-                  "linear-gradient(135deg, #1e0a3c 0%, #0d1a3a 40%, #0a1628 100%)",
-              }}
-            >
-              <div className="h-full w-full opacity-30"
-                style={{
-                  backgroundImage:
-                    "radial-gradient(circle at 20% 50%, #7c3aed33 0%, transparent 60%), radial-gradient(circle at 80% 20%, #2563eb22 0%, transparent 50%)",
-                }}
-              />
-            </div>
+          <Section eyebrow="Work samples" title="Portfolio" action={<Link href="/profile/edit" className="text-xs text-violet-300 hover:text-violet-200">Add project <ArrowUpRight className="ml-1 inline h-3 w-3" /></Link>}>
+            {hub?.portfolio.length ? <div className="grid gap-3 sm:grid-cols-2">{hub.portfolio.slice(0, 6).map((item) => <div key={item.id} className="rounded-2xl border border-white/8 bg-white/[.02] p-4"><div className="flex items-start justify-between gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-400/10 text-violet-300"><Layers3 className="h-5 w-5" /></div>{item.projectUrl && <a href={item.projectUrl} target="_blank" rel="noreferrer" className="text-gray-500 hover:text-violet-300" aria-label={`Open ${item.title}`}><ArrowUpRight className="h-4 w-4" /></a>}</div><p className="mt-4 text-sm font-medium text-white">{item.title}</p><p className="mt-1 line-clamp-3 text-xs leading-5 text-gray-500">{item.description || "No project description provided."}</p></div>)}</div> : <EmptyState icon={Layers3} title="Your portfolio is ready for proof of work" description="Add real projects, outcomes, and links so clients can understand the quality of your work." />}
+          </Section>
 
-            {/* Avatar + info */}
-            <div className="px-6 pb-6">
-              <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 -mt-10">
-                <div className="flex items-end gap-4">
-                  <Avatar className="w-20 h-20 border-4 border-[#0a0f1a] shadow-xl">
-                    <AvatarFallback className="bg-gradient-to-br from-violet-600 to-blue-600 text-white text-2xl font-bold">
-                      {initials}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="pb-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h1 className="text-xl font-bold text-white">{user.name || "Anonymous User"}</h1>
-                      {user.isVerified && (
-                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2 py-0.5">
-                          <ShieldCheck className="h-3 w-3" /> Verified
-                        </span>
-                      )}
-                      {user.role === "SUPER_ADMIN" && (
-                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-400 bg-red-500/10 border border-red-500/20 rounded-full px-2 py-0.5">
-                          <Shield className="h-3 w-3" /> Super Admin
-                        </span>
-                      )}
-                      {user.role === "admin" && (
-                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-full px-2 py-0.5">
-                          <Shield className="h-3 w-3" /> Admin
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-gray-400 mt-0.5">{userTypeLabel}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 pb-1">
-                  <Link href="/profile/edit">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-white/10 text-gray-300 hover:text-white hover:border-white/20 bg-transparent gap-1.5"
-                    >
-                      <Edit3 className="h-3.5 w-3.5" />
-                      Edit Profile
-                    </Button>
-                  </Link>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="border-red-500/20 text-red-400 hover:text-red-300 hover:border-red-500/40 bg-transparent gap-1.5"
-                    onClick={handleSignOut}
-                    disabled={isLoggingOut}
-                  >
-                    <LogOut className="h-3.5 w-3.5" />
-                    {isLoggingOut ? "Signing out…" : "Sign Out"}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* ── Stats row ─────────────────────────────────────────────────── */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard
-              icon={user.isVerified ? ShieldCheck : Shield}
-              label="Verification"
-              value={user.isVerified ? "Verified" : "Unverified"}
-              color={user.isVerified ? "emerald" : "amber"}
-            />
-            <StatCard
-              icon={Briefcase}
-              label="Account Type"
-              value={userTypeLabel}
-              color="violet"
-            />
-            <StatCard
-              icon={Calendar}
-              label="Member Since"
-              value={formatDate(user.createdAt)}
-              color="blue"
-            />
-            <StatCard
-              icon={Clock}
-              label="Last Sign-In"
-              value={formatRelativeTime(user.lastSignedIn)}
-              color="violet"
-            />
-          </div>
-
-          {/* ── Two-column layout ─────────────────────────────────────────── */}
-          <div className="grid lg:grid-cols-3 gap-6">
-
-            {/* Left — Account Details */}
-            <div className="lg:col-span-2 space-y-6">
-
-              {/* Account Information */}
-              <section className="rounded-2xl border border-white/8 bg-[#131a26]/60 p-6">
-                <div className="flex items-center justify-between mb-2">
-                  <h2 className="text-base font-semibold text-white flex items-center gap-2">
-                    <User className="h-4 w-4 text-violet-400" />
-                    Account Information
-                  </h2>
-                  <Badge
-                    variant="outline"
-                    className="text-xs border-white/10 text-gray-400 bg-white/4"
-                  >
-                    {roleLabel}
-                  </Badge>
-                </div>
-                <Separator className="bg-white/6 mb-4" />
-
-                <InfoRow
-                  icon={User}
-                  label="Full Name"
-                  value={user.name}
-                  copyable
-                />
-                <InfoRow
-                  icon={Mail}
-                  label="Email Address"
-                  value={user.email}
-                  copyable
-                  badge={
-                    user.email ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 rounded-full px-1.5 py-0.5">
-                        <CheckCircle className="h-2.5 w-2.5" /> Confirmed
-                      </span>
-                    ) : undefined
-                  }
-                />
-                <InfoRow
-                  icon={Phone}
-                  label="Phone Number"
-                  value={user.phone}
-                  copyable={!!user.phone}
-                  badge={
-                    !user.phone ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-400 bg-amber-500/10 rounded-full px-1.5 py-0.5">
-                        <AlertCircle className="h-2.5 w-2.5" /> Not added
-                      </span>
-                    ) : undefined
-                  }
-                />
-                <InfoRow
-                  icon={Lock}
-                  label="Sign-In Method"
-                  value={loginMethodLabel}
-                />
-                <InfoRow
-                  icon={Shield}
-                  label="Account Role"
-                  value={roleLabel}
-                />
-              </section>
-
-              {/* Verification Status */}
-              <section className="rounded-2xl border border-white/8 bg-[#131a26]/60 p-6">
-                <h2 className="text-base font-semibold text-white flex items-center gap-2 mb-2">
-                  <ShieldCheck className="h-4 w-4 text-violet-400" />
-                  Verification Status
-                </h2>
-                <Separator className="bg-white/6 mb-4" />
-
-                {user.isVerified ? (
-                  <div className="flex items-start gap-4 p-4 rounded-xl bg-emerald-500/8 border border-emerald-500/20">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-500/15 flex items-center justify-center shrink-0">
-                      <ShieldCheck className="h-5 w-5 text-emerald-400" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-emerald-300">Identity Verified</p>
-                      <p className="text-xs text-emerald-400/70 mt-0.5 leading-relaxed">
-                        Your account has been verified. You have full access to all ZYLOBRIDGE features including job applications, escrow payments, and professional listings.
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="flex items-start gap-4 p-4 rounded-xl bg-amber-500/8 border border-amber-500/20">
-                      <div className="w-10 h-10 rounded-xl bg-amber-500/15 flex items-center justify-center shrink-0">
-                        <AlertCircle className="h-5 w-5 text-amber-400" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-amber-300">Verification Pending</p>
-                        <p className="text-xs text-amber-400/70 mt-0.5 leading-relaxed">
-                          Complete identity verification to unlock job applications, escrow payments, and professional listings on ZYLOBRIDGE.
-                        </p>
-                      </div>
-                    </div>
-                    {user.userType === "professional" && (
-                      <Link href="/verification">
-                        <Button
-                          size="sm"
-                          className="w-full font-semibold"
-                          style={{
-                            background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)",
-                          }}
-                        >
-                          <ShieldCheck className="h-4 w-4 mr-2" />
-                          Start Verification
-                        </Button>
-                      </Link>
-                    )}
-                  </div>
-                )}
-              </section>
-
-              {/* Account Type Setup */}
-              {user.userType === "unset" && (
-                <section className="rounded-2xl border border-violet-500/30 bg-violet-500/5 p-6">
-                  <h2 className="text-base font-semibold text-white flex items-center gap-2 mb-2">
-                    <Settings className="h-4 w-4 text-violet-400" />
-                    Complete Your Setup
-                  </h2>
-                  <Separator className="bg-white/6 mb-4" />
-                  <p className="text-sm text-gray-400 leading-relaxed mb-4">
-                    Your account type has not been configured yet. Choose whether you are joining as a trade professional or a client/contractor to unlock the full ZYLOBRIDGE experience.
-                  </p>
-                  <Link href="/onboarding">
-                    <Button
-                      size="sm"
-                      className="font-semibold"
-                      style={{
-                        background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)",
-                      }}
-                    >
-                      Complete Onboarding
-                      <ChevronRight className="h-4 w-4 ml-1" />
-                    </Button>
-                  </Link>
-                </section>
-              )}
-            </div>
-
-            {/* Right — Quick Actions */}
-            <div className="space-y-4">
-              <h2 className="text-base font-semibold text-white px-1">Quick Actions</h2>
-
-              <QuickActionCard
-                icon={Briefcase}
-                title="Browse Jobs"
-                description="Find and apply to available trade jobs in your area."
-                href="/jobs"
-              />
-              <QuickActionCard
-                icon={MessageSquare}
-                title="Messages"
-                description="View your conversations with clients and professionals."
-                href="/messages"
-              />
-              <QuickActionCard
-                icon={ShoppingBag}
-                title="Shop"
-                description="Browse tools, equipment, and supplies in the marketplace."
-                href="/shop"
-              />
-              {user.userType === "professional" && (
-                <QuickActionCard
-                  icon={Star}
-                  title="My Applications"
-                  description="Track the status of your job applications."
-                  href="/my-applications"
-                />
-              )}
-              {user.userType === "client" && (
-                <QuickActionCard
-                  icon={LayoutDashboard}
-                  title="My Jobs"
-                  description="Manage the jobs you have posted on the platform."
-                  href="/my-jobs"
-                  accent
-                />
-              )}
-              {user.userType === "enterprise" && (
-                <QuickActionCard
-                  icon={Building2}
-                  title="Enterprise Workspace"
-                  description="Open your organization workspace and account tools."
-                  href="/dashboard/enterprise"
-                  accent
-                />
-              )}
-              {(user.role === "admin" || user.role === "SUPER_ADMIN") && (
-                <QuickActionCard
-                  icon={Shield}
-                  title="Admin Dashboard"
-                  description="Access super administrator controls, verification queues, and platform management."
-                  href="/dashboard/admin"
-                  accent
-                />
-              )}
-
-              {/* Account Metadata */}
-              <div className="rounded-2xl border border-white/8 bg-[#131a26]/60 p-5 space-y-3">
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Account Details</h3>
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-gray-500">Account ID</span>
-                    <span className="text-xs text-gray-300 font-mono">#{user.id}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-gray-500">Created</span>
-                    <span className="text-xs text-gray-300">{formatDate(user.createdAt)}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-gray-500">Last active</span>
-                    <span className="text-xs text-gray-300">{formatRelativeTime(user.lastSignedIn)}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-gray-500">Sign-in method</span>
-                    <span className="text-xs text-gray-300">{loginMethodLabel}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Sign Out */}
-              <Button
-                variant="outline"
-                className="w-full border-red-500/20 text-red-400 hover:text-red-300 hover:border-red-500/40 bg-transparent gap-2"
-                onClick={handleSignOut}
-                disabled={isLoggingOut}
-              >
-                <LogOut className="h-4 w-4" />
-                {isLoggingOut ? "Signing out…" : "Sign Out"}
-              </Button>
-            </div>
-          </div>
+          <Section eyebrow="Trust center" title="Verification & reputation" action={user.userType === "professional" ? <Link href="/verification" className="text-xs text-violet-300 hover:text-violet-200">Open verification <ArrowUpRight className="ml-1 inline h-3 w-3" /></Link> : undefined}>
+            <div className="grid gap-3 sm:grid-cols-3"><div className={`rounded-2xl border p-4 ${hub?.trust.identityVerified ? "border-emerald-400/20 bg-emerald-400/[.06]" : "border-amber-400/20 bg-amber-400/[.05]"}`}><ShieldCheck className="h-5 w-5 text-emerald-300" /><p className="mt-3 text-sm font-medium text-white">Identity</p><p className="mt-1 text-xs text-gray-400">{hub?.trust.identityVerified ? "Verified account" : "Verification not complete"}</p></div><div className="rounded-2xl border border-white/8 bg-white/[.02] p-4"><FileCheck2 className="h-5 w-5 text-violet-300" /><p className="mt-3 text-sm font-medium text-white">Professional checks</p><p className="mt-1 text-xs text-gray-400">{hub?.trust.approvedVerifications} verified · {hub?.trust.totalVerifications} submitted</p></div><div className="rounded-2xl border border-white/8 bg-white/[.02] p-4"><Star className="h-5 w-5 text-amber-300" /><p className="mt-3 text-sm font-medium text-white">Reputation</p><p className="mt-1 text-xs text-gray-400">{hub?.trust.averageRating ? `${hub.trust.averageRating.toFixed(1)} / 5 from ${reviewCount} reviews` : "No review history yet"}</p></div></div>
+          </Section>
         </div>
-      </main>
 
-      <Footer />
-    </div>
-  );
+        <aside className="space-y-6 xl:sticky xl:top-6 xl:self-start">
+          {isProfessional ? <Section eyebrow="Marketplace controls" title="Visibility & availability"><div className="space-y-4"><div><label className="text-xs font-medium text-gray-400" htmlFor="profile-headline">Marketplace headline</label><input id="profile-headline" value={headline} onChange={(event) => setHeadline(event.target.value)} maxLength={160} placeholder="e.g. Licensed electrician for commercial fit-outs" className="mt-2 w-full rounded-xl border border-white/10 bg-[#0b111c] px-3 py-2.5 text-sm text-white outline-none placeholder:text-gray-600 focus:border-violet-400/60" /></div><div><label className="text-xs font-medium text-gray-400" htmlFor="profile-availability">Availability</label><select id="profile-availability" value={availabilityStatus} onChange={(event) => setAvailabilityStatus(event.target.value as ProfileAvailabilityStatus)} className="mt-2 w-full rounded-xl border border-white/10 bg-[#0b111c] px-3 py-2.5 text-sm text-white outline-none focus:border-violet-400/60"><option value="available_now">Available now</option><option value="available_from">Available from a future date</option><option value="currently_working">Currently engaged</option><option value="emergency_only">Emergency work only</option><option value="not_available">Not available</option></select></div><div className="flex items-start gap-3 rounded-xl border border-white/8 bg-white/[.02] p-3"><button type="button" onClick={() => setVisibility(visibility === "visible" ? "hidden" : "visible")} className="mt-0.5 text-violet-300" aria-label="Toggle marketplace visibility">{visibility === "visible" ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}</button><div><p className="text-sm font-medium text-white">{visibilityLabel}</p><p className="mt-1 text-xs leading-5 text-gray-500">Only marketplace visibility changes here. Private account details remain protected.</p></div></div><Button onClick={saveControls} disabled={metadataMutation.isPending} className="w-full bg-violet-600 hover:bg-violet-500">{metadataMutation.isPending ? "Saving…" : "Save marketplace controls"}</Button></div></Section> : <Section eyebrow="Marketplace access" title="Build your professional profile"><div className="space-y-4"><p className="text-sm leading-6 text-gray-400">Professional marketplace controls become available after you choose the professional account type and complete your profile.</p><Link href="/onboarding"><Button className="w-full bg-violet-600 hover:bg-violet-500">Start professional setup</Button></Link></div></Section>}
+          <Section eyebrow="Your workspace" title="Quick access"><div className="grid gap-2"><Link href="/messages" className="flex items-center justify-between rounded-xl border border-white/8 bg-white/[.02] p-3 text-sm text-gray-300 hover:border-violet-400/30 hover:text-white"><span className="flex items-center gap-2"><MessageSquare className="h-4 w-4 text-violet-300" />Messages</span><ChevronRight className="h-4 w-4 text-gray-600" /></Link><Link href="/applications" className="flex items-center justify-between rounded-xl border border-white/8 bg-white/[.02] p-3 text-sm text-gray-300 hover:border-violet-400/30 hover:text-white"><span className="flex items-center gap-2"><BriefcaseBusiness className="h-4 w-4 text-violet-300" />Applications</span><ChevronRight className="h-4 w-4 text-gray-600" /></Link><Link href="/notifications/settings" className="flex items-center justify-between rounded-xl border border-white/8 bg-white/[.02] p-3 text-sm text-gray-300 hover:border-violet-400/30 hover:text-white"><span className="flex items-center gap-2"><Settings2 className="h-4 w-4 text-violet-300" />Communication preferences</span><ChevronRight className="h-4 w-4 text-gray-600" /></Link><Link href="/payments" className="flex items-center justify-between rounded-xl border border-white/8 bg-white/[.02] p-3 text-sm text-gray-300 hover:border-violet-400/30 hover:text-white"><span className="flex items-center gap-2"><WalletCards className="h-4 w-4 text-violet-300" />Earnings & payouts</span><ChevronRight className="h-4 w-4 text-gray-600" /></Link><Link href="/jobs" className="flex items-center justify-between rounded-xl border border-white/8 bg-white/[.02] p-3 text-sm text-gray-300 hover:border-violet-400/30 hover:text-white"><span className="flex items-center gap-2"><Globe2 className="h-4 w-4 text-violet-300" />Browse marketplace</span><ChevronRight className="h-4 w-4 text-gray-600" /></Link></div></Section>
+          <Section eyebrow="Account security" title="Account details"><div className="space-y-3 text-sm"><div className="flex items-center gap-3"><Mail className="h-4 w-4 text-gray-500" /><span className="truncate text-gray-300">{user.email || "Email not set"}</span></div><div className="flex items-center gap-3"><Phone className="h-4 w-4 text-gray-500" /><span className="text-gray-300">{user.phone || "Phone not set"}</span></div><div className="flex items-center gap-3"><Shield className="h-4 w-4 text-gray-500" /><span className="text-gray-300">{user.loginMethod || "Sign-in method not set"}</span></div><Separator className="bg-white/8" /><p className="text-xs leading-5 text-gray-500">Your contact details and verification records are visible only within authorized account workflows.</p></div></Section>
+          {(user.role === "admin" || user.role === "SUPER_ADMIN") && <Link href="/dashboard/admin" className="block rounded-2xl border border-red-400/20 bg-red-400/[.05] p-4 text-sm text-red-200 hover:border-red-400/40"><span className="flex items-center gap-2 font-medium"><Settings2 className="h-4 w-4" />Admin dashboard<ArrowUpRight className="ml-auto h-4 w-4" /></span></Link>}
+          <Button variant="outline" className="w-full border-red-400/20 bg-transparent text-red-300 hover:border-red-400/40 hover:text-red-200" onClick={async () => { try { await logout(); toast.success("You have been signed out."); navigate("/"); } catch { toast.error("Sign out failed. Please try again."); } }} disabled={isLoggingOut}><LogOut className="mr-2 h-4 w-4" />{isLoggingOut ? "Signing out…" : "Sign out"}</Button>
+        </aside>
+      </div>
+    </main><Footer /></div>;
 }

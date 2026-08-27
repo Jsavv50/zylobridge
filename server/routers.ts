@@ -50,6 +50,8 @@ import {
   getApplicationCount,
   createProfile,
   getProfileByUserId,
+  getPublicProfileByUserId,
+  getProfessionalProfileHub,
   updateProfile,
   createReview,
   getReviewsByRevieweeId,
@@ -237,6 +239,31 @@ const jobCreateSchema = z.object({
   projectId: z.number().int().positive().optional(),
 });
 
+const profileMetadataSchema = z.object({
+  headline: z.string().max(160).trim().optional(),
+  additionalVocations: z.array(z.string().max(100)).max(12).optional(),
+  specializations: z.array(z.string().max(100)).max(20).optional(),
+  availabilityStatus: z.enum(["available_now", "available_from", "currently_working", "not_available", "emergency_only"]).optional(),
+  availableFrom: z.string().max(32).optional(),
+  preferredWorkDays: z.array(z.string().max(20)).max(7).optional(),
+  employmentTypes: z.array(z.enum(["contract", "project", "temporary", "full_time"])).max(4).optional(),
+  preferredProjectTypes: z.array(z.string().max(80)).max(12).optional(),
+  preferredJobSize: z.enum(["small", "medium", "large"]).optional(),
+  minimumProjectValue: z.number().nonnegative().optional(),
+  paymentStructure: z.enum(["hourly", "daily", "fixed_project", "milestone"]).optional(),
+  dailyRate: z.number().nonnegative().optional(),
+  startingProjectRate: z.number().nonnegative().optional(),
+  rateVisibility: z.enum(["public", "private"]).optional(),
+  languages: z.array(z.object({ language: z.string().max(60), proficiency: z.enum(["basic", "conversational", "fluent", "native"]) })).max(10).optional(),
+  equipment: z.array(z.string().max(100)).max(30).optional(),
+  transportation: z.string().max(120).optional(),
+  serviceAreas: z.array(z.string().max(120)).max(20).optional(),
+  serviceRadiusKm: z.number().nonnegative().max(1000).optional(),
+  willingToTravel: z.boolean().optional(),
+  visibility: z.enum(["visible", "hidden"]).optional(),
+  allowEmployerContact: z.boolean().optional(),
+}).partial();
+
 const profileUpdateSchema = z.object({
   vocation: z.string().max(64).optional(),
   bio: z.string().max(2000).trim().optional(),
@@ -247,6 +274,7 @@ const profileUpdateSchema = z.object({
   location: z.string().max(200).trim().optional(),
   yearsExperience: z.number().int().nonnegative().max(60).optional(),
   isAvailable: z.boolean().optional(),
+  profileMetadata: profileMetadataSchema.optional(),
 });
 
 const reviewCreateSchema = z.object({
@@ -738,10 +766,24 @@ export const appRouter = router({
     me: protectedProcedure.query(async ({ ctx }) => {
       return getProfileByUserId(ctx.user.id);
     }),
+    hub: protectedProcedure.query(async ({ ctx }) => {
+      const hub = await getProfessionalProfileHub(ctx.user.id);
+      if (!hub) throw new TRPCError({ code: "NOT_FOUND", message: "Profile package not found." });
+      return hub;
+    }),
+    updateMetadata: protectedProcedure
+      .input(profileMetadataSchema)
+      .mutation(async ({ ctx, input }) => {
+        const existing = await getProfileByUserId(ctx.user.id);
+        if (!existing) throw new TRPCError({ code: "BAD_REQUEST", message: "Create your professional profile before changing marketplace controls." });
+        const current = existing.profileMetadata && typeof existing.profileMetadata === "object" && !Array.isArray(existing.profileMetadata) ? existing.profileMetadata as Record<string, unknown> : {};
+        await updateProfile(ctx.user.id, { profileMetadata: { ...current, ...input } });
+        return { success: true };
+      }),
     getByUserId: publicProcedure
       .input(z.object({ userId: z.number().int().positive() }))
       .query(async ({ input }) => {
-        return getProfileByUserId(input.userId);
+        return getPublicProfileByUserId(input.userId);
       }),
     upsert: protectedProcedure.input(profileUpdateSchema).mutation(async ({ ctx, input }) => {
       const existing = await getProfileByUserId(ctx.user.id);
@@ -764,6 +806,7 @@ export const appRouter = router({
           location: input.location,
           yearsExperience: input.yearsExperience,
           isAvailable: input.isAvailable ?? true,
+          profileMetadata: input.profileMetadata,
         });
       }
       return { success: true };

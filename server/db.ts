@@ -56,6 +56,7 @@ import {
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { deriveApplicationStage, type ApplicationStage } from "../shared/applicationLifecycle";
+import { calculateProfileCompletion, parseProfileMetadata, publicProfileMetadata } from "../shared/profile";
 
 export const MAX_PAGE_SIZE = 100;
 export const DEFAULT_PAGE_SIZE = 20;
@@ -419,7 +420,7 @@ export type TalentSearchFilters = {
 export async function searchProfessionals(filters: TalentSearchFilters) {
   const db = await getDb();
   if (!db) return { items: [], nextOffset: 0, hasMore: false };
-  const conditions = [eq(users.userType, "professional")];
+  const conditions = [eq(users.userType, "professional"), sql`(${profiles.profileMetadata} IS NULL OR ${profiles.profileMetadata}->>'visibility' IS DISTINCT FROM 'hidden')` as any];
   const queryText = filters.q?.trim();
   if (queryText) {
     const pattern = `%${queryText}%`;
@@ -456,11 +457,19 @@ export async function searchProfessionals(filters: TalentSearchFilters) {
     .limit(limit + 1)
     .offset(offset);
   const hasMore = rows.length > limit;
+  const visibleItems = (hasMore ? rows.slice(0, limit) : rows).map((item) => ({ ...item, profile: { ...item.profile, profileMetadata: publicProfileMetadata(item.profile.profileMetadata) } }));
   return {
-    items: hasMore ? rows.slice(0, limit) : rows,
+    items: visibleItems,
     nextOffset: hasMore ? offset + limit : null,
     hasMore,
   };
+}
+
+export async function getPublicProfileByUserId(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [row] = await db.select({ profile: profiles }).from(profiles).innerJoin(users, eq(profiles.userId, users.id)).where(and(eq(profiles.userId, userId), eq(users.userType, "professional"), sql`(${profiles.profileMetadata} IS NULL OR ${profiles.profileMetadata}->>'visibility' IS DISTINCT FROM 'hidden')`)).limit(1);
+  return row ? { ...row.profile, profileMetadata: publicProfileMetadata(row.profile.profileMetadata) } : undefined;
 }
 
 export async function getPublicProfessionalProfile(userId: number) {
@@ -478,7 +487,7 @@ export async function getPublicProfessionalProfile(userId: number) {
   })
     .from(profiles)
     .innerJoin(users, eq(profiles.userId, users.id))
-    .where(and(eq(profiles.userId, userId), eq(users.userType, "professional")))
+    .where(and(eq(profiles.userId, userId), eq(users.userType, "professional"), sql`(${profiles.profileMetadata} IS NULL OR ${profiles.profileMetadata}->>'visibility' IS DISTINCT FROM 'hidden')`))
     .limit(1);
   if (!row) return undefined;
 
@@ -493,6 +502,7 @@ export async function getPublicProfessionalProfile(userId: number) {
 
   return {
     ...row,
+    profile: { ...row.profile, profileMetadata: publicProfileMetadata(row.profile.profileMetadata) },
     portfolio: portfolioRows,
     qualifications: qualificationRows,
     experience: experienceRows,
@@ -965,6 +975,38 @@ export async function getProfileByUserId(userId: number) {
   if (!db) return undefined;
   const result = await db.select().from(profiles).where(eq(profiles.userId, userId)).limit(1);
   return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getProfessionalProfileHub(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const [user] = await db.select({ id: users.id, name: users.name, email: users.email, phone: users.phone, avatarUrl: users.avatarUrl, userType: users.userType, role: users.role, isVerified: users.isVerified, createdAt: users.createdAt, lastSignedIn: users.lastSignedIn }).from(users).where(eq(users.id, userId)).limit(1);
+  if (!user) return undefined;
+  const [profile, portfolio, experience, qualifications, verifications, reviews, activity, completedRows] = await Promise.all([
+    getProfileByUserId(userId),
+    getProfessionalPortfoliosByUserId(userId),
+    getProfessionalExperiencesByUserId(userId),
+    getProfessionalQualificationsByUserId(userId),
+    getProfessionalVerificationsByUserId(userId),
+    getReviewsByRevieweeId(userId, MAX_PAGE_SIZE, 0),
+    getProfessionalMarketplaceActivity(userId),
+    db.select({ count: sql<number>`count(*)` }).from(jobs).where(and(eq(jobs.assignedProfessionalId, userId), eq(jobs.status, "completed"))),
+  ]);
+  const approvedVerifications = verifications.filter((item) => item.status === "verified");
+  const completion = calculateProfileCompletion({ avatarUrl: user.avatarUrl, profile, portfolioCount: portfolio.length, experienceCount: experience.length, qualificationCount: qualifications.length, verifiedCount: approvedVerifications.length });
+  return {
+    user,
+    profile: profile ? { ...profile, profileMetadata: parseProfileMetadata(profile.profileMetadata) } : null,
+    portfolio,
+    experience,
+    qualifications,
+    verifications,
+    reviews,
+    activity,
+    completedJobs: Number(completedRows[0]?.count ?? 0),
+    completion,
+    trust: { identityVerified: Boolean(user.isVerified), approvedVerifications: approvedVerifications.length, totalVerifications: verifications.length, reviewCount: reviews.length, averageRating: profile?.averageRating ? Number(profile.averageRating) : null },
+  };
 }
 
 export async function updateProfile(userId: number, data: Partial<InsertProfile>) {

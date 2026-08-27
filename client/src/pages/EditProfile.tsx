@@ -21,6 +21,7 @@ import Footer from "@/components/Footer";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import VocationSelector from "@/components/VocationSelector";
+import { parseProfileMetadata, type ProfileAvailabilityStatus } from "@shared/profile";
 
 export default function EditProfile() {
   const [, setLocation] = useLocation();
@@ -42,6 +43,28 @@ export default function EditProfile() {
   const [hourlyRate, setHourlyRate] = useState("");
   const [locationStr, setLocationStr] = useState("");
   const [yearsExperience, setYearsExperience] = useState("");
+  const [headline, setHeadline] = useState("");
+  const [additionalVocations, setAdditionalVocations] = useState("");
+  const [specializations, setSpecializations] = useState("");
+  const [availabilityStatus, setAvailabilityStatus] = useState<ProfileAvailabilityStatus>("available_now");
+  const [availableFrom, setAvailableFrom] = useState("");
+  const [preferredWorkDays, setPreferredWorkDays] = useState("");
+  const [employmentTypes, setEmploymentTypes] = useState("");
+  const [preferredProjectTypes, setPreferredProjectTypes] = useState("");
+  const [preferredJobSize, setPreferredJobSize] = useState<"small" | "medium" | "large" | "">("");
+  const [minimumProjectValue, setMinimumProjectValue] = useState("");
+  const [paymentStructure, setPaymentStructure] = useState<"hourly" | "daily" | "fixed_project" | "milestone" | "">("");
+  const [dailyRate, setDailyRate] = useState("");
+  const [startingProjectRate, setStartingProjectRate] = useState("");
+  const [rateVisibility, setRateVisibility] = useState<"public" | "private">("private");
+  const [languages, setLanguages] = useState("");
+  const [equipment, setEquipment] = useState("");
+  const [transportation, setTransportation] = useState("");
+  const [serviceAreas, setServiceAreas] = useState("");
+  const [serviceRadiusKm, setServiceRadiusKm] = useState("");
+  const [willingToTravel, setWillingToTravel] = useState(false);
+  const [visibility, setVisibility] = useState<"visible" | "hidden">("visible");
+  const [allowEmployerContact, setAllowEmployerContact] = useState(true);
 
   useEffect(() => {
     if (user) {
@@ -60,6 +83,29 @@ export default function EditProfile() {
       setHourlyRate(profProfile.hourlyRate ? String(profProfile.hourlyRate) : "");
       setLocationStr(profProfile.location ?? "");
       setYearsExperience(profProfile.yearsExperience ? String(profProfile.yearsExperience) : "");
+      const metadata = parseProfileMetadata(profProfile.profileMetadata);
+      setHeadline(metadata.headline ?? "");
+      setAdditionalVocations(metadata.additionalVocations?.join(", ") ?? "");
+      setSpecializations(metadata.specializations?.join(", ") ?? "");
+      setAvailabilityStatus(metadata.availabilityStatus ?? (profProfile.isAvailable ? "available_now" : "not_available"));
+      setAvailableFrom(metadata.availableFrom ?? "");
+      setPreferredWorkDays(metadata.preferredWorkDays?.join(", ") ?? "");
+      setEmploymentTypes(metadata.employmentTypes?.join(", ") ?? "");
+      setPreferredProjectTypes(metadata.preferredProjectTypes?.join(", ") ?? "");
+      setPreferredJobSize(metadata.preferredJobSize ?? "");
+      setMinimumProjectValue(metadata.minimumProjectValue !== undefined ? String(metadata.minimumProjectValue) : "");
+      setPaymentStructure(metadata.paymentStructure ?? "");
+      setDailyRate(metadata.dailyRate !== undefined ? String(metadata.dailyRate) : "");
+      setStartingProjectRate(metadata.startingProjectRate !== undefined ? String(metadata.startingProjectRate) : "");
+      setRateVisibility(metadata.rateVisibility ?? "private");
+      setLanguages(metadata.languages?.map((item) => `${item.language}:${item.proficiency}`).join(", ") ?? "");
+      setEquipment(metadata.equipment?.join(", ") ?? "");
+      setTransportation(metadata.transportation ?? "");
+      setServiceAreas(metadata.serviceAreas?.join(", ") ?? "");
+      setServiceRadiusKm(metadata.serviceRadiusKm !== undefined ? String(metadata.serviceRadiusKm) : "");
+      setWillingToTravel(metadata.willingToTravel ?? false);
+      setVisibility(metadata.visibility ?? "visible");
+      setAllowEmployerContact(metadata.allowEmployerContact ?? true);
     }
   }, [profProfile]);
 
@@ -101,6 +147,31 @@ export default function EditProfile() {
           hourlyRate: hourlyRate ? Number(hourlyRate) : undefined,
           location: locationStr || undefined,
           yearsExperience: yearsExperience ? Number(yearsExperience) : undefined,
+          isAvailable: availabilityStatus !== "not_available",
+          profileMetadata: {
+            headline: headline.trim() || undefined,
+            additionalVocations: additionalVocations.split(",").map((item) => item.trim()).filter(Boolean),
+            specializations: specializations.split(",").map((item) => item.trim()).filter(Boolean),
+            availabilityStatus,
+            availableFrom: availableFrom || undefined,
+            preferredWorkDays: preferredWorkDays.split(",").map((item) => item.trim()).filter(Boolean),
+            employmentTypes: employmentTypes.split(",").map((item) => item.trim()).filter((item): item is "contract" | "project" | "temporary" | "full_time" => ["contract", "project", "temporary", "full_time"].includes(item)),
+            preferredProjectTypes: preferredProjectTypes.split(",").map((item) => item.trim()).filter(Boolean),
+            preferredJobSize: preferredJobSize || undefined,
+            minimumProjectValue: minimumProjectValue ? Number(minimumProjectValue) : undefined,
+            paymentStructure: paymentStructure || undefined,
+            dailyRate: dailyRate ? Number(dailyRate) : undefined,
+            startingProjectRate: startingProjectRate ? Number(startingProjectRate) : undefined,
+            rateVisibility,
+            languages: languages.split(",").map((item) => { const [language, proficiency = "conversational"] = item.split(":").map((part) => part.trim()); return { language, proficiency }; }).filter((item): item is { language: string; proficiency: "basic" | "conversational" | "fluent" | "native" } => Boolean(item.language) && ["basic", "conversational", "fluent", "native"].includes(item.proficiency)),
+            equipment: equipment.split(",").map((item) => item.trim()).filter(Boolean),
+            transportation: transportation.trim() || undefined,
+            serviceAreas: serviceAreas.split(",").map((item) => item.trim()).filter(Boolean),
+            serviceRadiusKm: serviceRadiusKm ? Number(serviceRadiusKm) : undefined,
+            willingToTravel,
+            visibility,
+            allowEmployerContact,
+          },
         });
       }
 
@@ -300,6 +371,46 @@ export default function EditProfile() {
                     className="bg-[#0a0f1a] border-white/10 text-white"
                   />
                 </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs text-gray-400 font-medium uppercase tracking-wider">Marketplace Headline</label>
+                  <Input value={headline} onChange={(e) => setHeadline(e.target.value)} maxLength={160} placeholder="e.g. Licensed electrician for commercial fit-outs" className="bg-[#0a0f1a] border-white/10 text-white" />
+                  <p className="text-[11px] text-gray-500">Help employers understand what you do best in one line.</p>
+                </div>
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2"><div className="space-y-2"><label className="text-xs text-gray-400 font-medium uppercase tracking-wider">Additional Vocations</label><Input value={additionalVocations} onChange={(e) => setAdditionalVocations(e.target.value)} placeholder="Concrete Finisher, Plasterer" className="bg-[#0a0f1a] border-white/10 text-white" /></div><div className="space-y-2"><label className="text-xs text-gray-400 font-medium uppercase tracking-wider">Specializations</label><Input value={specializations} onChange={(e) => setSpecializations(e.target.value)} placeholder="Brickwork, Repairs, Finishing" className="bg-[#0a0f1a] border-white/10 text-white" /></div></div>
+
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <div className="space-y-2"><label className="text-xs text-gray-400 font-medium uppercase tracking-wider">Availability</label><select value={availabilityStatus} onChange={(e) => setAvailabilityStatus(e.target.value as ProfileAvailabilityStatus)} className="w-full rounded-md border border-white/10 bg-[#0a0f1a] px-3 py-2 text-sm text-white"><option value="available_now">Available now</option><option value="available_from">Available from a future date</option><option value="currently_working">Currently working</option><option value="emergency_only">Emergency jobs only</option><option value="not_available">Not available</option></select></div>
+                  <div className="space-y-2"><label className="text-xs text-gray-400 font-medium uppercase tracking-wider">Available From</label><Input type="date" value={availableFrom} onChange={(e) => setAvailableFrom(e.target.value)} className="bg-[#0a0f1a] border-white/10 text-white" /></div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <div className="space-y-2"><label className="text-xs text-gray-400 font-medium uppercase tracking-wider">Preferred Work Days</label><Input value={preferredWorkDays} onChange={(e) => setPreferredWorkDays(e.target.value)} placeholder="Monday, Tuesday, Saturday" className="bg-[#0a0f1a] border-white/10 text-white" /></div>
+                  <div className="space-y-2"><label className="text-xs text-gray-400 font-medium uppercase tracking-wider">Service Areas</label><Input value={serviceAreas} onChange={(e) => setServiceAreas(e.target.value)} placeholder="Cape Town, Bellville" className="bg-[#0a0f1a] border-white/10 text-white" /></div>
+                  <div className="space-y-2"><label className="text-xs text-gray-400 font-medium uppercase tracking-wider">Service Radius (km)</label><Input type="number" min="0" max="1000" value={serviceRadiusKm} onChange={(e) => setServiceRadiusKm(e.target.value)} placeholder="Optional" className="bg-[#0a0f1a] border-white/10 text-white" /></div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <div className="space-y-2"><label className="text-xs text-gray-400 font-medium uppercase tracking-wider">Job Types</label><Input value={employmentTypes} onChange={(e) => setEmploymentTypes(e.target.value)} placeholder="project, contract, full_time" className="bg-[#0a0f1a] border-white/10 text-white" /><p className="text-[11px] text-gray-500">Use: contract, project, temporary, full_time.</p></div>
+                  <div className="space-y-2"><label className="text-xs text-gray-400 font-medium uppercase tracking-wider">Preferred Projects</label><Input value={preferredProjectTypes} onChange={(e) => setPreferredProjectTypes(e.target.value)} placeholder="Residential, Renovation, Maintenance" className="bg-[#0a0f1a] border-white/10 text-white" /></div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+                  <div className="space-y-2"><label className="text-xs text-gray-400 font-medium uppercase tracking-wider">Job Size</label><select value={preferredJobSize} onChange={(e) => setPreferredJobSize(e.target.value as "small" | "medium" | "large" | "")} className="w-full rounded-md border border-white/10 bg-[#0a0f1a] px-3 py-2 text-sm text-white"><option value="">Any size</option><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select></div>
+                  <div className="space-y-2"><label className="text-xs text-gray-400 font-medium uppercase tracking-wider">Payment Structure</label><select value={paymentStructure} onChange={(e) => setPaymentStructure(e.target.value as "hourly" | "daily" | "fixed_project" | "milestone" | "")} className="w-full rounded-md border border-white/10 bg-[#0a0f1a] px-3 py-2 text-sm text-white"><option value="">Not set</option><option value="hourly">Hourly</option><option value="daily">Daily</option><option value="fixed_project">Fixed project</option><option value="milestone">Milestone</option></select></div>
+                  <div className="space-y-2"><label className="text-xs text-gray-400 font-medium uppercase tracking-wider">Minimum Project Value</label><Input type="number" min="0" value={minimumProjectValue} onChange={(e) => setMinimumProjectValue(e.target.value)} placeholder="Optional" className="bg-[#0a0f1a] border-white/10 text-white" /></div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+                  <div className="space-y-2"><label className="text-xs text-gray-400 font-medium uppercase tracking-wider">Daily Rate</label><Input type="number" min="0" value={dailyRate} onChange={(e) => setDailyRate(e.target.value)} placeholder="Optional" className="bg-[#0a0f1a] border-white/10 text-white" /></div>
+                  <div className="space-y-2"><label className="text-xs text-gray-400 font-medium uppercase tracking-wider">Starting Project Rate</label><Input type="number" min="0" value={startingProjectRate} onChange={(e) => setStartingProjectRate(e.target.value)} placeholder="Optional" className="bg-[#0a0f1a] border-white/10 text-white" /></div>
+                  <div className="space-y-2"><label className="text-xs text-gray-400 font-medium uppercase tracking-wider">Rate Visibility</label><select value={rateVisibility} onChange={(e) => setRateVisibility(e.target.value as "public" | "private")} className="w-full rounded-md border border-white/10 bg-[#0a0f1a] px-3 py-2 text-sm text-white"><option value="private">Private</option><option value="public">Public</option></select></div>
+                </div>
+
+                <div className="space-y-2"><label className="text-xs text-gray-400 font-medium uppercase tracking-wider">Languages</label><Input value={languages} onChange={(e) => setLanguages(e.target.value)} placeholder="English:fluent, Afrikaans:conversational" className="bg-[#0a0f1a] border-white/10 text-white" /><p className="text-[11px] text-gray-500">Add language:proficiency pairs. Proficiency: basic, conversational, fluent, native.</p></div>
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2"><div className="space-y-2"><label className="text-xs text-gray-400 font-medium uppercase tracking-wider">Equipment & Capabilities</label><Input value={equipment} onChange={(e) => setEquipment(e.target.value)} placeholder="Masonry tools, Power mixer" className="bg-[#0a0f1a] border-white/10 text-white" /></div><div className="space-y-2"><label className="text-xs text-gray-400 font-medium uppercase tracking-wider">Transportation</label><Input value={transportation} onChange={(e) => setTransportation(e.target.value)} placeholder="Own transportation" className="bg-[#0a0f1a] border-white/10 text-white" /></div></div>
+                <label className="flex items-center gap-3 text-sm text-gray-300"><input type="checkbox" checked={willingToTravel} onChange={(e) => setWillingToTravel(e.target.checked)} className="h-4 w-4 rounded border-white/20 bg-[#0a0f1a] text-violet-600" />Willing to travel beyond my primary service area</label>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2"><label className="flex items-center gap-3 rounded-xl border border-white/8 bg-[#0a0f1a] p-3 text-sm text-gray-300"><input type="checkbox" checked={allowEmployerContact} onChange={(e) => setAllowEmployerContact(e.target.checked)} className="h-4 w-4 rounded border-white/20 bg-[#0a0f1a] text-violet-600" />Allow verified employers to contact me</label><div className="space-y-2"><label className="text-xs text-gray-400 font-medium uppercase tracking-wider">Profile Visibility</label><select value={visibility} onChange={(e) => setVisibility(e.target.value as "visible" | "hidden")} className="w-full rounded-md border border-white/10 bg-[#0a0f1a] px-3 py-2 text-sm text-white"><option value="visible">Visible in professional search</option><option value="hidden">Hidden from professional search</option></select></div></div>
               </div>
             )}
 
