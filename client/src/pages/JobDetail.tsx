@@ -1,121 +1,103 @@
-import { useState } from "react";
-import { Link, useParams } from "wouter";
-import { ArrowLeft, CalendarDays, CheckCircle2, Clock3, DollarSign, Loader2, MapPin, Share2, ShieldCheck, Star, Zap } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Link, useLocation, useParams } from "wouter";
+import { ArrowLeft, ArrowUpRight, BriefcaseBusiness, CalendarDays, Check, CheckCircle2, ChevronRight, Clock3, Copy, DollarSign, FileText, Flag, Loader2, MapPin, MoreHorizontal, Save, Share2, ShieldCheck, Sparkles, UserRound, X, Zap } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
-import { ApplicationShell, EmptyState, PageHeader, StatusBadge } from "@/components/shell/ZyloShell";
+import { ApplicationShell, EmptyState, StatusBadge } from "@/components/shell/ZyloShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { formatJobBudget } from "@shared/currency";
 import { VOCATION_LABELS, VOCATION_ICONS, type VocationKey } from "@shared/vocations";
 
-const statusMeta: Record<string, { label: string; tone: "success" | "info" | "warning" | "error" | "neutral" }> = {
-  open: { label: "Open for applications", tone: "success" },
-  in_progress: { label: "In progress", tone: "info" },
-  completed: { label: "Completed", tone: "neutral" },
-  cancelled: { label: "Cancelled", tone: "error" },
-};
-
-function formatDate(value: Date | string | null | undefined) {
-  return value ? new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "Not specified";
-}
+function formatDate(value: Date | string | null | undefined) { return value ? new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : null; }
+function relativeDate(value: Date | string | null | undefined) { if (!value) return "Date not specified"; const days = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 86_400_000)); return days === 0 ? "Today" : days === 1 ? "Yesterday" : `${days} days ago`; }
+function deadlineLabel(value: Date | string | null | undefined) { if (!value) return "No deadline specified"; const days = Math.ceil((new Date(value).getTime() - Date.now()) / 86_400_000); if (days < 0) return "Deadline passed"; if (days === 0) return "Closes today"; if (days === 1) return "Closes tomorrow"; return `Closes in ${days} days`; }
+function statusMeta(status: string, deadline: Date | string | null | undefined) { if (status !== "open") return { label: status === "in_progress" ? "In progress" : status === "completed" ? "Filled / completed" : "Closed", tone: status === "completed" ? "neutral" as const : "error" as const }; const days = deadline ? Math.ceil((new Date(deadline).getTime() - Date.now()) / 86_400_000) : null; return { label: days !== null && days >= 0 && days <= 3 ? "Closing soon" : "Open for applications", tone: days !== null && days <= 3 ? "warning" as const : "success" as const }; }
 
 export default function JobDetail() {
   const { id } = useParams<{ id: string }>();
+  const [, navigate] = useLocation();
   const { user, isAuthenticated } = useAuth();
-  const from = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("from") : null;
-  const backHref = from?.startsWith("/jobs") ? from : "/jobs";
+  const search = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+  const origin = search?.get("from");
+  const backHref = origin && ["/jobs", "/applications", "/dashboard", "/notifications"].some((path) => origin === path || origin.startsWith(`${path}?`)) ? origin : "/jobs";
+  const backLabel = backHref.startsWith("/applications") ? "Back to Applications" : backHref.startsWith("/dashboard") ? "Back to Dashboard" : backHref.startsWith("/notifications") ? "Back to Notifications" : "Back to Find Jobs";
+  const jobId = Number(id);
+  const validId = Number.isInteger(jobId) && jobId > 0;
+  const viewerIsProfessional = user?.userType === "professional";
+  const publicQuery = trpc.jobs.getById.useQuery({ id: jobId }, { enabled: validId && (!isAuthenticated || !viewerIsProfessional) });
+  const detailQuery = trpc.jobs.professionalDetails.useQuery({ id: jobId }, { enabled: validId && isAuthenticated && viewerIsProfessional });
+  const savedStatus = trpc.savedJobs.status.useQuery({ jobId }, { enabled: validId && isAuthenticated && viewerIsProfessional });
+  const data = viewerIsProfessional ? detailQuery.data : publicQuery.data;
+  const isLoading = publicQuery.isLoading || detailQuery.isLoading;
+  const isError = publicQuery.isError || detailQuery.isError;
   const [showApplication, setShowApplication] = useState(false);
+  const [showShareMenu, setShowShareMenu] = useState(false);
+  const [showReport, setShowReport] = useState(false);
+  const [reportReason, setReportReason] = useState<"suspicious" | "misleading" | "inappropriate" | "duplicate" | "other">("suspicious");
+  const [reportDetails, setReportDetails] = useState("");
   const [coverLetter, setCoverLetter] = useState("");
   const [bidAmount, setBidAmount] = useState("");
-  const [reviewRating, setReviewRating] = useState(0);
-  const [reviewComment, setReviewComment] = useState("");
-  const jobQuery = trpc.jobs.getById.useQuery({ id: Number(id) }, { enabled: Number.isInteger(Number(id)) && Number(id) > 0 });
-  const submitApplication = trpc.applications.submitApplication.useMutation({
-    onSuccess: () => {
-      toast.success("Application submitted successfully.");
-      setShowApplication(false);
-      setCoverLetter("");
-      setBidAmount("");
-    },
-    onError: (error) => toast.error(error.message || "We couldn't submit your application."),
-  });
+  const [showPreview, setShowPreview] = useState(false);
+  const utils = trpc.useUtils();
+  const toggleSaved = trpc.savedJobs.toggle.useMutation({ onSuccess: async () => { await utils.jobs.professionalDetails.invalidate({ id: jobId }); toast.success(savedForLater ? "Job removed from saved jobs." : "Job saved for later."); }, onError: (error) => toast.error(error.message || "We couldn't update saved jobs. Try again.") });
+  const submitApplication = trpc.applications.submitApplication.useMutation({ onSuccess: async () => { toast.success("Application submitted successfully."); setShowApplication(false); setShowPreview(false); await utils.jobs.professionalDetails.invalidate({ id: jobId }); }, onError: (error) => toast.error(error.message || "We couldn't submit your application. Your draft is still here; please try again.") });
+  const reportJob = trpc.jobs.report.useMutation({ onSuccess: () => { toast.success("Thanks. Your report was submitted for review."); setShowReport(false); setReportDetails(""); }, onError: (error) => toast.error(error.message || "We couldn't submit the report. Please try again.") });
 
-  const savedStatus = trpc.savedJobs.status.useQuery({ jobId: Number(id) }, { enabled: isAuthenticated && user?.userType === "professional" && Number.isInteger(Number(id)) });
-  const toggleSaved = trpc.savedJobs.toggle.useMutation({
-    onSuccess: () => void savedStatus.refetch(),
-    onError: (error) => toast.error(error.message || "We couldn't update saved jobs."),
-  });
+  const shareJob = async () => { const url = window.location.href; const shareTitle = data ? ("job" in data ? data.job.title : data.title) : "Zylobridge opportunity"; if (navigator.share) { await navigator.share({ title: shareTitle, text: "View this Zylobridge opportunity", url }).catch(() => undefined); } else if (navigator.clipboard) { await navigator.clipboard.writeText(url); toast.success("Job link copied."); } else toast.info("Copy this page URL to share the job."); setShowShareMenu(false); };
+  const apply = () => { const amount = Number(bidAmount); if (!coverLetter.trim() || coverLetter.trim().length < 10) return toast.error("Add at least 10 characters to your proposal."); if (!Number.isFinite(amount) || amount <= 0) return toast.error("Enter a valid proposed budget."); setShowPreview(true); };
+  const confirmApply = () => { const amount = Number(bidAmount); if (data && "job" in data) submitApplication.mutate({ jobId: data.job.id, coverLetter: coverLetter.trim(), bidAmount: amount }); };
 
-  const submitReview = trpc.reviews.create.useMutation({
-    onSuccess: () => {
-      toast.success("Your review was submitted.");
-      setReviewRating(0);
-      setReviewComment("");
-    },
-    onError: (error) => toast.error(error.message || "We couldn't submit your review."),
-  });
+  if (isLoading) return <ApplicationShell role="professional"><div className="space-y-5" aria-label="Loading job details"><div className="h-9 w-2/3 animate-pulse rounded-xl bg-muted/50" /><div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]"><div className="space-y-5"><div className="h-64 animate-pulse rounded-2xl bg-muted/50" /><div className="h-48 animate-pulse rounded-2xl bg-muted/50" /></div><div className="h-80 animate-pulse rounded-2xl bg-muted/50" /></div></div></ApplicationShell>;
+  if (isError || !data) return <ApplicationShell role="professional"><EmptyState title="Job not found" description="This opportunity may have been removed, closed, or is no longer available to this account." action={<Link href="/jobs"><Button variant="outline"><ArrowLeft className="mr-2 h-4 w-4" />Browse Jobs</Button></Link>} /></ApplicationShell>;
 
-  if (jobQuery.isLoading) {
-    return <ApplicationShell><div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div></ApplicationShell>;
-  }
-  if (jobQuery.isError || !jobQuery.data) {
-    return <ApplicationShell><EmptyState title="Job not found" description="This opportunity may have been closed or is no longer available." action={<Link href="/jobs"><Button variant="outline"><ArrowLeft className="h-4 w-4 mr-2" />Back to jobs</Button></Link>} /></ApplicationShell>;
-  }
-
-  const job = jobQuery.data;
-  const viewerIsProfessional = user?.userType === "professional";
-  const canApply = isAuthenticated && viewerIsProfessional && job.status === "open" && user.id !== job.clientId;
-  const canReview = Boolean(user && isAuthenticated && job.status === "completed" && (user.id === job.clientId ? job.assignedProfessionalId : user.id === job.assignedProfessionalId));
-  const revieweeId = user ? (user.id === job.clientId ? job.assignedProfessionalId : job.clientId) : undefined;
-  const meta = statusMeta[job.status] ?? statusMeta.open;
+  const job = "job" in data ? data.job : data;
   const vocation = job.vocation as VocationKey;
+  const meta = statusMeta(job.status, job.deadline);
+  const professionalData = viewerIsProfessional && "application" in data ? data : null;
+  const application = professionalData?.application;
+  const savedForLater = professionalData?.isSaved ?? savedStatus.data?.saved ?? false;
+  const isOpen = job.status === "open" && (!job.deadline || new Date(job.deadline).getTime() > Date.now());
+  const canApply = Boolean(viewerIsProfessional && isOpen && !application && user && user.id !== job.clientId);
+  const matchReasons: Array<{ label: string; detail: string }> = professionalData?.match.reasons ?? [];
+  const skills: string[] = (job.description.match(/[A-Za-z][A-Za-z -]{2,30}/g) || []).filter((term: string) => term.length < 28).slice(0, 5);
+  const applicationLabel = application?.status === "accepted" ? "Selected for this opportunity" : application?.status === "rejected" ? "Application not selected" : application?.status === "withdrawn" ? "Application withdrawn" : professionalData?.shortlisted ? "You've been shortlisted" : "Application submitted";
+  const applicationTone = application?.status === "rejected" ? "error" as const : application?.status === "accepted" || professionalData?.shortlisted ? "success" as const : "info" as const;
+  const trustSignals = [professionalData?.client?.isVerified ? "Client identity is verified" : null, professionalData?.client?.jobsPosted ? `${professionalData.client.jobsPosted} jobs posted` : null, professionalData?.client?.completedJobs ? `${professionalData.client.completedJobs} completed jobs` : null].filter(Boolean) as string[];
+  const summaryItems = [
+    { icon: DollarSign, label: "Budget", value: formatJobBudget(job.budget, job.currency), detail: job.currency ? "Stored currency" : "Legacy listing; currency not specified" },
+    { icon: MapPin, label: "Location", value: job.location, detail: "Project location" },
+    { icon: CalendarDays, label: "Application deadline", value: formatDate(job.deadline) || "Not specified", detail: deadlineLabel(job.deadline) },
+    { icon: Clock3, label: "Posted", value: formatDate(job.createdAt) || "Not specified", detail: relativeDate(job.createdAt) },
+    { icon: BriefcaseBusiness, label: "Trade / vocation", value: VOCATION_LABELS[vocation] ?? job.vocation, detail: "Required trade" },
+  ];
 
-  const handleSubmit = () => {
-    const amount = Number(bidAmount);
-    if (!coverLetter.trim() || coverLetter.trim().length < 10 || !Number.isFinite(amount) || amount <= 0) {
-      toast.error("Add a cover letter and a valid bid amount before submitting.");
-      return;
-    }
-    submitApplication.mutate({ jobId: job.id, coverLetter: coverLetter.trim(), bidAmount: amount });
-  };
+  return <ApplicationShell role="professional">
+    <div className="space-y-6 pb-20 lg:pb-0">
+      <div className="flex flex-wrap items-center justify-between gap-3"><button type="button" onClick={() => navigate(backHref)} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><ArrowLeft className="h-4 w-4" />{backLabel}</button><span className="text-xs text-muted-foreground">Job #{job.id}</span></div>
+      <header className="rounded-3xl border border-border bg-card p-5 shadow-sm sm:p-8"><div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between"><div className="flex min-w-0 items-start gap-4"><div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-2xl" aria-hidden="true">{VOCATION_ICONS[vocation] ?? "🔧"}</div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><StatusBadge status={meta.tone} label={meta.label} />{job.isUrgent && <StatusBadge status="warning" label="Urgent" />}</div><h1 className="mt-3 text-2xl font-bold tracking-tight text-foreground sm:text-4xl">{job.title}</h1><p className="mt-2 text-base text-muted-foreground">{VOCATION_LABELS[vocation] ?? job.vocation}</p><p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground"><span className="inline-flex items-center gap-1.5"><MapPin className="h-4 w-4" />{job.location}</span><span aria-hidden="true">•</span><span>Posted {relativeDate(job.createdAt)}</span></p></div></div><div className="flex flex-wrap gap-2 lg:justify-end"><Button variant="outline" size="sm" onClick={() => viewerIsProfessional && professionalData ? toggleSaved.mutate({ jobId: job.id, saved: !savedForLater }) : toast.info("Sign in as a professional to save jobs.")} disabled={toggleSaved.isPending || !isOpen} aria-label={savedForLater ? "Remove job from saved jobs" : "Save job"}><Save className={`mr-2 h-4 w-4 ${savedForLater ? "fill-current text-primary" : ""}`} />{savedForLater ? "Saved" : "Save job"}</Button><div className="relative"><Button variant="outline" size="sm" onClick={() => setShowShareMenu((value) => !value)} aria-expanded={showShareMenu}><Share2 className="mr-2 h-4 w-4" />Share</Button>{showShareMenu && <div className="absolute right-0 top-11 z-20 w-48 rounded-xl border border-border bg-card p-2 shadow-xl"><button type="button" onClick={() => void shareJob()} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted"><Copy className="h-4 w-4" />Copy / share link</button></div>}</div><Button variant="ghost" size="icon" aria-label="More job actions" title="More job actions" onClick={() => setShowReport(true)}><MoreHorizontal className="h-5 w-5" /></Button></div></div></header>
 
-  return (
-    <ApplicationShell>
-      <div className="mb-5"><Link href={backHref} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" />Back to job discovery</Link></div>
-      <PageHeader title={job.title} description={`${VOCATION_LABELS[vocation] ?? job.vocation} · posted ${formatDate(job.createdAt)}`} action={<div className="flex flex-wrap items-center justify-end gap-2"><StatusBadge status={meta.tone} label={meta.label} />{isAuthenticated && user?.userType === "professional" && <Button variant="outline" size="sm" onClick={() => toggleSaved.mutate({ jobId: job.id, saved: !savedStatus.data?.saved })} disabled={toggleSaved.isPending}><span aria-hidden="true">☆</span>{savedStatus.data?.saved ? "Saved" : "Save job"}</Button>}<Button variant="outline" size="sm" onClick={() => { if (navigator.clipboard) { void navigator.clipboard.writeText(window.location.href).then(() => toast.success("Job link copied.")); } else { toast.info("Copy this page URL to share the job."); } }}><Share2 className="mr-1.5 h-4 w-4" />Share</Button></div>} />
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] items-start">
-        <main className="space-y-6 min-w-0">
-          <section className="rounded-2xl border border-border bg-card p-6 md:p-8">
-            <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-2xl">{VOCATION_ICONS[vocation] ?? "🔧"}</div>
-              <div className="min-w-0"><p className="text-sm text-muted-foreground">Project brief</p><h2 className="mt-1 text-xl font-semibold">What the client needs</h2></div>
-              {job.isUrgent && <span className="ml-auto inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-500"><Zap className="h-3.5 w-3.5" />Urgent</span>}
-            </div>
-            <p className="mt-6 whitespace-pre-wrap text-sm leading-7 text-muted-foreground">{job.description}</p>
-          </section>
-
-          {canApply && <section className="rounded-2xl border border-primary/25 bg-primary/5 p-6 md:p-8">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-lg font-semibold">Ready to apply?</h2><p className="text-sm text-muted-foreground">Share your approach and proposed budget with the client.</p></div><Button onClick={() => setShowApplication((value) => !value)}>{showApplication ? "Close application" : "Apply for this job"}</Button></div>
-            {showApplication && <div className="mt-6 space-y-4 border-t border-border/70 pt-6">
-              <div><Label htmlFor="bid-amount">Your proposed budget</Label><Input id="bid-amount" type="number" min="1" value={bidAmount} onChange={(event) => setBidAmount(event.target.value)} placeholder="e.g. 250000" className="mt-1.5" /></div>
-              <div><Label htmlFor="cover-letter">Cover letter</Label><Textarea id="cover-letter" value={coverLetter} onChange={(event) => setCoverLetter(event.target.value)} rows={7} maxLength={3000} placeholder="Explain your relevant experience, proposed approach, and availability." className="mt-1.5" /><p className="mt-1 text-right text-xs text-muted-foreground">{coverLetter.length}/3000</p></div>
-              <Button onClick={handleSubmit} disabled={submitApplication.isPending}>{submitApplication.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Submit application</Button>
-            </div>}
-          </section>}
-          {!isAuthenticated && job.status === "open" && <section className="rounded-2xl border border-primary/25 bg-primary/5 p-6 text-center"><p className="text-sm text-muted-foreground">Sign in as a professional to submit an application.</p><a href={getLoginUrl()}><Button className="mt-4">Sign in to apply</Button></a></section>}
-          {canReview && revieweeId && <section className="rounded-2xl border border-border bg-card p-6 md:p-8"><div><p className="text-sm text-muted-foreground">Project complete</p><h2 className="mt-1 text-xl font-semibold">Leave a review</h2><p className="mt-2 text-sm text-muted-foreground">Share an accurate account of your experience with the other job participant.</p></div><div className="mt-6 space-y-5 border-t border-border/70 pt-6"><div><Label>Rating</Label><div className="mt-2 flex gap-1" role="radiogroup" aria-label="Rating from 1 to 5 stars">{[1, 2, 3, 4, 5].map((value) => <button key={value} type="button" role="radio" aria-checked={reviewRating === value} aria-label={`${value} star${value === 1 ? "" : "s"}`} onClick={() => setReviewRating(value)} className="rounded-md p-1 text-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><Star className={value <= reviewRating ? "h-6 w-6 fill-current" : "h-6 w-6"} /></button>)}</div></div><div><Label htmlFor="review-comment">Comment (optional)</Label><Textarea id="review-comment" value={reviewComment} onChange={(event) => setReviewComment(event.target.value)} rows={5} maxLength={2000} placeholder="Describe the quality, communication, and professionalism you experienced." className="mt-1.5" /><p className="mt-1 text-right text-xs text-muted-foreground">{reviewComment.length}/2000</p></div><Button onClick={() => { if (reviewRating < 1) { toast.error("Choose a rating from 1 to 5 stars."); return; } submitReview.mutate({ jobId: job.id, revieweeId, rating: reviewRating, comment: reviewComment.trim() || undefined }); }} disabled={submitReview.isPending}>{submitReview.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Submit review</Button></div></section>}
-        </main>
-
-        <aside className="space-y-4 lg:sticky lg:top-24">
-          <section className="rounded-2xl border border-border bg-card p-5"><h2 className="font-semibold">Opportunity details</h2><dl className="mt-5 space-y-4 text-sm"><div className="flex items-start gap-3"><DollarSign className="h-4 w-4 mt-0.5 text-primary" /><div><dt className="text-muted-foreground">Budget</dt><dd className="font-semibold">₦{Number(job.budget).toLocaleString()}</dd></div></div><div className="flex items-start gap-3"><MapPin className="h-4 w-4 mt-0.5 text-primary" /><div><dt className="text-muted-foreground">Location</dt><dd className="font-medium">{job.location}</dd></div></div><div className="flex items-start gap-3"><CalendarDays className="h-4 w-4 mt-0.5 text-primary" /><div><dt className="text-muted-foreground">Application deadline</dt><dd className="font-medium">{formatDate(job.deadline)}</dd></div></div><div className="flex items-start gap-3"><Clock3 className="h-4 w-4 mt-0.5 text-primary" /><div><dt className="text-muted-foreground">Posted</dt><dd className="font-medium">{formatDate(job.createdAt)}</dd></div></div></dl></section>
-          <section className="rounded-2xl border border-border bg-card p-5"><h2 className="font-semibold">Trust signals</h2><div className="mt-4 space-y-3 text-sm text-muted-foreground"><p className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-emerald-500" />Secure application flow</p><p className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-500" />Protected marketplace account</p><p className="flex items-center gap-2"><DollarSign className="h-4 w-4 text-emerald-500" />Escrow and dispute support</p></div></section>
-          {job.organizationSlug && <Link href={`/companies/${job.organizationSlug}`} className="block rounded-2xl border border-border bg-card p-5 hover:border-primary/50"><p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Posted through</p><p className="mt-2 font-semibold">{job.organizationName || "Organization workspace"}</p><p className="mt-1 text-sm text-muted-foreground">View the company profile.</p></Link>}
-        </aside>
-      </div>
-    </ApplicationShell>
-  );
+      {showReport && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="presentation"><section role="dialog" aria-modal="true" aria-labelledby="report-job-title" className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-2xl sm:p-6"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[.16em] text-muted-foreground">Safety & moderation</p><h2 id="report-job-title" className="mt-1 text-xl font-semibold">Report this job</h2></div><button type="button" onClick={() => setShowReport(false)} aria-label="Close report dialog" className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><X className="h-4 w-4" /></button></div><p className="mt-4 text-sm leading-6 text-muted-foreground">Tell us what looks wrong. Reports are reviewed through the marketplace moderation workflow.</p><div className="mt-5 space-y-4"><div><Label htmlFor="report-reason">Reason</Label><select id="report-reason" value={reportReason} onChange={(event) => setReportReason(event.target.value as typeof reportReason)} className="mt-1.5 h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><option value="suspicious">Suspicious or fraudulent</option><option value="misleading">Misleading information</option><option value="inappropriate">Inappropriate content</option><option value="duplicate">Duplicate job</option><option value="other">Other</option></select></div><div><Label htmlFor="report-details">Additional context (optional)</Label><Textarea id="report-details" value={reportDetails} onChange={(event) => setReportDetails(event.target.value)} maxLength={2000} rows={5} placeholder="Share details that can help the review." className="mt-1.5" /></div></div><div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><Button variant="outline" onClick={() => setShowReport(false)}>Cancel</Button><Button onClick={() => reportJob.mutate({ jobId: job.id, reason: reportReason, details: reportDetails.trim() || undefined })} disabled={reportJob.isPending}>{reportJob.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Submit report</Button></div></section></div>}
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]"><main className="min-w-0 space-y-6">
+        <section className="rounded-2xl border border-border bg-card p-5 sm:p-7"><div className="flex items-center gap-3"><BriefcaseBusiness className="h-5 w-5 text-primary" /><div><p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Opportunity at a glance</p><h2 className="mt-1 text-xl font-semibold">Make an informed decision</h2></div></div><dl className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{summaryItems.map(({ icon: Icon, label, value, detail }) => <div key={label} className="rounded-xl border border-border bg-background/40 p-4"><Icon className="h-4 w-4 text-primary" /><dt className="mt-3 text-xs text-muted-foreground">{label}</dt><dd className="mt-1 font-semibold text-foreground">{value}</dd><p className="mt-1 text-xs text-muted-foreground">{detail}</p></div>)}</dl></section>
+        {viewerIsProfessional && <section className="rounded-2xl border border-primary/20 bg-primary/[.04] p-5 sm:p-7"><div className="flex items-start gap-3"><Sparkles className="mt-0.5 h-5 w-5 text-primary" /><div><p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Why this may match you</p><h2 className="mt-1 text-xl font-semibold">Explainable compatibility signals</h2>{matchReasons.length ? <div className="mt-5 space-y-3">{matchReasons.map((reason) => <div key={reason.label} className="flex gap-3"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" /><div><p className="text-sm font-medium text-foreground">{reason.label}</p><p className="text-xs leading-5 text-muted-foreground">{reason.detail}</p></div></div>)}</div> : <><p className="mt-3 text-sm leading-6 text-muted-foreground">Complete your professional profile to receive better job match insights. Optional profile fields strengthen recommendations but do not block applications.</p><Link href="/profile/edit"><Button variant="outline" className="mt-4">Improve my profile</Button></Link></>}</div></div></section>}
+        <section className="rounded-2xl border border-border bg-card p-5 sm:p-7"><div className="flex items-center gap-3"><FileText className="h-5 w-5 text-primary" /><h2 className="text-xl font-semibold">About this opportunity</h2></div><p className="mt-5 whitespace-pre-wrap text-sm leading-7 text-muted-foreground">{job.description}</p></section>
+        {skills.length > 0 && <section className="rounded-2xl border border-border bg-card p-5 sm:p-7"><h2 className="text-xl font-semibold">Skills and requirements</h2><p className="mt-2 text-sm text-muted-foreground">Terms identified from the client’s job description.</p><div className="mt-5 flex flex-wrap gap-2">{skills.map((skill) => <span key={skill} className="rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs text-foreground">{skill}</span>)}</div><Link href="/profile/edit" className="mt-5 inline-flex items-center text-sm font-medium text-primary hover:underline">Add or update skills <ChevronRight className="ml-1 h-4 w-4" /></Link></section>}
+        <section className="rounded-2xl border border-border bg-card p-5 sm:p-7"><div className="flex items-center gap-3"><MapPin className="h-5 w-5 text-primary" /><h2 className="text-xl font-semibold">Location and work arrangement</h2></div><p className="mt-4 text-sm leading-7 text-muted-foreground">This opportunity is listed for <strong className="font-semibold text-foreground">{job.location}</strong>. Exact project details should be confirmed through the authorized application and messaging workflow.</p></section>
+        <section className="rounded-2xl border border-border bg-card p-5 sm:p-7"><div className="flex items-center gap-3"><ShieldCheck className="h-5 w-5 text-emerald-400" /><h2 className="text-xl font-semibold">Your Zylobridge marketplace support</h2></div><div className="mt-5 grid gap-3 sm:grid-cols-3"><div className="rounded-xl border border-border p-4"><CheckCircle2 className="h-5 w-5 text-emerald-400" /><p className="mt-3 text-sm font-semibold">Secure applications</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Submit through an authenticated, ownership-scoped workflow.</p></div><div className="rounded-xl border border-border p-4"><ShieldCheck className="h-5 w-5 text-emerald-400" /><p className="mt-3 text-sm font-semibold">Protected marketplace</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Verification signals appear only when supported by account data.</p></div><div className="rounded-xl border border-border p-4"><DollarSign className="h-5 w-5 text-emerald-400" /><p className="mt-3 text-sm font-semibold">Payment workflows</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Supported escrow and dispute flows apply only where configured.</p></div></div></section>
+        {professionalData?.similar?.length ? <section className="space-y-4"><div><p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Keep exploring</p><h2 className="mt-1 text-2xl font-semibold">More opportunities you may like</h2></div><div className="grid gap-3 md:grid-cols-2">{professionalData.similar.map((similar) => <article key={similar.id} className="rounded-2xl border border-border bg-card p-4 transition hover:border-primary/40"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-xs text-primary">{VOCATION_LABELS[similar.vocation as VocationKey] ?? similar.vocation}</p><h3 className="mt-1 truncate font-semibold">{similar.title}</h3><p className="mt-1 text-xs text-muted-foreground">{similar.location} · {relativeDate(similar.createdAt)}</p></div>{similar.isUrgent && <StatusBadge status="warning" label="Urgent" />}</div><div className="mt-4 flex items-center justify-between gap-3"><span className="text-sm font-semibold">{formatJobBudget(similar.budget, similar.currency)}</span><Link href={`/jobs/${similar.id}?from=${encodeURIComponent(`/jobs/${job.id}`)}`}><Button size="sm" variant="outline">View job <ArrowUpRight className="ml-2 h-3.5 w-3.5" /></Button></Link></div></article>)}</div></section> : null}
+      </main>
+      <aside className="space-y-4 lg:sticky lg:top-24"><section className="rounded-2xl border border-primary/25 bg-card p-5 shadow-sm"><p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Apply to this job</p><h2 className="mt-2 text-lg font-semibold">{job.title}</h2><p className="mt-2 text-sm font-semibold">{formatJobBudget(job.budget, job.currency)}</p>{application ? <div className="mt-5"><StatusBadge status={applicationTone} label={applicationLabel} /><p className="mt-3 text-sm leading-6 text-muted-foreground">{application.status === "accepted" ? "You have been selected for this opportunity." : application.status === "rejected" ? "Thank you for your interest. This application was not selected." : "Your application is recorded in the protected applications workflow."}</p><Link href={`/applications/${application.id}`}><Button className="mt-4 w-full">View application</Button></Link></div> : canApply ? <><div className="mt-5 space-y-3 text-sm"><p className="flex items-center gap-2 text-emerald-400"><Check className="h-4 w-4" />Professional account</p><p className="flex items-center gap-2 text-emerald-400"><Check className="h-4 w-4" />Profile can be evaluated</p><p className="flex items-center gap-2 text-muted-foreground"><Clock3 className="h-4 w-4" />{deadlineLabel(job.deadline)}</p></div><Button className="mt-5 w-full" onClick={() => setShowApplication((value) => !value)}>{showApplication ? "Close application" : "Apply for this job"}</Button></> : <div className="mt-5 rounded-xl border border-border bg-muted/20 p-4 text-sm text-muted-foreground">{!isAuthenticated ? "Sign in as a professional to apply." : !viewerIsProfessional ? "Professional accounts can apply to this opportunity." : !isOpen ? "Applications are closed for this opportunity." : "You cannot apply to your own job."}</div>}</section>
+      {showApplication && canApply && <section className="rounded-2xl border border-border bg-card p-5"><h2 className="font-semibold">Your application</h2><p className="mt-2 text-xs leading-5 text-muted-foreground">Introduce yourself, explain your relevant experience, and describe how you would approach this work.</p><div className="mt-5 space-y-4"><div><Label htmlFor="bid-amount">Proposed budget</Label><Input id="bid-amount" type="number" min="1" value={bidAmount} onChange={(event) => setBidAmount(event.target.value)} placeholder="Enter your proposal" className="mt-1.5" /></div><div><Label htmlFor="cover-letter">Your proposal</Label><Textarea id="cover-letter" value={coverLetter} onChange={(event) => setCoverLetter(event.target.value)} rows={8} maxLength={3000} placeholder="Explain your relevant experience, approach, and availability." className="mt-1.5" /><p className="mt-1 text-right text-xs text-muted-foreground">{coverLetter.length}/3000</p></div><Button className="w-full" onClick={apply} disabled={submitApplication.isPending}>{submitApplication.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Preview application</Button></div></section>}
+      {showPreview && <section className="rounded-2xl border border-primary/30 bg-primary/[.04] p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Preview application</p><h2 className="mt-1 font-semibold">Review before submitting</h2></div><button type="button" onClick={() => setShowPreview(false)} aria-label="Close application preview"><X className="h-4 w-4" /></button></div><div className="mt-4 space-y-3 text-sm"><p><span className="text-muted-foreground">Proposed budget:</span> <strong>{formatJobBudget(Number(bidAmount), job.currency)}</strong></p><p className="whitespace-pre-wrap rounded-xl border border-border bg-background/50 p-3 leading-6">{coverLetter}</p></div><Button className="mt-4 w-full" onClick={confirmApply} disabled={submitApplication.isPending}>{submitApplication.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}Submit application</Button></section>}
+      {professionalData?.client && <section className="rounded-2xl border border-border bg-card p-5"><div className="flex items-start gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary"><UserRound className="h-5 w-5" /></div><div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-[.16em] text-muted-foreground">About the client</p><h2 className="mt-1 truncate font-semibold">{professionalData.client.name || "Client account"}</h2>{professionalData.client.isVerified && <p className="mt-1 inline-flex items-center gap-1 text-xs text-emerald-400"><ShieldCheck className="h-3.5 w-3.5" />Verified account</p>}</div></div>{trustSignals.length > 0 && <div className="mt-5 space-y-2 border-t border-border pt-4">{trustSignals.map((signal) => <p key={signal} className="flex items-center gap-2 text-sm text-muted-foreground"><CheckCircle2 className="h-4 w-4 text-emerald-400" />{signal}</p>)}</div>}{professionalData.client.createdAt && <p className="mt-4 text-xs text-muted-foreground">Member since {formatDate(professionalData.client.createdAt)}</p>}</section>}
+      {job.organizationSlug && <Link href={`/companies/${job.organizationSlug}`} className="block rounded-2xl border border-border bg-card p-5 hover:border-primary/50"><p className="text-xs uppercase tracking-[.16em] text-muted-foreground">Posted through</p><p className="mt-2 font-semibold">{job.organizationName || "Organization workspace"}</p><p className="mt-1 text-sm text-muted-foreground">View the company profile.</p></Link>}
+      </aside></div>
+      {canApply && <div className="fixed inset-x-3 bottom-3 z-30 lg:hidden"><Button className="w-full rounded-2xl py-6 shadow-2xl" onClick={() => { setShowApplication(true); window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }); }}>Apply for this job</Button></div>}
+    </div>
+  </ApplicationShell>;
 }

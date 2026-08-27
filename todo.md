@@ -1049,3 +1049,11 @@
 - [x] Add or update focused regression tests for the specification requirements.
 - [x] Run TypeScript, full Vitest, client/server builds, diff checks, and responsive/runtime validation.
 - [x] Save the verified implementation checkpoint.
+
+## Attached specification: pasted_content_29.txt
+- [x] Read and normalize every requirement in the attached specification.
+- [x] Audit the synchronized repository against the specification and identify exact implementation gaps.
+- [x] Implement all requested changes while preserving existing authorization, privacy, branding, and no-fabrication constraints.
+- [x] Add or update focused regression tests for the specification requirements.
+- [x] Run TypeScript, full Vitest, client/server builds, diff checks, and responsive/runtime validation.
+- [x] Save the verified implementation checkpoint.
