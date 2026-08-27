@@ -7,6 +7,7 @@ import {
   jobs,
   applications,
   savedJobs,
+  jobReports,
   jobAlerts,
   shortlists,
   profiles,
@@ -14,6 +15,7 @@ import {
   InsertJob,
   InsertApplication,
   InsertSavedJob,
+  InsertJobReport,
   InsertJobAlert,
   InsertProfile,
   InsertReview,
@@ -57,6 +59,7 @@ import {
 import { ENV } from "./_core/env";
 import { deriveApplicationStage, type ApplicationStage } from "../shared/applicationLifecycle";
 import { calculateProfileCompletion, parseProfileMetadata, publicProfileMetadata } from "../shared/profile";
+import { calculateExplainableJobMatch } from "../shared/jobMatching";
 
 export const MAX_PAGE_SIZE = 100;
 export const DEFAULT_PAGE_SIZE = 20;
@@ -307,6 +310,41 @@ export async function getJobById(id: number) {
     ...row.job,
     organizationName: row.organizationName ?? undefined,
     organizationSlug: row.organizationSlug ?? undefined,
+  };
+}
+
+export async function createJobReport(data: InsertJobReport) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const [report] = await db.insert(jobReports).values(data).onConflictDoNothing({ target: [jobReports.jobId, jobReports.reporterId] }).returning();
+  return report ?? { ...data, id: 0, status: data.status ?? "open", createdAt: new Date() };
+}
+
+export async function getProfessionalJobDetails(professionalId: number, jobId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const job = await getJobById(jobId);
+  if (!job) return undefined;
+  const [profile, application, saved, client, posted, completed, shortlist] = await Promise.all([
+    getProfileByUserId(professionalId),
+    getApplicationByJobAndProfessionalId(jobId, professionalId),
+    isJobSaved(jobId, professionalId),
+    db.select({ id: users.id, name: users.name, avatarUrl: users.avatarUrl, isVerified: users.isVerified, createdAt: users.createdAt }).from(users).where(eq(users.id, job.clientId)).limit(1),
+    db.select({ count: sql<number>`count(*)` }).from(jobs).where(eq(jobs.clientId, job.clientId)),
+    db.select({ count: sql<number>`count(*)` }).from(jobs).where(and(eq(jobs.clientId, job.clientId), eq(jobs.status, "completed"))),
+    db.select({ id: shortlists.id }).from(shortlists).where(and(eq(shortlists.jobId, jobId), eq(shortlists.professionalId, professionalId))).limit(1),
+  ]);
+  if (job.status !== "open" && !application) return undefined;
+  const similarResult = job.status === "open" ? await searchJobs({ vocation: job.vocation, status: "open", sort: "newest", limit: 7, offset: 0 }) : { items: [] };
+  const similar = similarResult.items.filter((item) => item.id !== job.id).slice(0, 6);
+  return {
+    job,
+    application: application ?? null,
+    shortlisted: shortlist.length > 0,
+    isSaved: saved,
+    match: profile ? calculateExplainableJobMatch(profile, job) : { score: 0, reasons: [] },
+    similar,
+    client: { ...client[0], jobsPosted: Number(posted[0]?.count ?? 0), completedJobs: Number(completed[0]?.count ?? 0) },
   };
 }
 

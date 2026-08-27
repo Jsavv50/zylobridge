@@ -123,6 +123,8 @@ import {
   getProfessionalJobSignals,
   getProfessionalMarketplaceActivity,
   getProfessionalFinancialDashboard,
+  getProfessionalJobDetails,
+  createJobReport,
   getProfessionalFinancialTransactions,
   getProfessionalPayouts,
   getProfessionalProtectedEscrow,
@@ -514,6 +516,25 @@ export const appRouter = router({
         const viewerCanSeeUnpublished = Boolean(ctx.user && (ctx.user.id === job.clientId || ctx.user.role === "admin" || ctx.user.role === "SUPER_ADMIN"));
         if (job.status !== "open" && !viewerCanSeeUnpublished) throw new TRPCError({ code: "NOT_FOUND" });
         return job;
+      }),
+
+    report: protectedProcedure
+      .input(z.object({ jobId: z.number().int().positive(), reason: z.enum(["suspicious", "misleading", "inappropriate", "duplicate", "other"]), details: z.string().max(2000).trim().optional() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.userType !== "professional") throw new TRPCError({ code: "FORBIDDEN", message: "Only professionals can report marketplace jobs." });
+        const job = await getJobById(input.jobId);
+        if (!job || job.status !== "open") throw new TRPCError({ code: "NOT_FOUND", message: "Open job not found." });
+        if (job.clientId === ctx.user.id) throw new TRPCError({ code: "FORBIDDEN", message: "You cannot report your own job." });
+        return createJobReport({ jobId: input.jobId, reporterId: ctx.user.id, reason: input.reason, details: input.details || null, status: "open" });
+      }),
+
+    professionalDetails: protectedProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.userType !== "professional") throw new TRPCError({ code: "FORBIDDEN", message: "Professional job details are available to professional accounts." });
+        const details = await getProfessionalJobDetails(ctx.user.id, input.id);
+        if (!details) throw new TRPCError({ code: "NOT_FOUND", message: "This opportunity is no longer available." });
+        return details;
       }),
 
     myJobs: protectedProcedure

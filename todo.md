@@ -1051,3 +1051,11 @@
 - [x] Save the verified implementation checkpoint.
 - [x] Drop only the newly created, unused `job_reports` table after explicit user confirmation.
 - [x] Revalidate the restored repository and save the final reversal checkpoint.
+
+## Attached specification: pasted_content_31.txt
+- [x] Read and normalize the complete Job Details specification.
+- [x] Audit the restored `/jobs/:id` route, application flow, saved jobs, matching, client trust, authentication, and navigation contracts.
+- [x] Implement the requested world-class professional Job Details experience using real data and existing architecture.
+- [x] Preserve application validation, duplicate prevention, privacy boundaries, role isolation, and safe sharing/reporting behavior.
+- [x] Add focused regression tests and validate TypeScript, full Vitest, client/server builds, runtime health, and responsive QA.
+- [x] Save the verified Job Details checkpoint.
