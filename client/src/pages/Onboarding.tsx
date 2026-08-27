@@ -6,8 +6,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Briefcase, HardHat, Building2, ArrowRight, Loader2 } from "lucide-react";
 import Navbar from "@/components/Navbar";
-
-const LOGO_URL = "/ZYLO.png";
+import { ZylobridgeLogo } from "@/components/ZylobridgeLogo";
 
 export default function Onboarding() {
   const [, navigate] = useLocation();
@@ -34,10 +33,15 @@ export default function Onboarding() {
     );
   }
 
+  if (user.role === "SUPER_ADMIN" || user.role === "admin") {
+    navigate("/dashboard/admin");
+    return null;
+  }
+
   if (user.userType !== "unset") {
     if (user.userType === "client") navigate("/dashboard/client");
     else if (user.userType === "professional") navigate("/dashboard/professional");
-    else if (user.userType === "enterprise") navigate("/dashboard/enterprise");
+    else navigate("/dashboard/enterprise");
     return null;
   }
 
@@ -47,7 +51,7 @@ export default function Onboarding() {
 
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-2xl py-20">
         <div className="text-center mb-12">
-          <img src={LOGO_URL} alt="ZYLOBRIDGE" className="h-14 w-14 object-contain mx-auto mb-6" />
+          <ZylobridgeLogo compact showWordmark={false} className="mx-auto mb-6" imageClassName="h-14 w-14" />
           <h1
             className="text-3xl font-extrabold text-white mb-3"
             style={{ fontFamily: "'Space Grotesk', sans-serif" }}

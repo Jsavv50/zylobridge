@@ -8,7 +8,9 @@ import { registerOAuthRoutes } from "./oauth";
 import { registerGoogleAuthRoutes } from "./googleAuth";
 import { registerRealtimeAuthRoutes } from "./realtimeAuth";
 import { registerStorageProxy } from "./storageProxy";
+import { registerPaystackWebhook } from "../webhook";
 import { appRouter } from "../routers";
+import { sdk } from "./sdk";
 import { createContext } from "./context";
 import { setupVite } from "./vite";
 import { registerSocketIO } from "../socket";
@@ -68,10 +70,13 @@ async function startServer() {
       origin: (origin, callback) => {
         // Allow same-origin requests (no Origin header) and local development
         if (!origin) return callback(null, true);
+        const isDevelopment = process.env.NODE_ENV !== "production";
+        const isManagedPreviewOrigin = isDevelopment && /^https:\/\/3000-[a-z0-9-]+\.us\d+\.manus\.computer$/.test(origin);
+        const isLocalDevelopmentOrigin = isDevelopment && /^(http:\/\/localhost|http:\/\/127\.0\.0\.1)(:\d+)?$/.test(origin);
         if (
-          allowedOrigins.length === 0 ||
           allowedOrigins.includes(origin) ||
-          origin.startsWith("http://localhost")
+          isLocalDevelopmentOrigin ||
+          isManagedPreviewOrigin
         ) {
           return callback(null, true);
         }
@@ -101,11 +106,16 @@ async function startServer() {
   registerOAuthRoutes(app);
   registerGoogleAuthRoutes(app);
   registerRealtimeAuthRoutes(app);
+  registerPaystackWebhook(app);
 
   // ── Root endpoint (API diagnostics) ──────────────────────────────────────
-  app.get("/", (_req, res) => {
-    res.json({ status: "ok", service: "Zylobridge API" });
-  });
+  // In development, setupVite owns the root route so the local React app renders.
+  // Railway remains API-only and keeps the diagnostic root response in production.
+  if (process.env.NODE_ENV !== "development") {
+    app.get("/", (_req, res) => {
+      res.json({ status: "ok", service: "Zylobridge API" });
+    });
+  }
 
   // ── Health check ──────────────────────────────────────────────────────────
   app.get("/api/health", (_req, res) => {
@@ -123,6 +133,27 @@ async function startServer() {
 
   // ── Socket.io real-time messaging ──────────────────────────────────────────
   registerSocketIO(server);
+
+  // ── Scheduled Cron: Audit Log Retention (30 Days) ──────────────────────────
+  app.post("/api/scheduled/cleanupAuditLogs", async (req, res) => {
+    try {
+      const user = await sdk.authenticateRequest(req);
+      if (!user.isCron) {
+        return res.status(403).json({ error: "Unauthorized cron execution" });
+      }
+      const { deleteOldAuditLogs } = await import("../db");
+      const result = await deleteOldAuditLogs(30);
+      return res.json({ ok: true, cleanedAt: new Date().toISOString(), result });
+    } catch (err: any) {
+      console.error("[Cron] cleanupAuditLogs failed:", err);
+      return res.status(500).json({
+        error: err.message,
+        stack: err.stack,
+        context: { url: req.originalUrl },
+        timestamp: new Date().toISOString(),
+      });
+    }
+  });
 
   // ── Local development — Vite dev server (not used on Railway) ─────────────
   if (process.env.NODE_ENV === "development") {

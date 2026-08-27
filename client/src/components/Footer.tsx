@@ -1,6 +1,5 @@
 import { Link } from "wouter";
-
-const LOGO_URL = "/ZYLO.png";
+import { ZylobridgeLogo } from "./ZylobridgeLogo";
 
 export default function Footer() {
   return (
@@ -9,20 +8,8 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Brand */}
           <div className="col-span-1 md:col-span-2">
-            <div className="flex items-center gap-3 mb-4">
-              <img src={LOGO_URL} alt="ZYLOBRIDGE" className="h-8 w-8 object-contain" />
-              <span
-                className="text-lg font-extrabold tracking-tight"
-                style={{
-                  fontFamily: "'Space Grotesk', sans-serif",
-                  background: "linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  backgroundClip: "text",
-                }}
-              >
-                ZYLOBRIDGE
-              </span>
+            <div className="mb-4">
+              <ZylobridgeLogo imageClassName="h-8 w-8" />
             </div>
             <p className="text-sm text-gray-500 max-w-xs leading-relaxed">
               Powering the Future of Connection. The premier marketplace connecting skilled trade professionals with contractors and clients across North America.

@@ -1,11 +1,8 @@
 import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { getLoginUrl } from "@/const";
 
 // Railway backend base URL — must be set in Vercel env vars as VITE_API_URL
-// e.g. https://api.zylobridge.com
-// Falls back to empty string for same-origin local development.
 const API_URL = ((import.meta.env.VITE_API_URL as string | undefined) ?? "").replace(/\/$/, "");
 
 import { Button } from "@/components/ui/button";
@@ -23,15 +20,14 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
-
-const LOGO_URL = "/ZYLO.png";
+import { ZylobridgeLogo } from "@/components/ZylobridgeLogo";
 
 type AuthMethod = "choose" | "email_input" | "email_otp" | "phone_input" | "phone_otp" | "name_capture";
 type NameCaptureFor = "email" | "phone";
 
 export default function SignIn() {
   const [, navigate] = useLocation();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, refresh } = useAuth();
 
   const [method, setMethod] = useState<AuthMethod>("choose");
   const [nameCaptureFor, setNameCaptureFor] = useState<NameCaptureFor>("email");
@@ -49,13 +45,31 @@ export default function SignIn() {
   const [countdown, setCountdown] = useState(0);
 
   // Verified user stored after first (and only) verifyOtp call
-  // Used by handleCompleteName so verifyOtp is NEVER called a second time
   const [verifiedUserId, setVerifiedUserId] = useState<number | null>(null);
+
+  // Prevent multiple Google OAuth initiation clicks
+  const [isGoogleRedirecting, setIsGoogleRedirecting] = useState(false);
 
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) navigate("/");
   }, [isAuthenticated, navigate]);
+
+  /**
+   * Complete the login handoff only after the backend accepts the new cookie.
+   * The refresh request is proof that auth.me can resolve the session;
+   * navigation stays inside the SPA and does not force a document reload.
+   */
+  const finishAuthentication = async (message: string) => {
+    const authenticatedUser = await refresh();
+    if (!authenticatedUser) {
+      toast.error("Your session could not be established. Please try again.");
+      return false;
+    }
+    toast.success(message);
+    navigate("/");
+    return true;
+  };
 
   // Countdown timer
   useEffect(() => {
@@ -63,6 +77,19 @@ export default function SignIn() {
     const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
     return () => clearTimeout(t);
   }, [countdown]);
+
+  // Handle Google OAuth click with double-click / duplicate navigation safeguard
+  const handleGoogleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    if (isGoogleRedirecting) return;
+    setIsGoogleRedirecting(true);
+    try {
+      sessionStorage.setItem("zylo_oauth_init_at", Date.now().toString());
+    } catch {}
+    const returnPath = window.location.pathname === "/sign-in" ? "/" : window.location.pathname;
+    const targetUrl = `${API_URL}/api/auth/google?returnPath=${encodeURIComponent(returnPath)}`;
+    window.location.href = targetUrl;
+  };
 
   // ── Email OTP mutations ────────────────────────────────────────────────────
   const sendEmailOtp = trpc.emailAuth.sendOtp.useMutation({
@@ -75,21 +102,20 @@ export default function SignIn() {
   });
 
   const verifyEmailOtp = trpc.emailAuth.verifyOtp.useMutation({
-    retry: false, // OTPs are single-use — never retry a failed verifyOtp request
-    onSuccess: (data) => {
+    retry: false,
+    onSuccess: async (data) => {
       if (data.success) {
-        // Store the verified user ID so Complete Sign Up can use it without re-calling verifyOtp
         if (data.user?.id) setVerifiedUserId(data.user.id);
         if (!name && !data.user?.name) {
           setNameCaptureFor("email");
           setMethod("name_capture");
         } else {
-          toast.success("Welcome to ZYLOBRIDGE!");
-          window.location.href = "/";
+          await finishAuthentication("Welcome to ZYLOBRIDGE!");
         }
       }
     },
     onError: (err) => {
+      setEmailOtp("");
       if (err.message.toLowerCase().includes("expired") || err.message.toLowerCase().includes("invalid")) {
         toast.error("This code has expired or is invalid. Please request a new one.");
       } else {
@@ -97,11 +123,8 @@ export default function SignIn() {
       }
     },
   });
-  // retry: false is critical — OTPs are single-use; retrying a failed request would
-  // submit the same consumed token to Supabase and produce "Token has expired or is invalid"
-  // This override is intentionally placed after the mutation definition for clarity.
 
-  // ── Phone OTP mutations ────────────────────────────────────────────────────
+  // ── Phone OTP mutations ────────────────────────────────────────────────
   const sendPhoneOtp = trpc.phoneAuth.sendOtp.useMutation({
     onSuccess: () => {
       toast.success("OTP sent! Check your SMS messages.");
@@ -112,16 +135,15 @@ export default function SignIn() {
   });
 
   const verifyPhoneOtp = trpc.phoneAuth.verifyOtp.useMutation({
-    retry: false, // OTPs are single-use — never retry a failed verifyOtp request
-    onSuccess: (data) => {
+    retry: false,
+    onSuccess: async (data) => {
       if (data.success) {
         if (data.user?.id) setVerifiedUserId(data.user.id);
         if (!name && !data.user?.name) {
           setNameCaptureFor("phone");
           setMethod("name_capture");
         } else {
-          toast.success("Welcome to ZYLOBRIDGE!");
-          window.location.href = "/";
+          await finishAuthentication("Welcome to ZYLOBRIDGE!");
         }
       }
     },
@@ -134,90 +156,59 @@ export default function SignIn() {
     },
   });
 
-  // ── Name capture mutation (re-verify with name) ────────────────────────────
-  // ── Name capture — uses auth.updateName (NEVER re-calls verifyOtp) ─────────
-  const updateName = trpc.auth.updateName.useMutation({
-    onSuccess: () => {
-      toast.success("Welcome to ZYLOBRIDGE!");
-      window.location.href = "/";
+  const completeEmailName = trpc.emailAuth.completeName.useMutation({
+    onSuccess: async () => {
+      await finishAuthentication("Account set up successfully!");
     },
-    onError: (err) => {
-      if (err.message.toLowerCase().includes("unauthorized") || err.message.toLowerCase().includes("session")) {
-        toast.error("Your sign-in session has expired. Please request a new verification code.");
-        setMethod("email_input");
-        setVerifiedUserId(null);
-      } else {
-        toast.error(err.message);
-      }
-    },
+    onError: (err: any) => toast.error(err.message),
   });
 
-  const handleCompleteName = () => {
-    if (!name.trim()) return toast.error("Please enter your name.");
-    // The OTP was already verified — use the JWT session cookie to update the name.
-    // verifyOtp is NOT called again here.
-    updateName.mutate({ name: name.trim() });
+  const completePhoneName = trpc.phoneAuth.completeName.useMutation({
+    onSuccess: async () => {
+      await finishAuthentication("Account set up successfully!");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const handleCompleteName = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) {
+      toast.error("Please enter your name");
+      return;
+    }
+    if (nameCaptureFor === "email") {
+      completeEmailName.mutate({ name: name.trim(), userId: verifiedUserId ?? undefined });
+    } else {
+      completePhoneName.mutate({ name: name.trim(), userId: verifiedUserId ?? undefined });
+    }
   };
 
-  const handleResend = () => {
-    if (countdown > 0) return;
-    if (method === "email_otp") sendEmailOtp.mutate({ email });
-    else if (method === "phone_otp") sendPhoneOtp.mutate({ phone });
-  };
-
-  const isLoading =
-    sendEmailOtp.isPending || verifyEmailOtp.isPending ||
-    sendPhoneOtp.isPending || verifyPhoneOtp.isPending ||
-    updateName.isPending;
-
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div
-      className="min-h-screen flex flex-col"
-      style={{ background: "linear-gradient(135deg, #0a0d14 0%, #0d1117 60%, #0f0a1e 100%)" }}
-    >
-      {/* Grid overlay */}
-      <div
-        className="pointer-events-none fixed inset-0 opacity-[0.03]"
-        style={{
-          backgroundImage:
-            "linear-gradient(rgba(124,58,237,0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(124,58,237,0.6) 1px, transparent 1px)",
-          backgroundSize: "40px 40px",
-        }}
-      />
-      {/* Glow orb */}
-      <div
-        className="pointer-events-none fixed top-[-120px] left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full opacity-10"
-        style={{ background: "radial-gradient(circle, #7c3aed 0%, transparent 70%)" }}
-      />
+    <div className="min-h-screen bg-[#0a0e17] text-white flex flex-col justify-between relative overflow-hidden">
+      {/* Background radial glow */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-violet-600/10 blur-[120px] rounded-full pointer-events-none" />
 
-      {/* Header */}
-      <header className="relative z-10 flex items-center justify-between px-6 py-5 max-w-7xl mx-auto w-full">
+      {/* Top Header */}
+      <header className="w-full border-b border-white/8 bg-[#0a0e17]/80 backdrop-blur-md sticky top-0 z-50 px-6 py-4 flex items-center justify-between">
+        <ZylobridgeLogo
+          className="group text-white"
+          imageClassName="h-10 w-10 rounded-xl shadow-lg shadow-violet-600/30 transition-transform group-hover:scale-105"
+        />
         <Link href="/">
-          <div className="flex items-center gap-2.5 cursor-pointer">
-            <img src={LOGO_URL} alt="ZYLOBRIDGE" className="h-9 w-9 rounded-lg object-contain" />
-            <span className="text-xl font-extrabold tracking-tight text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-              ZYLOBRIDGE
-            </span>
-          </div>
-        </Link>
-        <Link href="/">
-          <button className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors">
+          <span className="text-sm font-medium text-gray-400 hover:text-white transition-colors flex items-center gap-1.5 cursor-pointer">
             <ArrowLeft className="h-4 w-4" /> Back to Home
-          </button>
+          </span>
         </Link>
       </header>
 
-      {/* Main */}
-      <main className="relative z-10 flex-1 flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md">
-
-          {/* ── CHOOSE METHOD ── */}
+      {/* Main Container */}
+      <main className="flex-1 flex items-center justify-center px-4 py-12 relative z-10">
+        <div className="w-full max-w-md space-y-8">
           {method === "choose" && (
             <div className="space-y-6">
               <div className="text-center space-y-2">
-                <div className="inline-flex items-center gap-2 text-xs font-semibold tracking-widest text-violet-400 uppercase bg-violet-500/10 border border-violet-500/20 rounded-full px-4 py-1.5 mb-2">
-                  <Zap className="h-3 w-3" /> Welcome to ZYLOBRIDGE
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-500/10 border border-violet-500/25 text-violet-400 text-xs font-semibold mb-2">
+                  <Zap className="h-3.5 w-3.5" /> Secure Authentication
                 </div>
                 <h1 className="text-3xl font-extrabold text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
                   Sign In or Get Started
@@ -228,20 +219,33 @@ export default function SignIn() {
               </div>
 
               <div className="rounded-2xl border border-white/8 bg-[#131a26]/80 backdrop-blur-sm p-8 space-y-4">
-                {/* Google OAuth — direct Google OAuth 2.0 via /api/auth/google */}
-                <a href={`${API_URL}/api/auth/google?returnPath=${encodeURIComponent(window.location.pathname === '/sign-in' ? '/' : window.location.pathname)}`} className="block">
-                  <button className="w-full flex items-center justify-between px-5 py-4 rounded-xl font-semibold text-white transition-all duration-200 hover:bg-white/10 active:scale-[0.98] border border-white/10 bg-white/5">
+                {/* Google OAuth with click safeguard */}
+                <a
+                  href={`${API_URL}/api/auth/google`}
+                  onClick={handleGoogleClick}
+                  className={`block ${isGoogleRedirecting ? "opacity-60 pointer-events-none" : ""}`}
+                >
+                  <button
+                    disabled={isGoogleRedirecting}
+                    className="w-full flex items-center justify-between px-5 py-4 rounded-xl font-semibold text-white transition-all duration-200 hover:bg-white/10 active:scale-[0.98] border border-white/10 bg-white/5 cursor-pointer"
+                  >
                     <span className="flex items-center gap-3">
                       <span className="w-8 h-8 rounded-lg bg-white flex items-center justify-center">
-                        <svg className="w-4 h-4" viewBox="0 0 24 24">
-                          <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                          <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                          <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                          <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-                        </svg>
+                        {isGoogleRedirecting ? (
+                          <Loader2 className="w-4 h-4 text-violet-600 animate-spin" />
+                        ) : (
+                          <svg className="w-4 h-4" viewBox="0 0 24 24">
+                            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                          </svg>
+                        )}
                       </span>
                       <span className="text-left">
-                        <span className="block text-sm font-bold text-white">Sign in with Google</span>
+                        <span className="block text-sm font-bold text-white">
+                          {isGoogleRedirecting ? "Connecting to Google..." : "Sign in with Google"}
+                        </span>
                         <span className="block text-xs text-gray-400 font-normal">Fast, secure, one-click sign in</span>
                       </span>
                     </span>
@@ -258,7 +262,7 @@ export default function SignIn() {
                 {/* Email OTP */}
                 <button
                   onClick={() => setMethod("email_input")}
-                  className="w-full flex items-center justify-between px-5 py-4 rounded-xl border border-white/10 bg-white/4 hover:bg-white/8 hover:border-violet-500/30 transition-all duration-200 active:scale-[0.98]"
+                  className="w-full flex items-center justify-between px-5 py-4 rounded-xl border border-white/10 bg-white/4 hover:bg-white/8 hover:border-violet-500/30 transition-all duration-200 active:scale-[0.98] cursor-pointer"
                 >
                   <span className="flex items-center gap-3">
                     <span className="w-8 h-8 rounded-lg bg-violet-500/15 border border-violet-500/20 flex items-center justify-center">
@@ -275,7 +279,7 @@ export default function SignIn() {
                 {/* Phone OTP */}
                 <button
                   onClick={() => setMethod("phone_input")}
-                  className="w-full flex items-center justify-between px-5 py-4 rounded-xl border border-white/10 bg-white/4 hover:bg-white/8 hover:border-violet-500/30 transition-all duration-200 active:scale-[0.98]"
+                  className="w-full flex items-center justify-between px-5 py-4 rounded-xl border border-white/10 bg-white/4 hover:bg-white/8 hover:border-violet-500/30 transition-all duration-200 active:scale-[0.98] cursor-pointer"
                 >
                   <span className="flex items-center gap-3">
                     <span className="w-8 h-8 rounded-lg bg-violet-500/15 border border-violet-500/20 flex items-center justify-center">
@@ -315,238 +319,256 @@ export default function SignIn() {
           {/* ── EMAIL INPUT ── */}
           {method === "email_input" && (
             <div className="rounded-2xl border border-white/8 bg-[#131a26]/80 backdrop-blur-sm p-8 space-y-6">
-              <button onClick={() => setMethod("choose")} className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors">
+              <button onClick={() => setMethod("choose")} className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors cursor-pointer">
                 <ArrowLeft className="h-4 w-4" /> Back
               </button>
-              <div className="text-center space-y-1">
-                <div className="w-12 h-12 rounded-2xl bg-violet-500/15 border border-violet-500/20 flex items-center justify-center mx-auto mb-3">
-                  <Mail className="h-6 w-6 text-violet-400" />
-                </div>
-                <h2 className="text-2xl font-extrabold text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                  Enter Your Email
-                </h2>
-                <p className="text-gray-400 text-sm">We'll send a one-time code to verify your address.</p>
+              <div className="space-y-2">
+                <h2 className="text-2xl font-bold">Sign in with Email</h2>
+                <p className="text-sm text-gray-400">Enter your email address to receive a 6-digit verification code.</p>
               </div>
-              <div className="space-y-3">
-                <Label className="text-gray-300 text-sm font-medium">Email Address</Label>
-                <Input
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && sendEmailOtp.mutate({ email })}
-                  className="bg-[#0d1117] border-white/10 text-white placeholder:text-gray-600 focus:border-violet-500 h-12 text-base"
-                  autoFocus
-                />
-              </div>
-              <Button
-                className="w-full h-12 font-bold text-base"
-                style={{ background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)" }}
-                onClick={() => sendEmailOtp.mutate({ email })}
-                disabled={sendEmailOtp.isPending || !email.trim()}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!email || !email.includes("@")) {
+                    toast.error("Please enter a valid email address");
+                    return;
+                  }
+                  sendEmailOtp.mutate({ email });
+                }}
+                className="space-y-4"
               >
-                {sendEmailOtp.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Sending...</> : <>Send OTP Code <ChevronRight className="h-4 w-4 ml-1" /></>}
-              </Button>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email address</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="name@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="bg-white/5 border-white/10 text-white placeholder:text-gray-600"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  disabled={sendEmailOtp.isPending}
+                  className="w-full bg-violet-600 hover:bg-violet-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-violet-600/25"
+                >
+                  {sendEmailOtp.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Send Verification Code
+                </Button>
+              </form>
             </div>
           )}
 
-          {/* ── EMAIL OTP VERIFY ── */}
+          {/* ── EMAIL OTP ── */}
           {method === "email_otp" && (
             <div className="rounded-2xl border border-white/8 bg-[#131a26]/80 backdrop-blur-sm p-8 space-y-6">
-              <button onClick={() => setMethod("email_input")} className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors">
-                <ArrowLeft className="h-4 w-4" /> Change email
+              <button onClick={() => setMethod("email_input")} className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors cursor-pointer">
+                <ArrowLeft className="h-4 w-4" /> Change Email
               </button>
-              <div className="text-center space-y-1">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center mx-auto mb-3">
-                  <KeyRound className="h-6 w-6 text-emerald-400" />
-                </div>
-                <h2 className="text-2xl font-extrabold text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                  Enter the Code
-                </h2>
-                <p className="text-gray-400 text-sm">
-                  A 6-digit code was sent to <span className="text-violet-400 font-semibold">{email}</span>
-                </p>
-                <p className="text-xs text-amber-400">Check your inbox and spam folder.</p>
+              <div className="space-y-2">
+                <h2 className="text-2xl font-bold">Enter Verification Code</h2>
+                <p className="text-sm text-gray-400">We sent a 6-digit code to <span className="text-white font-medium">{email}</span>.</p>
               </div>
-              <div className="space-y-3">
-                <Label className="text-gray-300 text-sm font-medium">One-Time Password</Label>
-                <Input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={6}
-                  placeholder="• • • • • •"
-                  value={emailOtp}
-                  onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  onKeyDown={(e) => {
-                    // e.preventDefault() stops the Enter key from also activating the
-                    // button below via its onClick, which would call mutate() twice.
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      if (!verifyEmailOtp.isPending && emailOtp.length === 6) {
-                        verifyEmailOtp.mutate({ email, otp: emailOtp, name: name || undefined });
-                      }
-                    }
-                  }}
-                  className="bg-[#0d1117] border-white/10 text-white placeholder:text-gray-600 focus:border-violet-500 h-14 text-center text-2xl tracking-[0.5em] font-bold"
-                  autoFocus
-                />
-              </div>
-              <Button
-                className="w-full h-12 font-bold text-base"
-                style={{ background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)" }}
-                onClick={() => verifyEmailOtp.mutate({ email, otp: emailOtp, name: name || undefined })}
-                disabled={verifyEmailOtp.isPending || emailOtp.length < 6}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (emailOtp.length !== 6) {
+                    toast.error("Please enter the full 6-digit code");
+                    return;
+                  }
+                  verifyEmailOtp.mutate({ email, otp: emailOtp });
+                }}
+                className="space-y-4"
               >
-                {verifyEmailOtp.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Verifying...</> : <><ShieldCheck className="h-4 w-4 mr-1" />Verify & Sign In</>}
-              </Button>
-              <div className="text-center">
-                {countdown > 0 ? (
-                  <p className="text-xs text-gray-500">Resend in <span className="text-violet-400 font-semibold tabular-nums">{countdown}s</span></p>
-                ) : (
-                  <button onClick={handleResend} className="text-xs text-violet-400 hover:text-violet-300 font-semibold transition-colors">Resend OTP</button>
-                )}
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="otp">Verification Code</Label>
+                  <Input
+                    id="otp"
+                    type="text"
+                    maxLength={6}
+                    placeholder="123456"
+                    value={emailOtp}
+                    onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, ""))}
+                    required
+                    className="bg-white/5 border-white/10 text-white placeholder:text-gray-600 text-center tracking-widest text-lg font-mono"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  disabled={verifyEmailOtp.isPending}
+                  className="w-full bg-violet-600 hover:bg-violet-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-violet-600/25 cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {verifyEmailOtp.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Verifying securely...</span>
+                    </>
+                  ) : (
+                    <span>Verify & Sign In</span>
+                  )}
+                </Button>
+                <div className="flex items-center justify-between text-xs pt-2">
+                  <span className="text-gray-500">Didn't receive the code?</span>
+                  <button
+                    type="button"
+                    disabled={countdown > 0 || sendEmailOtp.isPending}
+                    onClick={() => sendEmailOtp.mutate({ email })}
+                    className="text-violet-400 hover:underline disabled:text-gray-600 disabled:no-underline cursor-pointer font-medium"
+                  >
+                    {countdown > 0 ? `Resend code in ${countdown}s` : "Resend Code"}
+                  </button>
+                </div>
+              </form>
             </div>
           )}
 
           {/* ── PHONE INPUT ── */}
           {method === "phone_input" && (
             <div className="rounded-2xl border border-white/8 bg-[#131a26]/80 backdrop-blur-sm p-8 space-y-6">
-              <button onClick={() => setMethod("choose")} className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors">
+              <button onClick={() => setMethod("choose")} className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors cursor-pointer">
                 <ArrowLeft className="h-4 w-4" /> Back
               </button>
-              <div className="text-center space-y-1">
-                <div className="w-12 h-12 rounded-2xl bg-violet-500/15 border border-violet-500/20 flex items-center justify-center mx-auto mb-3">
-                  <Phone className="h-6 w-6 text-violet-400" />
-                </div>
-                <h2 className="text-2xl font-extrabold text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                  Enter Your Phone
-                </h2>
-                <p className="text-gray-400 text-sm">We'll send a one-time code to verify your number.</p>
+              <div className="space-y-2">
+                <h2 className="text-2xl font-bold">Sign in with Phone</h2>
+                <p className="text-sm text-gray-400">Enter your phone number (e.g. +1234567890) to receive an SMS code.</p>
               </div>
-              <div className="space-y-3">
-                <Label className="text-gray-300 text-sm font-medium">Phone Number</Label>
-                <Input
-                  type="tel"
-                  placeholder="+234 800 000 0000"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && sendPhoneOtp.mutate({ phone })}
-                  className="bg-[#0d1117] border-white/10 text-white placeholder:text-gray-600 focus:border-violet-500 h-12 text-base"
-                  autoFocus
-                />
-                <p className="text-[11px] text-gray-600">Include your country code, e.g. +234 for Nigeria.</p>
-              </div>
-              <Button
-                className="w-full h-12 font-bold text-base"
-                style={{ background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)" }}
-                onClick={() => sendPhoneOtp.mutate({ phone })}
-                disabled={sendPhoneOtp.isPending || !phone.trim()}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!phone || phone.length < 8) {
+                    toast.error("Please enter a valid phone number");
+                    return;
+                  }
+                  sendPhoneOtp.mutate({ phone });
+                }}
+                className="space-y-4"
               >
-                {sendPhoneOtp.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Sending...</> : <>Send OTP Code <ChevronRight className="h-4 w-4 ml-1" /></>}
-              </Button>
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Phone number</Label>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    placeholder="+1 (555) 000-0000"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    required
+                    className="bg-white/5 border-white/10 text-white placeholder:text-gray-600"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  disabled={sendPhoneOtp.isPending}
+                  className="w-full bg-violet-600 hover:bg-violet-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-violet-600/25"
+                >
+                  {sendPhoneOtp.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Send SMS Code
+                </Button>
+              </form>
             </div>
           )}
 
-          {/* ── PHONE OTP VERIFY ── */}
+          {/* ── PHONE OTP ── */}
           {method === "phone_otp" && (
             <div className="rounded-2xl border border-white/8 bg-[#131a26]/80 backdrop-blur-sm p-8 space-y-6">
-              <button onClick={() => setMethod("phone_input")} className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors">
-                <ArrowLeft className="h-4 w-4" /> Change number
+              <button onClick={() => setMethod("phone_input")} className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors cursor-pointer">
+                <ArrowLeft className="h-4 w-4" /> Change Phone
               </button>
-              <div className="text-center space-y-1">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center mx-auto mb-3">
-                  <KeyRound className="h-6 w-6 text-emerald-400" />
-                </div>
-                <h2 className="text-2xl font-extrabold text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                  Enter the Code
-                </h2>
-                <p className="text-gray-400 text-sm">
-                  A 6-digit code was sent to <span className="text-violet-400 font-semibold">{phone}</span>
-                </p>
+              <div className="space-y-2">
+                <h2 className="text-2xl font-bold">Enter SMS Code</h2>
+                <p className="text-sm text-gray-400">We sent a 6-digit code to <span className="text-white font-medium">{phone}</span>.</p>
               </div>
-              <div className="space-y-3">
-                <Label className="text-gray-300 text-sm font-medium">One-Time Password</Label>
-                <Input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={6}
-                  placeholder="• • • • • •"
-                  value={phoneOtp}
-                  onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      if (!verifyPhoneOtp.isPending && phoneOtp.length === 6) {
-                        verifyPhoneOtp.mutate({ phone, otp: phoneOtp, name: name || undefined });
-                      }
-                    }
-                  }}
-                  className="bg-[#0d1117] border-white/10 text-white placeholder:text-gray-600 focus:border-violet-500 h-14 text-center text-2xl tracking-[0.5em] font-bold"
-                  autoFocus
-                />
-              </div>
-              <Button
-                className="w-full h-12 font-bold text-base"
-                style={{ background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)" }}
-                onClick={() => verifyPhoneOtp.mutate({ phone, otp: phoneOtp, name: name || undefined })}
-                disabled={verifyPhoneOtp.isPending || phoneOtp.length < 6}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (phoneOtp.length !== 6) {
+                    toast.error("Please enter the full 6-digit code");
+                    return;
+                  }
+                  verifyPhoneOtp.mutate({ phone, otp: phoneOtp });
+                }}
+                className="space-y-4"
               >
-                {verifyPhoneOtp.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Verifying...</> : <><ShieldCheck className="h-4 w-4 mr-1" />Verify & Sign In</>}
-              </Button>
-              <div className="text-center">
-                {countdown > 0 ? (
-                  <p className="text-xs text-gray-500">Resend in <span className="text-violet-400 font-semibold tabular-nums">{countdown}s</span></p>
-                ) : (
-                  <button onClick={handleResend} className="text-xs text-violet-400 hover:text-violet-300 font-semibold transition-colors">Resend OTP</button>
-                )}
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="potp">SMS Verification Code</Label>
+                  <Input
+                    id="potp"
+                    type="text"
+                    maxLength={6}
+                    placeholder="123456"
+                    value={phoneOtp}
+                    onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, ""))}
+                    required
+                    className="bg-white/5 border-white/10 text-white placeholder:text-gray-600 text-center tracking-widest text-lg font-mono"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  disabled={verifyPhoneOtp.isPending}
+                  className="w-full bg-violet-600 hover:bg-violet-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-violet-600/25 cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {verifyPhoneOtp.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Verifying SMS code...</span>
+                    </>
+                  ) : (
+                    <span>Verify SMS & Sign In</span>
+                  )}
+                </Button>
+                <div className="flex items-center justify-between text-xs pt-2">
+                  <span className="text-gray-500">Didn't receive the SMS?</span>
+                  <button
+                    type="button"
+                    disabled={countdown > 0 || sendPhoneOtp.isPending}
+                    onClick={() => sendPhoneOtp.mutate({ phone })}
+                    className="text-violet-400 hover:underline disabled:text-gray-600 disabled:no-underline cursor-pointer font-medium"
+                  >
+                    {countdown > 0 ? `Resend code in ${countdown}s` : "Resend SMS"}
+                  </button>
+                </div>
+              </form>
             </div>
           )}
 
-          {/* ── NAME CAPTURE (first-time users) ── */}
+          {/* ── NAME CAPTURE ── */}
           {method === "name_capture" && (
             <div className="rounded-2xl border border-white/8 bg-[#131a26]/80 backdrop-blur-sm p-8 space-y-6">
-              <div className="text-center space-y-1">
-                <div className="w-12 h-12 rounded-2xl bg-violet-500/15 border border-violet-500/20 flex items-center justify-center mx-auto mb-3">
-                  <svg className="w-6 h-6 text-violet-400" viewBox="0 0 24 24" fill="none">
-                    <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="2" />
-                    <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
+              <div className="space-y-2">
+                <h2 className="text-2xl font-bold">What is your name?</h2>
+                <p className="text-sm text-gray-400">Please provide your name to complete your ZYLOBRIDGE account profile.</p>
+              </div>
+              <form onSubmit={handleCompleteName} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="fullname">Full Name</Label>
+                  <Input
+                    id="fullname"
+                    type="text"
+                    placeholder="John Doe"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                    className="bg-white/5 border-white/10 text-white placeholder:text-gray-600"
+                  />
                 </div>
-                <h2 className="text-2xl font-extrabold text-white" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                  One Last Step
-                </h2>
-                <p className="text-gray-400 text-sm">Tell us your name so we can personalise your experience.</p>
-              </div>
-              <div className="space-y-3">
-                <Label className="text-gray-300 text-sm font-medium">Full Name</Label>
-                <Input
-                  type="text"
-                  placeholder="e.g. Adebayo Okafor"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleCompleteName()}
-                  className="bg-[#0d1117] border-white/10 text-white placeholder:text-gray-600 focus:border-violet-500 h-12 text-base"
-                  autoFocus
-                />
-              </div>
-              <Button
-                className="w-full h-12 font-bold text-base"
-                style={{ background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)" }}
-                onClick={handleCompleteName}
-                disabled={isLoading || !name.trim()}
-              >
-                {isLoading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Creating account...</> : <>Complete Sign Up <ChevronRight className="h-4 w-4 ml-1" /></>}
-              </Button>
+                <Button
+                  type="submit"
+                  disabled={nameCaptureFor === "email" ? completeEmailName.isPending : completePhoneName.isPending}
+                  className="w-full bg-violet-600 hover:bg-violet-700 text-white font-semibold py-3 rounded-xl shadow-lg shadow-violet-600/25"
+                >
+                  {(nameCaptureFor === "email" ? completeEmailName.isPending : completePhoneName.isPending) ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Complete Sign Up
+                </Button>
+              </form>
             </div>
           )}
-
         </div>
       </main>
 
-      <footer className="relative z-10 text-center py-6 text-[11px] text-gray-700">
-        © {new Date().getFullYear()} ZYLOBRIDGE · All rights reserved
+      {/* Footer */}
+      <footer className="w-full border-t border-white/8 py-6 text-center text-xs text-gray-600">
+        &copy; {new Date().getFullYear()} ZYLOBRIDGE. All rights reserved.
       </footer>
     </div>
   );

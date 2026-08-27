@@ -201,7 +201,7 @@ class SDKServer {
     cookieValue: string | undefined | null
   ): Promise<{ openId: string; appId: string; name: string } | null> {
     if (!cookieValue) {
-      console.warn("[Auth] Missing session cookie");
+      // Suppress noisy Missing session cookie log for unauthenticated requests unless explicitly debugging
       return null;
     }
 
@@ -257,7 +257,7 @@ class SDKServer {
     } as GetUserInfoWithJwtResponse;
   }
 
-  async authenticateRequest(req: Request): Promise<User> {
+  async authenticateRequest(req: Request): Promise<User & { isCron?: boolean }> {
     // Regular authentication flow
     const cookies = this.parseCookies(req.headers.cookie);
     const sessionCookie = cookies.get(COOKIE_NAME);
@@ -268,7 +268,36 @@ class SDKServer {
     }
 
     const sessionUserId = session.openId;
+    if (sessionUserId.startsWith("cron_") || session.openId.startsWith("cron_")) {
+      return {
+        id: -1,
+        openId: sessionUserId,
+        name: "Cron System",
+        email: null,
+        phone: null,
+        avatarUrl: null,
+        isVerified: false,
+        loginMethod: null,
+        role: "user",
+        userType: "client",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        lastSignedIn: new Date(),
+        isCron: true,
+      } as any;
+    }
     const signedInAt = new Date();
+
+    // Fast in-memory session cache lookup to avoid repeated DB queries on every API request
+    const g = globalThis as unknown as { __zyloSessionCache?: Map<string, { user: User; expiresAt: number }> };
+    if (!g.__zyloSessionCache) {
+      g.__zyloSessionCache = new Map<string, { user: User; expiresAt: number }>();
+    }
+    const cachedEntry = g.__zyloSessionCache.get(sessionUserId);
+    if (cachedEntry && cachedEntry.expiresAt > Date.now()) {
+      return cachedEntry.user;
+    }
+
     let user = await db.getUserByOpenId(sessionUserId);
 
     // If user not in DB, sync from OAuth server automatically
@@ -293,16 +322,17 @@ class SDKServer {
       throw ForbiddenError("User not found");
     }
 
-    try {
-      await db.upsertUser({
-        openId: user.openId,
-        email: user.email,
-        name: user.name,
-        lastSignedIn: signedInAt,
-      });
-    } catch (err) {
-      console.error("[Auth] Non-fatal upsert error during authenticateRequest:", err);
-    }
+    const g2 = globalThis as unknown as { __zyloSessionCache?: Map<string, { user: User; expiresAt: number }> };
+    g2.__zyloSessionCache?.set(sessionUserId, { user, expiresAt: Date.now() + 60 * 1000 });
+
+    db.upsertUser({
+      openId: user.openId,
+      email: user.email,
+      name: user.name,
+      lastSignedIn: signedInAt,
+    }).catch((err) => {
+      console.error("[Auth] Non-fatal background upsert error during authenticateRequest:", err);
+    });
 
     return user;
   }

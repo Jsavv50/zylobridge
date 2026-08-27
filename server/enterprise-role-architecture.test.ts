@@ -20,7 +20,8 @@ describe("Enterprise frontend role integration", () => {
     expect(onboarding).toContain('navigate("/dashboard/enterprise")');
     expect(navbar).toContain('const isEnterprise = user?.userType === "enterprise"');
     expect(navbar).toContain('href="/dashboard/enterprise"');
-    expect(dashboard).toContain('user?.userType !== "enterprise"');
+    expect(dashboard).toContain('const isEnterprise = user?.userType === "enterprise"');
     expect(dashboard).toContain('trpc.enterprise.overview.useQuery');
+    expect(dashboard).toContain('enabled: isEnterprise');
   });
 });

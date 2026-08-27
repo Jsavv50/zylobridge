@@ -1,3 +1,4 @@
+import { ZylobridgeLogo } from "./ZylobridgeLogo";
 import { Skeleton } from './ui/skeleton';
 
 export function DashboardLayoutSkeleton() {
@@ -5,10 +6,9 @@ export function DashboardLayoutSkeleton() {
     <div className="flex min-h-screen bg-background">
       {/* Sidebar skeleton */}
       <div className="w-[280px] border-r border-border bg-background p-4 space-y-6">
-        {/* Logo area */}
+        {/* Official logo area */}
         <div className="flex items-center gap-3 px-2">
-          <Skeleton className="h-8 w-8 rounded-md" />
-          <Skeleton className="h-4 w-24" />
+          <ZylobridgeLogo imageClassName="h-8 w-8" />
         </div>
 
         {/* Menu items */}

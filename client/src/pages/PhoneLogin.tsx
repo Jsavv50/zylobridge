@@ -15,7 +15,7 @@ type Step = "phone" | "otp" | "name";
 
 export default function PhoneLogin() {
   const [, navigate] = useLocation();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, refresh } = useAuth();
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
@@ -30,11 +30,9 @@ export default function PhoneLogin() {
     return () => window.clearTimeout(timer);
   }, [countdown]);
 
-  // Redirect if already authenticated
-  if (isAuthenticated) {
-    navigate("/");
-    return null;
-  }
+  useEffect(() => {
+    if (isAuthenticated) navigate("/");
+  }, [isAuthenticated, navigate]);
 
   const sendOtpMutation = trpc.phoneAuth.sendOtp.useMutation({
     onSuccess: () => {
@@ -46,9 +44,14 @@ export default function PhoneLogin() {
   });
 
   const verifyOtpMutation = trpc.phoneAuth.verifyOtp.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
+      const authenticatedUser = await refresh();
+      if (!authenticatedUser) {
+        toast.error("Your session could not be established. Please try again.");
+        return;
+      }
       toast.success("Phone verified! Welcome to ZYLOBRIDGE.");
-      window.location.href = "/";
+      navigate("/");
     },
     onError: (err) => toast.error(err.message || "Invalid OTP. Please try again."),
   });
