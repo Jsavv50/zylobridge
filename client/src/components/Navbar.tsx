@@ -41,9 +41,11 @@ export default function Navbar() {
   const unreadCount = unreadData?.count ?? 0;
 
   const navLinks = [
-    { href: "/marketplace", label: "Browse Jobs" },
-    { href: "/shop", label: "Shop" },
+    { href: "/jobs", label: "Browse Jobs" },
+    { href: "/talent", label: "Find Professionals" },
     { href: "/how-it-works", label: "How It Works" },
+    { href: "/enterprise", label: "Enterprise" },
+    { href: "/shop", label: "Shop" },
   ];
 
   const initials = user?.name

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
+import { useEffect } from "react";
 import { ArrowRight, CheckCircle2, Filter, Loader2, MapPin, RotateCcw, Search, Star, UsersRound } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { ApplicationShell, EmptyState, PageHeader, StatusBadge } from "@/components/shell/ZyloShell";
@@ -11,13 +12,20 @@ import { VOCATION_KEYS, VOCATION_LABELS, type VocationKey } from "@shared/vocati
 
 export default function TalentDirectory() {
   const [, navigate] = useLocation();
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(() => new URLSearchParams(typeof window === "undefined" ? "" : window.location.search).get("q") ?? "");
   const [vocation, setVocation] = useState("all");
-  const [location, setLocation] = useState("");
+  const [location, setLocation] = useState(() => new URLSearchParams(typeof window === "undefined" ? "" : window.location.search).get("location") ?? "");
   const [sort, setSort] = useState<"relevance" | "rating" | "experience" | "newest">("relevance");
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [availableOnly, setAvailableOnly] = useState(true);
   const [offset, setOffset] = useState(0);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const nextQuery = params.get("q") ?? "";
+    const nextLocation = params.get("location") ?? "";
+    if (nextQuery !== q) setQ(nextQuery);
+    if (nextLocation !== location) setLocation(nextLocation);
+  }, [q, location]);
   const input = useMemo(() => ({ q: q.trim() || undefined, vocation: vocation === "all" ? undefined : vocation, location: location.trim() || undefined, sort, verifiedOnly, availableOnly, limit: 12, offset }), [q, vocation, location, sort, verifiedOnly, availableOnly, offset]);
   const query = trpc.talent.search.useQuery(input);
 

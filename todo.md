@@ -936,3 +936,13 @@
 - [x] Add representative taxonomy, duplicate-normalization, persistence, filtering, and responsive regression coverage
 - [x] Run TypeScript, full tests, production builds, route checks, and migration validation
 - [x] Save and publish the verified vocation expansion
+
+## Phase 95: Homepage World-Class Marketplace Redesign
+- [x] Audit Home, Navbar, Footer, routes, live jobs/professionals APIs, taxonomy, assets, and outdated geography/claims
+- [x] Define truthful homepage content and marketplace-first information architecture without fabricated activity, reviews, stats, or companies
+- [x] Implement premium responsive hero, marketplace search, live professional discovery, live job discovery, taxonomy exploration, two-sided journeys, trust, enterprise, Africa/global positioning, and final CTA sections
+- [x] Repair and verify global navigation, footer links, CTA routes, official logo usage, mobile menu, and direct route behavior
+- [x] Add homepage SEO metadata, accessibility semantics, keyboard/focus behavior, and no-overflow responsive styling
+- [x] Add regression coverage for truthful content, live-data states, links, taxonomy rendering, and responsive structure
+- [x] Run TypeScript, full tests, production builds, desktop/tablet/mobile visual checks, and safe live route verification
+- [x] Save and publish the verified homepage redesign

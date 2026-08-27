@@ -1,0 +1,3 @@
+# Phase 95 Live Domain Check
+
+Read-only checks on 2026-08-27 found that `https://zylobridge.manus.space/` and `https://zylomarket-wuxyqzod.manus.space/` both return the JSON health response `{"status":"ok","service":"Zylobridge API"}` at the root URL rather than the homepage HTML. This is consistent with the project’s split frontend/API deployment state and is not a safe basis for claiming the custom production frontend is live on those Manus domains. The local managed preview served the redesigned homepage successfully at desktop and mobile sizes. No sign-in, payment, OAuth, or data mutation was attempted.
