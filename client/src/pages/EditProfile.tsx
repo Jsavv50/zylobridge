@@ -20,7 +20,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
-import { VOCATION_LABELS, type VocationKey } from "@shared/vocations";
+import VocationSelector from "@/components/VocationSelector";
 
 export default function EditProfile() {
   const [, setLocation] = useLocation();
@@ -229,18 +229,12 @@ export default function EditProfile() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label className="text-xs text-gray-400 font-medium uppercase tracking-wider">Primary Vocation</label>
-                    <select
+                    <VocationSelector
+                      id="profile-vocation"
                       value={vocation}
-                      onChange={(e) => setVocation(e.target.value)}
-                      className="w-full h-10 px-3 rounded-md bg-[#0a0f1a] border border-white/10 text-white text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
-                    >
-                      <option value="">Select Vocation</option>
-                      {Object.entries(VOCATION_LABELS).map(([key, label]) => (
-                        <option key={key} value={key} className="bg-[#131a26] text-white">
-                          {label}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={setVocation}
+                      placeholder="Select Vocation"
+                    />
                   </div>
 
                   <div className="space-y-2">

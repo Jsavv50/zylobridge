@@ -926,3 +926,13 @@
 - [x] Add or update payment, routing, transfer, security, authorization, and duplicate-processing regression coverage
 - [x] Run full tests, TypeScript, production builds, safe live route checks, and inspect for committed secrets
 - [x] Save and publish the verified payment update
+
+## Phase 94: Expanded Categorized Vocation Taxonomy
+- [x] Audit existing vocation constants, selectors, validation, schema, APIs, search, filters, matching, candidate, marketplace, and profile display consumers
+- [x] Define one canonical backward-compatible vocation catalog with category associations and preserved legacy values
+- [x] Replace limited Professional Profile vocation selection with a categorized searchable responsive selector
+- [x] Update job posting and all vocation search/filter/matching consumers to use the canonical catalog
+- [x] Ensure new vocation values display as labels rather than IDs or raw internal values everywhere
+- [x] Add representative taxonomy, duplicate-normalization, persistence, filtering, and responsive regression coverage
+- [x] Run TypeScript, full tests, production builds, route checks, and migration validation
+- [x] Save and publish the verified vocation expansion

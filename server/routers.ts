@@ -124,6 +124,7 @@ import {
   initializePaystackSouthAfricaEft,
 } from "./paystack";
 import { getFrontendUrl } from "./_core/env";
+import { normalizeVocation } from "@shared/vocations";
 import { maskPhoneNumber, normalizePhoneNumber, sendPhoneOtpSms, SmsDeliveryError } from "./sms";
 import { getUserNotificationPreference, updateUserNotificationPreference, createInAppNotification, getUnreadNotifications, markNotificationRead, generateIcsContent, executeMatchingV2 } from "./phase4";
 import { initializeMilestonePayment, processVerifiedPayment, verifyPaystackWebhookSignature } from "./finance";
@@ -184,6 +185,13 @@ async function requireEscrowJobAccess(userId: number, role: string, jobId: numbe
     }
   }
   return job;
+}
+
+function canonicalizeVocation(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const canonical = normalizeVocation(value);
+  if (!canonical) throw new TRPCError({ code: "BAD_REQUEST", message: "Select a supported vocation." });
+  return canonical;
 }
 
 const jobFilterSchema = z.object({
@@ -398,7 +406,7 @@ export const appRouter = router({
   // ── Jobs ──────────────────────────────────────────────────────────────────
   jobs: router({
     list: publicProcedure.input(jobFilterSchema).query(async ({ input }) => {
-      return listJobs(input);
+      return listJobs({ ...input, vocation: canonicalizeVocation(input.vocation) });
     }),
 
     search: publicProcedure
@@ -413,7 +421,7 @@ export const appRouter = router({
         limit: z.number().int().min(1).max(MAX_PAGE_SIZE).optional().default(20),
         offset: z.number().int().nonnegative().optional().default(0),
       }))
-      .query(async ({ input }) => searchJobs(input)),
+      .query(async ({ input }) => searchJobs({ ...input, vocation: canonicalizeVocation(input.vocation) })),
 
     getById: publicProcedure
       .input(z.object({ id: z.number().int().positive() }))
@@ -447,7 +455,7 @@ export const appRouter = router({
         clientId: ctx.user.id,
         title: input.title,
         description: input.description,
-        vocation: input.vocation as any,
+        vocation: canonicalizeVocation(input.vocation) as any,
         budget: String(input.budget),
         location: input.location,
         deadline: input.deadline ? new Date(input.deadline) : undefined,
@@ -588,14 +596,14 @@ export const appRouter = router({
       if (existing) {
         await updateProfile(ctx.user.id, {
           ...input,
-          vocation: input.vocation as any,
+          vocation: canonicalizeVocation(input.vocation) as any,
           hourlyRate: input.hourlyRate !== undefined ? String(input.hourlyRate) : undefined,
         });
       } else {
         if (!input.vocation) throw new TRPCError({ code: "BAD_REQUEST", message: "Vocation required." });
         await createProfile({
           userId: ctx.user.id,
-          vocation: input.vocation as any,
+          vocation: canonicalizeVocation(input.vocation) as any,
           bio: input.bio,
           skills: input.skills,
           certifications: input.certifications,
@@ -1078,7 +1086,7 @@ export const appRouter = router({
     listAllJobs: adminProcedure
       .input(jobFilterSchema)
       .query(async ({ input }) => {
-        return listJobs(input);
+        return listJobs({ ...input, vocation: canonicalizeVocation(input.vocation) });
       }),
     deleteJob: adminProcedure
       .input(z.object({ id: z.number().int().positive() }))
@@ -1521,7 +1529,7 @@ export const appRouter = router({
         limit: z.number().int().min(1).max(MAX_PAGE_SIZE).optional().default(20),
         offset: z.number().int().nonnegative().optional().default(0),
       }))
-      .query(async ({ input }) => searchProfessionals(input)),
+      .query(async ({ input }) => searchProfessionals({ ...input, vocation: canonicalizeVocation(input.vocation) })),
     getProfile: publicProcedure
       .input(z.object({ userId: z.number().int().positive() }))
       .query(async ({ input }) => {
