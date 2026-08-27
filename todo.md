@@ -872,9 +872,9 @@
 - [x] Prevent the shared ZyloShell mobile authentication controls from wrapping into the official logo area at narrow widths
 
 ## Phase 89 — Production Routing Repair (`pasted_content_14.txt`)
-- [ ] Inventory every route declaration, navigation target, page component, redirect, and Vercel rewrite for Notifications, Escrow & Funding, Enterprise Organization, and related workflows
-- [ ] Determine the exact broken URLs and canonical route names without assuming the cause
-- [ ] Repair or reconnect existing Notifications, Escrow & Funding, and Enterprise Organization routes and navigation with existing authorization guards
-- [ ] Audit all frontend internal links for nonexistent or obsolete routes and preserve working routes
-- [ ] Verify SPA direct access, refresh behavior, authentication/role guards, desktop/tablet/mobile rendering, and production endpoints
-- [ ] Add routing regression coverage, run the full test suite and production builds, document root causes, and publish the fix
+- [x] Inventory every route declaration, navigation target, page component, redirect, and Vercel rewrite for Notifications, Escrow & Funding, Enterprise Organization, and related workflows
+- [x] Determine the exact broken URLs and canonical route names without assuming the cause
+- [x] Repair or reconnect existing Notifications, Escrow & Funding, and Enterprise Organization routes and navigation with existing authorization guards
+- [x] Audit all frontend internal links for nonexistent or obsolete routes and preserve working routes
+- [x] Verify SPA direct access, refresh behavior, authentication/role guards, desktop/tablet/mobile rendering, and production endpoints
+- [x] Add routing regression coverage, run the full test suite and production builds, document root causes, and publish the fix

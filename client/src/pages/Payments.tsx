@@ -1,0 +1,22 @@
+import { ArrowRight, BriefcaseBusiness, CheckCircle2, DollarSign, LockKeyhole, ShieldCheck } from "lucide-react";
+import { Link } from "wouter";
+import { Button } from "@/components/ui/button";
+import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { ApplicationShell, EmptyState, PageHeader, StatusBadge } from "@/components/shell/ZyloShell";
+
+export default function Payments() {
+  const { user, isAuthenticated } = useAuth();
+  const canFund = user?.userType === "client" || user?.userType === "enterprise" || user?.role === "admin" || user?.role === "SUPER_ADMIN";
+  const { data: jobs = [], isLoading } = trpc.jobs.myJobs.useQuery(undefined, { enabled: isAuthenticated && canFund });
+
+  if (!isAuthenticated) {
+    return <ApplicationShell><EmptyState icon={LockKeyhole} title="Sign in to access escrow" description="Funding and payout controls are protected by your account permissions." action={<Link href="/sign-in"><Button>Sign in</Button></Link>} /></ApplicationShell>;
+  }
+
+  if (!canFund) {
+    return <ApplicationShell role="professional"><PageHeader title="Earnings & Payouts" description="Track your marketplace activity and payout readiness." /><div className="grid gap-5 md:grid-cols-2"><div className="rounded-2xl border border-border bg-card p-6"><ShieldCheck className="h-6 w-6 text-emerald-400" /><h2 className="mt-4 text-lg font-semibold">Protected payment flow</h2><p className="mt-2 text-sm leading-relaxed text-muted-foreground">Employer escrow is released through the authorized job workflow. Your accepted applications and engagement updates remain available from the applications dashboard.</p><Link href="/applications" className="mt-5 inline-flex"><Button variant="outline">View applications <ArrowRight className="ml-2 h-4 w-4" /></Button></Link></div><div className="rounded-2xl border border-border bg-card p-6"><DollarSign className="h-6 w-6 text-primary" /><h2 className="mt-4 text-lg font-semibold">No payout action pending</h2><p className="mt-2 text-sm leading-relaxed text-muted-foreground">Payout actions are available after the employer funds an eligible engagement and the authorized release conditions are met.</p></div></div></ApplicationShell>;
+  }
+
+  return <ApplicationShell role={user?.userType === "enterprise" ? "enterprise" : "employer"}><PageHeader title="Escrow & Funding" description="Open the existing employer workflow to review candidates and fund an accepted engagement securely." action={<Link href="/employer"><Button variant="outline">Employer dashboard <ArrowRight className="ml-2 h-4 w-4" /></Button></Link>} /><div className="mb-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-5"><div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-400" /><div><h2 className="font-semibold text-foreground">Funding stays inside the authorized job flow</h2><p className="mt-1 text-sm leading-relaxed text-muted-foreground">Select an employer job below or open the dashboard. Existing candidate acceptance and escrow controls validate ownership server-side before any payment initialization.</p></div></div></div>{isLoading ? <div className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground">Loading managed jobs…</div> : jobs.length === 0 ? <EmptyState icon={BriefcaseBusiness} title="No managed jobs yet" description="Create or manage a job before funding an accepted application." action={<Link href="/employer/jobs"><Button>View job postings <ArrowRight className="ml-2 h-4 w-4" /></Button></Link>} /> : <div className="grid gap-4 lg:grid-cols-2">{jobs.map((job) => <article key={job.id} className="rounded-2xl border border-border bg-card p-5"><div className="flex items-start justify-between gap-4"><div><h2 className="font-semibold text-foreground">{job.title}</h2><p className="mt-1 text-sm text-muted-foreground">{job.location} · ₦{Number(job.budget).toLocaleString()}</p></div><StatusBadge status={job.status === "completed" ? "success" : job.status === "cancelled" ? "error" : job.status === "in_progress" ? "info" : "warning"} label={job.status.replace("_", " ")} /></div><p className="mt-4 text-sm leading-relaxed text-muted-foreground">Candidate review and the existing Fund Escrow action are available from this job’s management view.</p><Link href={`/employer/jobs?jobId=${job.id}`} className="mt-5 inline-flex"><Button variant="outline" size="sm">Manage job <ArrowRight className="ml-2 h-4 w-4" /></Button></Link></article>)}</div>}</ApplicationShell>;
+}
