@@ -12,7 +12,7 @@ import { trpc } from "@/lib/trpc";
 
 const workspaceCapabilities = [
   { icon: Compass, title: "Marketplace access", description: "Review the public marketplace and source qualified professionals for your organization.", href: "/marketplace", action: "Browse marketplace" },
-  { icon: UserRound, title: "Account management", description: "Review your enterprise account information and security settings.", href: "/profile", action: "View account" },
+  { icon: UserRound, title: "Account management", description: "Review your enterprise account information and security settings.", href: "/enterprise/account-management", action: "View account" },
 ];
 
 function formatDate(value: string | Date | null | undefined) {

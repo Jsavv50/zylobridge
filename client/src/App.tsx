@@ -20,10 +20,12 @@ const Onboarding = lazy(() => import("./pages/Onboarding"));
 const ClientDashboard = lazy(() => import("./pages/ClientDashboard"));
 const ProfessionalDashboard = lazy(() => import("./pages/ProfessionalDashboard"));
 const EnterpriseDashboard = lazy(() => import("./pages/EnterpriseDashboard"));
+const EnterpriseAccountManagement = lazy(() => import("./pages/EnterpriseAccountManagement"));
 const EnterpriseInvitation = lazy(() => import("./pages/EnterpriseInvitation"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const Messaging = lazy(() => import("./pages/Messaging"));
 const Notifications = lazy(() => import("./pages/Notifications"));
+const NotificationSettings = lazy(() => import("./pages/NotificationSettings"));
 const Payments = lazy(() => import("./pages/Payments"));
 const VerificationRequest = lazy(() => import("./pages/VerificationRequest"));
 const HowItWorks = lazy(() => import("./pages/HowItWorks"));
@@ -64,12 +66,14 @@ function Router() {
       <Route path="/dashboard/professional" component={ProfessionalDashboard} />
       <Route path="/dashboard/enterprise" component={EnterpriseDashboard} />
       <Route path="/enterprise" component={EnterpriseDashboard} />
+      <Route path="/enterprise/account-management" component={EnterpriseAccountManagement} />
       <Route path="/organization" component={EnterpriseDashboard} />
       <Route path="/enterprise/invitations/accept" component={EnterpriseInvitation} />
       <Route path="/dashboard/admin" component={AdminDashboard} />
       <Route path="/dashboard/super-admin" component={AdminDashboard} />
       <Route path="/messages" component={Messaging} />
       <Route path="/notifications" component={Notifications} />
+      <Route path="/notifications/settings" component={NotificationSettings} />
       <Route path="/payments" component={Payments} />
       <Route path="/verification" component={VerificationRequest} />
       <Route path="/how-it-works" component={HowItWorks} />

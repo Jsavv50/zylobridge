@@ -712,7 +712,9 @@ export async function updateProfile(userId: number, data: Partial<InsertProfile>
 // ─── Reviews ──────────────────────────────────────────────────────────────────
 export async function createReview(data: InsertReview) {
   const db = await getDb();
-  if (!db) throw new Error("Database unavailable");
+  if (!db) throw new Error("DB unavailable");
+  const existing = await db.select({ id: reviews.id }).from(reviews).where(and(eq(reviews.jobId, data.jobId), eq(reviews.reviewerId, data.reviewerId))).limit(1);
+  if (existing.length > 0) throw new Error("You have already reviewed this completed job.");
   return db.insert(reviews).values(data);
 }
 
@@ -887,9 +889,21 @@ export async function getConversationById(id: number) {
 export async function getConversationsByUserId(userId: number, limit = MAX_PAGE_SIZE, offset = 0) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(conversations).where(
-    or(eq(conversations.clientId, userId), eq(conversations.professionalId, userId))
-  ).orderBy(desc(conversations.lastMessageAt)).limit(clampPageSize(limit, MAX_PAGE_SIZE)).offset(clampOffset(offset));
+  return db.select({
+    id: conversations.id,
+    jobId: conversations.jobId,
+    clientId: conversations.clientId,
+    professionalId: conversations.professionalId,
+    lastMessageAt: conversations.lastMessageAt,
+    createdAt: conversations.createdAt,
+    unreadCount: sql<number>`count(case when ${messages.isRead} = false and ${messages.senderId} <> ${userId} then 1 end)`,
+  }).from(conversations)
+    .leftJoin(messages, eq(messages.conversationId, conversations.id))
+    .where(or(eq(conversations.clientId, userId), eq(conversations.professionalId, userId)))
+    .groupBy(conversations.id, conversations.jobId, conversations.clientId, conversations.professionalId, conversations.lastMessageAt, conversations.createdAt)
+    .orderBy(desc(conversations.lastMessageAt))
+    .limit(clampPageSize(limit, MAX_PAGE_SIZE))
+    .offset(clampOffset(offset));
 }
 
 export async function markConversationMessagesRead(conversationId: number, userId: number) {

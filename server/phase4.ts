@@ -13,6 +13,18 @@ export async function getUserNotificationPreference(userId: number) {
   return inserted[0];
 }
 
+export async function updateUserNotificationPreference(userId: number, data: { emailEnabled?: boolean; marketingEnabled?: boolean; marketplaceEvents?: boolean }) {
+  const db = await getDb();
+  if (!db) return { userId, ...data };
+  const existing = await db.select().from(notificationPreferences).where(eq(notificationPreferences.userId, userId)).limit(1);
+  if (existing[0]) {
+    const updated = await db.update(notificationPreferences).set({ ...data, updatedAt: new Date() }).where(eq(notificationPreferences.userId, userId)).returning();
+    return updated[0];
+  }
+  const inserted = await db.insert(notificationPreferences).values({ userId, emailEnabled: data.emailEnabled ?? true, marketingEnabled: data.marketingEnabled ?? false, marketplaceEvents: data.marketplaceEvents ?? true }).returning();
+  return inserted[0];
+}
+
 export async function createInAppNotification(data: { userId: number; title: string; content: string; category?: string; referenceType?: string; referenceId?: string }) {
   const db = await getDb();
   if (!db) return null;

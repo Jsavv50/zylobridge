@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useParams } from "wouter";
-import { ArrowLeft, CalendarDays, CheckCircle2, Clock3, DollarSign, Loader2, MapPin, ShieldCheck, Zap } from "lucide-react";
+import { ArrowLeft, CalendarDays, CheckCircle2, Clock3, DollarSign, Loader2, MapPin, ShieldCheck, Star, Zap } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
@@ -29,6 +29,8 @@ export default function JobDetail() {
   const [showApplication, setShowApplication] = useState(false);
   const [coverLetter, setCoverLetter] = useState("");
   const [bidAmount, setBidAmount] = useState("");
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewComment, setReviewComment] = useState("");
   const jobQuery = trpc.jobs.getById.useQuery({ id: Number(id) }, { enabled: Number.isInteger(Number(id)) && Number(id) > 0 });
   const submitApplication = trpc.applications.submitApplication.useMutation({
     onSuccess: () => {
@@ -38,6 +40,15 @@ export default function JobDetail() {
       setBidAmount("");
     },
     onError: (error) => toast.error(error.message || "We couldn't submit your application."),
+  });
+
+  const submitReview = trpc.reviews.create.useMutation({
+    onSuccess: () => {
+      toast.success("Your review was submitted.");
+      setReviewRating(0);
+      setReviewComment("");
+    },
+    onError: (error) => toast.error(error.message || "We couldn't submit your review."),
   });
 
   if (jobQuery.isLoading) {
@@ -50,6 +61,8 @@ export default function JobDetail() {
   const job = jobQuery.data;
   const viewerIsProfessional = user?.userType === "professional";
   const canApply = isAuthenticated && viewerIsProfessional && job.status === "open" && user.id !== job.clientId;
+  const canReview = Boolean(user && isAuthenticated && job.status === "completed" && (user.id === job.clientId ? job.assignedProfessionalId : user.id === job.assignedProfessionalId));
+  const revieweeId = user ? (user.id === job.clientId ? job.assignedProfessionalId : job.clientId) : undefined;
   const meta = statusMeta[job.status] ?? statusMeta.open;
   const vocation = job.vocation as VocationKey;
 
@@ -86,6 +99,7 @@ export default function JobDetail() {
             </div>}
           </section>}
           {!isAuthenticated && job.status === "open" && <section className="rounded-2xl border border-primary/25 bg-primary/5 p-6 text-center"><p className="text-sm text-muted-foreground">Sign in as a professional to submit an application.</p><a href={getLoginUrl()}><Button className="mt-4">Sign in to apply</Button></a></section>}
+          {canReview && revieweeId && <section className="rounded-2xl border border-border bg-card p-6 md:p-8"><div><p className="text-sm text-muted-foreground">Project complete</p><h2 className="mt-1 text-xl font-semibold">Leave a review</h2><p className="mt-2 text-sm text-muted-foreground">Share an accurate account of your experience with the other job participant.</p></div><div className="mt-6 space-y-5 border-t border-border/70 pt-6"><div><Label>Rating</Label><div className="mt-2 flex gap-1" role="radiogroup" aria-label="Rating from 1 to 5 stars">{[1, 2, 3, 4, 5].map((value) => <button key={value} type="button" role="radio" aria-checked={reviewRating === value} aria-label={`${value} star${value === 1 ? "" : "s"}`} onClick={() => setReviewRating(value)} className="rounded-md p-1 text-amber-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"><Star className={value <= reviewRating ? "h-6 w-6 fill-current" : "h-6 w-6"} /></button>)}</div></div><div><Label htmlFor="review-comment">Comment (optional)</Label><Textarea id="review-comment" value={reviewComment} onChange={(event) => setReviewComment(event.target.value)} rows={5} maxLength={2000} placeholder="Describe the quality, communication, and professionalism you experienced." className="mt-1.5" /><p className="mt-1 text-right text-xs text-muted-foreground">{reviewComment.length}/2000</p></div><Button onClick={() => { if (reviewRating < 1) { toast.error("Choose a rating from 1 to 5 stars."); return; } submitReview.mutate({ jobId: job.id, revieweeId, rating: reviewRating, comment: reviewComment.trim() || undefined }); }} disabled={submitReview.isPending}>{submitReview.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Submit review</Button></div></section>}
         </main>
 
         <aside className="space-y-4 lg:sticky lg:top-24">

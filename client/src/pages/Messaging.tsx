@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -27,12 +28,14 @@ interface Conversation {
   professionalId: number;
   lastMessageAt: Date;
   createdAt: Date;
+  unreadCount?: number;
 }
 
 type RealtimeStatus = "CONNECTING" | "CONNECTED" | "ERROR";
 
 export default function Messaging() {
   const { user, isAuthenticated, loading } = useAuth();
+  const [location] = useLocation();
   const [selectedConvId, setSelectedConvId] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState("");
@@ -43,6 +46,21 @@ export default function Messaging() {
     undefined,
     { enabled: isAuthenticated }
   );
+  const markAsReadMutation = trpc.messaging.markAsRead.useMutation({
+    onSuccess: () => void refetchConversations(),
+  });
+
+  useEffect(() => {
+    if (!conversations?.length) return;
+    const requestedId = Number(new URLSearchParams(location.split("?")[1] ?? "").get("conv"));
+    if (Number.isInteger(requestedId) && conversations.some((conversation) => conversation.id === requestedId)) {
+      setSelectedConvId(requestedId);
+    }
+  }, [conversations, location]);
+
+  useEffect(() => {
+    if (selectedConvId) markAsReadMutation.mutate({ conversationId: selectedConvId });
+  }, [selectedConvId]);
 
   const { data: fetchedMessages, isLoading: messagesLoading } = trpc.messaging.getMessages.useQuery(
     { conversationId: selectedConvId! },
@@ -269,7 +287,7 @@ export default function Messaging() {
                       key={conv.id}
                       onClick={() => setSelectedConvId(conv.id)}
                       className={`w-full p-4 text-left hover:bg-accent/50 transition-colors border-b border-border/50 ${
-                        isSelected ? "bg-primary/10 border-l-2 border-l-primary" : ""
+                        isSelected ? "bg-primary/10 border-l-2 border-l-primary" : conv.unreadCount ? "bg-primary/5" : ""
                       }`}
                     >
                       <div className="flex items-center gap-3">
@@ -280,9 +298,10 @@ export default function Messaging() {
                         </Avatar>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-foreground truncate">
+                            <span className={`text-sm truncate ${conv.unreadCount ? "font-bold text-foreground" : "font-medium text-foreground"}`}>
                               Job #{conv.jobId}
                             </span>
+                            {Boolean(conv.unreadCount) && <Badge className="ml-2 shrink-0 bg-primary text-primary-foreground">{conv.unreadCount! > 99 ? "99+" : conv.unreadCount}</Badge>}
                             <span className="text-xs text-muted-foreground">
                               {formatDistanceToNow(new Date(conv.lastMessageAt), { addSuffix: true })}
                             </span>

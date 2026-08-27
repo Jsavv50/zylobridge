@@ -123,7 +123,7 @@ import {
   generatePaystackReference,
 } from "./paystack";
 import { maskPhoneNumber, normalizePhoneNumber, sendPhoneOtpSms, SmsDeliveryError } from "./sms";
-import { getUserNotificationPreference, createInAppNotification, getUnreadNotifications, markNotificationRead, generateIcsContent, executeMatchingV2 } from "./phase4";
+import { getUserNotificationPreference, updateUserNotificationPreference, createInAppNotification, getUnreadNotifications, markNotificationRead, generateIcsContent, executeMatchingV2 } from "./phase4";
 import { initializeMilestonePayment, processVerifiedPayment, verifyPaystackWebhookSignature } from "./finance";
 import { addOrVerifyProfessionalBank, initiateMilestonePayout, authorizeRefund, createDispute, resolveDispute } from "./financeProtection";
 import {
@@ -695,6 +695,15 @@ export const appRouter = router({
           throw new TRPCError({ code: "FORBIDDEN", message: "Not a member of this conversation" });
         }
         const message = await createMessage(input.conversationId, ctx.user.id, input.content);
+        const recipientId = conv.clientId === ctx.user.id ? conv.professionalId : conv.clientId;
+        await createInAppNotification({
+          userId: recipientId,
+          title: "New message",
+          content: `${ctx.user.name || "A participant"} sent you a new message in Job #${conv.jobId}.`,
+          category: "messages",
+          referenceType: "message",
+          referenceId: String(input.conversationId),
+        });
         return message;
       }),
 
@@ -1650,6 +1659,13 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => markNotificationRead(input.id, ctx.user.id)),
     preferences: protectedProcedure
       .query(async ({ ctx }) => getUserNotificationPreference(ctx.user.id)),
+    updatePreferences: protectedProcedure
+      .input(z.object({
+        emailEnabled: z.boolean().optional(),
+        marketingEnabled: z.boolean().optional(),
+        marketplaceEvents: z.boolean().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => updateUserNotificationPreference(ctx.user.id, input)),
   }),
   finance: router({
     initializeMilestonePayment: protectedProcedure

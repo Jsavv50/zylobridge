@@ -8,7 +8,7 @@ import { ApplicationShell, EmptyState, PageHeader, StatusBadge } from "@/compone
 function referenceHref(referenceType: string | null, referenceId: string | null) {
   if (!referenceId) return "/notifications";
   if (referenceType === "job") return `/jobs/${referenceId}`;
-  if (referenceType === "message") return "/messages";
+  if (referenceType === "message") return referenceId ? `/messages?conv=${encodeURIComponent(referenceId)}` : "/messages";
   if (referenceType === "application") return "/applications";
   if (referenceType === "enterprise" || referenceType === "organization") return "/enterprise";
   return "/notifications";
@@ -32,7 +32,7 @@ export default function Notifications() {
       <PageHeader
         title="Notifications"
         description="Review important account, marketplace, messaging, and organization updates."
-        action={<Link href="/profile"><Button variant="outline"><Settings2 className="mr-2 h-4 w-4" />Notification settings</Button></Link>}
+        action={<Link href="/notifications/settings"><Button variant="outline"><Settings2 className="mr-2 h-4 w-4" />Notification settings</Button></Link>}
       />
       <div className="mb-6 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
         <StatusBadge status="info" label={`${notifications.length} unread`} />

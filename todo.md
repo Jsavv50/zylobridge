@@ -878,3 +878,23 @@
 - [x] Audit all frontend internal links for nonexistent or obsolete routes and preserve working routes
 - [x] Verify SPA direct access, refresh behavior, authentication/role guards, desktop/tablet/mobile rendering, and production endpoints
 - [x] Add routing regression coverage, run the full test suite and production builds, document root causes, and publish the fix
+
+## Phase 90 — Integrated Marketplace Workflow Repair (`pasted_content_15.txt`)
+- [ ] Audit the existing repository, routes, schema, migrations, notification infrastructure, enterprise implementation, jobs, messaging, and previous implementations against the attached requirements
+- [ ] Repair or create persisted Notification Settings with correct navigation and supported preference controls
+- [ ] Repair functional notifications, real-time message notifications, deep links, duplicate prevention, and recipient isolation
+- [ ] Repair persisted unread/read differentiation in Messages and existing unread counts
+- [ ] Repair Review Candidates routing and job-scoped candidate authorization/data loading
+- [ ] Audit and repair Job Discovery, View Details, direct URL, refresh, and ID-preserving navigation
+- [ ] Implement or reconnect authorized completed-job reviews and persisted professional rating aggregation without fabricated content
+- [ ] Repair private Enterprise Account Management routing, organization-focused UI, and organization isolation
+- [ ] Complete repository-wide navigation, responsive, back-navigation, schema/migration, authorization, and deployment audits
+- [ ] Add regression coverage and run full tests, TypeScript, production builds, safe live checks, documentation, backup, and publication
+
+## Phase 90: Integrated Marketplace Workflow Repair — current session
+- [x] Fix EmployerJobs Review candidates links to `/employer/jobs/:jobId/candidates`
+- [x] Implement completed-job participant review submission with 1–5 rating and optional comment
+- [x] Prevent duplicate reviews for the same job and reviewer
+- [x] Add regression coverage for candidate routing and review authorization/idempotency
+- [x] Validate TypeScript, Vitest, client/server production builds, and route behavior
+- [x] Save a published checkpoint with launch-readiness evidence
