@@ -32,10 +32,20 @@ import {
 // Configuration
 // ---------------------------------------------------------------------------
 
+/** Storefront API version used when no valid runtime override is supplied. */
+export const DEFAULT_SHOPIFY_API_VERSION = "2025-04";
+
 /**
- * Storefront API version pinned for the whole adapter.
+ * Accept only Shopify's quarterly YYYY-MM versions. This keeps the endpoint
+ * deterministic while allowing Railway and other production runtimes to pin
+ * a supported Storefront API version independently from the client bundle.
  */
-export const SHOPIFY_API_VERSION = "2025-04";
+export function getShopifyApiVersion(): string {
+  const configured = process.env.SHOPIFY_STOREFRONT_API_VERSION?.trim() ?? "";
+  return /^\d{4}-(01|04|07|10)$/.test(configured)
+    ? configured
+    : DEFAULT_SHOPIFY_API_VERSION;
+}
 
 /** Lazy env access — tests can override `process.env` before each case. */
 function getShopifyStoreDomain(): string {
@@ -48,7 +58,12 @@ export function isShopifyConfigured(): boolean {
   return Boolean(getShopifyStoreDomain() && getShopifyStorefrontToken());
 }
 function shopifyStorefrontEndpoint(): string {
-  return `https://${getShopifyStoreDomain()}/api/${SHOPIFY_API_VERSION}/graphql.json`;
+  const domain = getShopifyStoreDomain()
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/\/+$/, "");
+  return `https://${domain}/api/${getShopifyApiVersion()}/graphql.json`;
 }
 
 // ---------------------------------------------------------------------------

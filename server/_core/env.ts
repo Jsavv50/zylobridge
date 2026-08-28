@@ -48,6 +48,8 @@ export const ENV = {
   shopifyStoreDomain: process.env.SHOPIFY_STORE_DOMAIN ?? "",
   shopifyStorefrontApiAccessToken:
     process.env.SHOPIFY_STOREFRONT_API_ACCESS_TOKEN ?? "",
+  shopifyStorefrontApiVersion:
+    process.env.SHOPIFY_STOREFRONT_API_VERSION ?? "2025-04",
 };
 
 /**
