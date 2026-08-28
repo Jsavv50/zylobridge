@@ -1,7 +1,9 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "./db";
-import { milestones, paymentTransactions, paymentEvents, ledgerAccounts, ledgerEntries, reconciliationRecords, engagements } from "../drizzle/schema";
-import { initializePaystackTransaction, verifyPaystackTransaction, generatePaystackReference } from "./paystack";
+import { milestones, paymentTransactions, paymentEvents, ledgerAccounts, ledgerEntries, reconciliationRecords, engagements, jobs, organizationMembers } from "../drizzle/schema";
+import { initializePaystackSouthAfricaEft, initializePaystackTransaction, verifyPaystackTransaction, generatePaystackReference } from "./paystack";
+import { getFrontendUrl } from "./_core/env";
+import { createInAppNotification } from "./phase4";
 import * as crypto from "crypto";
 
 export async function verifyPaystackWebhookSignature(rawBody: string, signature: string | undefined): Promise<boolean> {
@@ -72,26 +74,42 @@ export async function initializeMilestonePayment(params: {
   milestoneId: number;
   payerId: number;
   email: string;
-  callbackUrl?: string;
+  isAdmin?: boolean;
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
 
-  const milestoneList = await db.select().from(milestones).where(eq(milestones.id, params.milestoneId)).limit(1);
-  if (milestoneList.length === 0) throw new Error("Milestone not found");
-  const milestone = milestoneList[0];
-
-  if (milestone.status === "funded" || milestone.status === "released") {
-    throw new Error("Milestone is already funded or released");
-  }
-
   const engagementList = await db.select().from(engagements).where(eq(engagements.id, params.engagementId)).limit(1);
   if (engagementList.length === 0) throw new Error("Engagement not found");
   const engagement = engagementList[0];
-
-  if (engagement.employerId !== params.payerId) {
-    throw new Error("Unauthorized: only the engagement employer can fund milestones");
+  if (engagement.status !== "active") throw new Error("Only active engagements can be funded");
+  const [job] = await db.select({ organizationId: jobs.organizationId }).from(jobs).where(eq(jobs.id, engagement.jobId)).limit(1);
+  let organizationAuthorized = false;
+  if (job?.organizationId) {
+    const [membership] = await db.select({ role: organizationMembers.role }).from(organizationMembers).where(and(
+      eq(organizationMembers.organizationId, job.organizationId),
+      eq(organizationMembers.userId, params.payerId),
+      eq(organizationMembers.status, "active"),
+      inArray(organizationMembers.role, ["OWNER", "ADMIN"]),
+    )).limit(1);
+    organizationAuthorized = Boolean(membership);
   }
+  if (!params.isAdmin && engagement.employerId !== params.payerId && !organizationAuthorized) {
+    throw new Error("Unauthorized: employer finance permission required");
+  }
+
+  const milestoneList = await db.select().from(milestones).where(and(eq(milestones.id, params.milestoneId), eq(milestones.engagementId, engagement.id))).limit(1);
+  if (milestoneList.length === 0) throw new Error("Milestone not found for this engagement");
+  const milestone = milestoneList[0];
+  if (["funded", "in_progress", "submitted", "approved", "release_pending", "released", "disputed", "cancelled"].includes(milestone.status)) {
+    throw new Error("Milestone is not eligible for funding");
+  }
+  const existing = await db.select({ id: paymentTransactions.id, status: paymentTransactions.status }).from(paymentTransactions).where(and(
+    eq(paymentTransactions.engagementId, engagement.id),
+    eq(paymentTransactions.milestoneId, milestone.id),
+    inArray(paymentTransactions.status, ["created", "payment_required", "payment_initiated", "payment_pending"]),
+  )).limit(1);
+  if (existing.length) throw new Error("A funding request is already active for this milestone");
 
   const reference = generatePaystackReference("ZB-MS");
   const amountMinor = Number(milestone.amountMinor);
@@ -112,27 +130,36 @@ export async function initializeMilestonePayment(params: {
   }).returning();
 
   // Initialize with Paystack
-  const paystackInit = await initializePaystackTransaction({
-    email: params.email,
-    amount: amountMinor / 100,
-    reference,
-    metadata: {
-      engagementId: params.engagementId,
-      milestoneId: params.milestoneId,
-      transactionId: txn.id,
-    },
-    callback_url: params.callbackUrl,
-  });
+  let authorizationUrl: string;
+  let providerReference = reference;
+  let accessCode: string | undefined;
+  try {
+    const metadata = { engagementId: params.engagementId, milestoneId: params.milestoneId, transactionId: txn.id };
+    if (milestone.currency === "ZAR") {
+      const eft = await initializePaystackSouthAfricaEft({ email: params.email, amount: amountMinor / 100, reference, metadata });
+      authorizationUrl = eft.url;
+    } else if (milestone.currency === "NGN") {
+      const paystackInit = await initializePaystackTransaction({ email: params.email, amount: amountMinor / 100, reference, metadata, callback_url: `${getFrontendUrl()}/payment/callback`, currency: "NGN" });
+      authorizationUrl = paystackInit.authorization_url;
+      providerReference = paystackInit.reference;
+      accessCode = paystackInit.access_code;
+    } else {
+      throw new Error(`No configured payment provider for ${milestone.currency}`);
+    }
+  } catch (error) {
+    await db.update(paymentTransactions).set({ status: "failed", updatedAt: new Date() }).where(eq(paymentTransactions.id, txn.id));
+    throw error;
+  }
 
   await db.update(paymentTransactions)
-    .set({ status: "payment_initiated", providerReference: paystackInit.reference, updatedAt: new Date() })
+    .set({ status: "payment_initiated", providerReference, updatedAt: new Date() })
     .where(eq(paymentTransactions.id, txn.id));
 
   return {
     transactionId: txn.id,
     reference,
-    authorizationUrl: paystackInit.authorization_url,
-    accessCode: paystackInit.access_code,
+    authorizationUrl,
+    accessCode,
     amountMinor,
     currency: milestone.currency,
   };
@@ -159,6 +186,9 @@ export async function processVerifiedPayment(reference: string, providerRef?: st
 
   if (verification.amount !== txn.amountMinor) {
     throw new Error(`Amount mismatch: expected ${txn.amountMinor}, got ${verification.amount}`);
+  }
+  if (verification.currency && verification.currency !== txn.currency) {
+    throw new Error("Payment currency mismatch");
   }
 
   await ensureLedgerAccountsExist();
@@ -205,5 +235,37 @@ export async function processVerifiedPayment(reference: string, providerRef?: st
     });
   });
 
+  const [context] = await db.select({ jobId: jobs.id, jobTitle: jobs.title })
+    .from(engagements)
+    .innerJoin(jobs, eq(jobs.id, engagements.jobId))
+    .where(eq(engagements.id, txn.engagementId))
+    .limit(1);
+  await Promise.allSettled([
+    createInAppNotification({ userId: txn.payerId, title: "Escrow funding confirmed", content: `${context?.jobTitle ?? "Engagement"} funding was verified and is now protected.`, category: "payment", referenceType: "payment", referenceId: txn.reference }),
+    txn.payeeId ? createInAppNotification({ userId: txn.payeeId, title: "Engagement funding confirmed", content: `${context?.jobTitle ?? "Your engagement"} funding was verified and is now protected.`, category: "payment", referenceType: "payment", referenceId: txn.reference }) : Promise.resolve(null),
+  ]);
+
   return { success: true, transactionId: txn.id, milestoneId: txn.milestoneId };
+}
+
+export async function processAuthorizedVerifiedPayment(reference: string, userId: number, isAdmin: boolean) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const [transaction] = await db.select({ payerId: paymentTransactions.payerId, engagementId: paymentTransactions.engagementId }).from(paymentTransactions).where(eq(paymentTransactions.reference, reference)).limit(1);
+  if (!transaction) throw new Error("Payment transaction not found");
+  const [engagement] = await db.select({ employerId: engagements.employerId, jobId: engagements.jobId }).from(engagements).where(eq(engagements.id, transaction.engagementId)).limit(1);
+  if (!engagement) throw new Error("Engagement not found");
+  let organizationAuthorized = false;
+  const [job] = await db.select({ organizationId: jobs.organizationId }).from(jobs).where(eq(jobs.id, engagement.jobId)).limit(1);
+  if (job?.organizationId) {
+    const [membership] = await db.select({ role: organizationMembers.role }).from(organizationMembers).where(and(
+      eq(organizationMembers.organizationId, job.organizationId),
+      eq(organizationMembers.userId, userId),
+      eq(organizationMembers.status, "active"),
+      inArray(organizationMembers.role, ["OWNER", "ADMIN"]),
+    )).limit(1);
+    organizationAuthorized = Boolean(membership);
+  }
+  if (!isAdmin && transaction.payerId !== userId && engagement.employerId !== userId && !organizationAuthorized) throw new Error("Unauthorized payment verification");
+  return processVerifiedPayment(reference);
 }

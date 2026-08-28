@@ -158,7 +158,8 @@ import { normalizeVocation } from "@shared/vocations";
 import { getEmployerCommandCenter, getEmployerJobsPortfolio } from "./analytics";
 import { maskPhoneNumber, normalizePhoneNumber, sendPhoneOtpSms, SmsDeliveryError } from "./sms";
 import { getUserNotificationPreference, updateUserNotificationPreference, createInAppNotification, getUnreadNotifications, listNotifications, markNotificationRead, markAllNotificationsRead, generateIcsContent, executeMatchingV2 } from "./phase4";
-import { initializeMilestonePayment, processVerifiedPayment, verifyPaystackWebhookSignature } from "./finance";
+import { initializeMilestonePayment, processAuthorizedVerifiedPayment, processVerifiedPayment, verifyPaystackWebhookSignature } from "./finance";
+import { getEmployerFinanceDashboard, getEmployerFinanceTransactionDetail, getEmployerFinanceTransactions } from "./employerFinance";
 import { addOrVerifyProfessionalBank, initiateMilestonePayout, authorizeRefund, createDispute, resolveDispute } from "./financeProtection";
 import {
   acceptOrganizationInvitation,
@@ -204,18 +205,19 @@ async function requireOrganizationManager(userId: number, organizationId: number
 async function requireEscrowJobAccess(userId: number, role: string, jobId: number, professionalId: number) {
   const job = await getJobById(jobId);
   if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found." });
-  if (role === "admin" || role === "SUPER_ADMIN") return job;
-  if (job.clientId !== userId) throw new TRPCError({ code: "FORBIDDEN", message: "Only the job owner can fund escrow." });
+  const isAdmin = role === "admin" || role === "SUPER_ADMIN";
+  let organizationAuthorized = false;
+  if (job.organizationId) {
+    const member = await getOrganizationMember(job.organizationId, userId);
+    organizationAuthorized = Boolean(member && canManageOrganization(member.role as OrganizationRole));
+  }
+  if (!isAdmin && job.clientId !== userId && !organizationAuthorized) throw new TRPCError({ code: "FORBIDDEN", message: "Employer finance permission required." });
   if (job.assignedProfessionalId && job.assignedProfessionalId !== professionalId) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Escrow professional must match the assigned professional." });
   }
-  if (!job.assignedProfessionalId) {
-    const applications = await getApplicationsByJobId(jobId, MAX_PAGE_SIZE, 0);
-    if (!applications.some(application => application.professionalId === professionalId)) {
-      throw new TRPCError({ code: "FORBIDDEN", message: "Professional is not associated with this job." });
-    }
-  }
-  return job;
+  const application = await getApplicationByJobAndProfessionalId(jobId, professionalId);
+  if (!application || application.status !== "accepted") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Accept the candidate before funding escrow." });
+  return { job, application };
 }
 
 function canonicalizeVocation(value: string | undefined): string | undefined {
@@ -1016,28 +1018,28 @@ export const appRouter = router({
       .input(z.object({
         jobId: z.number().int().positive(),
         professionalId: z.number().int().positive(),
-        amount: z.number().positive(),
-        callbackUrl: z.string().url().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user.userType !== "client" && ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") {
-          throw new TRPCError({ code: "FORBIDDEN", message: "Only clients can fund escrow." });
+        if (ctx.user.userType !== "client" && ctx.user.userType !== "enterprise" && ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Only authorized hiring accounts can fund escrow." });
         }
         if (!ctx.user.email) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Account email required for payment." });
         }
-        await requireEscrowJobAccess(ctx.user.id, ctx.user.role, input.jobId, input.professionalId);
+        const { job, application } = await requireEscrowJobAccess(ctx.user.id, ctx.user.role, input.jobId, input.professionalId);
+        if ((job.currency ?? "NGN") !== "NGN") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Use the configured currency payment method for this job." });
+        const amount = Number(application.bidAmount);
         const existing = await getEscrowByJobId(input.jobId);
         if (existing && existing.status === "funded") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Escrow already funded for this job." });
         }
-        if (existing?.status === "pending" && existing.clientId === ctx.user.id && existing.professionalId === input.professionalId && existing.paymentMethod === "paystack" && existing.paystackReference && existing.paystackAuthorizationUrl) {
+        if (existing?.status === "pending" && existing.professionalId === input.professionalId && existing.paymentMethod === "paystack" && existing.paystackReference && existing.paystackAuthorizationUrl) {
           return { authorizationUrl: existing.paystackAuthorizationUrl, reference: existing.paystackReference };
         }
         const reference = generatePaystackReference("ZB-ESC");
         const result = await initializePaystackTransaction({
           email: ctx.user.email,
-          amount: input.amount,
+          amount,
           reference,
           metadata: { jobId: input.jobId, clientId: ctx.user.id, professionalId: input.professionalId },
           callback_url: `${getFrontendUrl()}/payment/callback`,
@@ -1047,7 +1049,7 @@ export const appRouter = router({
           jobId: input.jobId,
           clientId: ctx.user.id,
           professionalId: input.professionalId,
-          amount: String(input.amount),
+          amount: String(amount),
           currency: "NGN",
           paymentMethod: "paystack",
           status: "pending",
@@ -1063,27 +1065,28 @@ export const appRouter = router({
       .input(z.object({
         jobId: z.number().int().positive(),
         professionalId: z.number().int().positive(),
-        amount: z.number().positive(),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user.userType !== "client" && ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") {
-          throw new TRPCError({ code: "FORBIDDEN", message: "Only clients can fund escrow." });
+        if (ctx.user.userType !== "client" && ctx.user.userType !== "enterprise" && ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Only authorized hiring accounts can fund escrow." });
         }
         if (!ctx.user.email) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Account email required for payment." });
         }
-        await requireEscrowJobAccess(ctx.user.id, ctx.user.role, input.jobId, input.professionalId);
+        const { job, application } = await requireEscrowJobAccess(ctx.user.id, ctx.user.role, input.jobId, input.professionalId);
+        if (job.currency !== "ZAR") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "South African EFT is only available for ZAR jobs." });
+        const amount = Number(application.bidAmount);
         const existing = await getEscrowByJobId(input.jobId);
         if (existing && existing.status === "funded") {
           throw new TRPCError({ code: "BAD_REQUEST", message: "Escrow already funded for this job." });
         }
-        if (existing?.status === "pending" && existing.clientId === ctx.user.id && existing.professionalId === input.professionalId && existing.currency === "ZAR" && existing.paystackReference && existing.paystackAuthorizationUrl) {
+        if (existing?.status === "pending" && existing.professionalId === input.professionalId && existing.currency === "ZAR" && existing.paystackReference && existing.paystackAuthorizationUrl) {
           return { authorizationUrl: existing.paystackAuthorizationUrl, reference: existing.paystackReference, status: "pending" as const, currency: "ZAR" as const };
         }
         const reference = generatePaystackReference("ZB-ZA-EFT");
         const result = await initializePaystackSouthAfricaEft({
           email: ctx.user.email,
-          amount: input.amount,
+          amount,
           reference,
           metadata: { jobId: input.jobId, clientId: ctx.user.id, professionalId: input.professionalId, country: "ZA", paymentMethod: "eft" },
         });
@@ -1091,7 +1094,7 @@ export const appRouter = router({
           jobId: input.jobId,
           clientId: ctx.user.id,
           professionalId: input.professionalId,
-          amount: String(input.amount),
+          amount: String(amount),
           currency: "ZAR",
           paymentMethod: "paystack",
           status: "pending",
@@ -1126,6 +1129,11 @@ export const appRouter = router({
           return { success: true, status: "success" as const, amount: result.amount / 100 };
         }
         await updateEscrowStatus(escrow.id, "funded", { paidAt: new Date() });
+        const job = await getJobById(escrow.jobId);
+        await Promise.allSettled([
+          createInAppNotification({ userId: escrow.clientId, title: "Escrow funding confirmed", content: `${job?.title ?? "Job"} funding was verified and is now protected.`, category: "payment", referenceType: "payment", referenceId: input.reference }),
+          createInAppNotification({ userId: escrow.professionalId, title: "Job funding confirmed", content: `${job?.title ?? "Your job"} funding was verified and is now protected.`, category: "payment", referenceType: "payment", referenceId: input.reference }),
+        ]);
         return { success: true, status: "success" as const, amount: result.amount / 100 };
       }),
 
@@ -1140,36 +1148,11 @@ export const appRouter = router({
         bankName: z.string().min(2).max(255),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user.userType !== "client" && ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") {
-          throw new TRPCError({ code: "FORBIDDEN", message: "Only clients can fund escrow." });
+        if (ctx.user.userType !== "client" && ctx.user.userType !== "enterprise" && ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Only authorized hiring accounts can fund escrow." });
         }
         await requireEscrowJobAccess(ctx.user.id, ctx.user.role, input.jobId, input.professionalId);
-        const existing = await getEscrowByJobId(input.jobId);
-        if (existing && existing.status === "funded") {
-          throw new TRPCError({ code: "BAD_REQUEST", message: "Escrow already funded." });
-        }
-        await createEscrowPayment({
-          jobId: input.jobId,
-          clientId: ctx.user.id,
-          professionalId: input.professionalId,
-          amount: String(input.amount),
-          currency: "NGN",
-          paymentMethod: "bank_transfer",
-          status: "pending",
-          bankAccountNumber: input.bankAccountNumber,
-          bankAccountName: input.bankAccountName,
-          bankName: input.bankName,
-        });
-        return {
-          success: true,
-          instructions: {
-            bankName: "Zenith Bank",
-            accountNumber: "1234567890",
-            accountName: "ZYLOBRIDGE ESCROW SERVICES LTD",
-            amount: input.amount,
-            narration: `ZYLOBRIDGE-JOB-${input.jobId}`,
-          },
-        };
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Manual bank transfer is not configured. Use the secure Paystack payment method." });
       }),
 
     // Upload bank transfer proof
@@ -2136,6 +2119,44 @@ export const appRouter = router({
       .mutation(async ({ ctx, input }) => updateUserNotificationPreference(ctx.user.id, input)),
   }),
   finance: router({
+    employerDashboard: protectedProcedure
+      .input(z.object({ period: z.enum(["7d", "30d", "3m", "12m", "all"]).optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.userType !== "client" && ctx.user.userType !== "enterprise" && ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Employer financial access required." });
+        }
+        return getEmployerFinanceDashboard(ctx.user.id, ctx.user.role === "admin" || ctx.user.role === "SUPER_ADMIN", input?.period);
+      }),
+    employerTransactions: protectedProcedure
+      .input(z.object({
+        search: z.string().max(100).optional(),
+        status: z.string().max(40).optional(),
+        category: z.enum(["all", "funding", "escrow", "released", "refunds", "fees"]).optional(),
+        dateFrom: z.string().date().optional(),
+        dateTo: z.string().date().optional(),
+        minAmountMinor: z.number().int().nonnegative().optional(),
+        maxAmountMinor: z.number().int().nonnegative().optional(),
+        provider: z.string().max(32).optional(),
+        sort: z.enum(["newest", "oldest", "amount_desc", "amount_asc", "updated"]).optional(),
+        limit: z.number().int().min(1).max(100).optional(),
+        offset: z.number().int().nonnegative().optional(),
+      }).optional())
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.userType !== "client" && ctx.user.userType !== "enterprise" && ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Employer financial access required." });
+        }
+        return getEmployerFinanceTransactions(ctx.user.id, ctx.user.role === "admin" || ctx.user.role === "SUPER_ADMIN", input ?? {});
+      }),
+    employerTransactionDetail: protectedProcedure
+      .input(z.object({ reference: z.string().min(3).max(120) }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.userType !== "client" && ctx.user.userType !== "enterprise" && ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Employer financial access required." });
+        }
+        const transaction = await getEmployerFinanceTransactionDetail(ctx.user.id, ctx.user.role === "admin" || ctx.user.role === "SUPER_ADMIN", input.reference);
+        if (!transaction) throw new TRPCError({ code: "NOT_FOUND", message: "Transaction not found." });
+        return transaction;
+      }),
     professionalDashboard: protectedProcedure
       .query(async ({ ctx }) => {
         if (ctx.user.userType !== "professional" && ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") {
@@ -2167,11 +2188,17 @@ export const appRouter = router({
         return getProfessionalProtectedEscrow(ctx.user.id);
       }),
     initializeMilestonePayment: protectedProcedure
-      .input(z.object({ engagementId: z.number().int().positive(), milestoneId: z.number().int().positive(), callbackUrl: z.string().optional() }))
-      .mutation(async ({ ctx, input }) => initializeMilestonePayment({ ...input, payerId: ctx.user.id, email: ctx.user.email || "employer@zylobridge.com" })),
+      .input(z.object({ engagementId: z.number().int().positive(), milestoneId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.userType !== "client" && ctx.user.userType !== "enterprise" && ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Employer financial access required." });
+        }
+        if (!ctx.user.email) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "A verified account email is required to initialize payment." });
+        return initializeMilestonePayment({ ...input, payerId: ctx.user.id, email: ctx.user.email, isAdmin: ctx.user.role === "admin" || ctx.user.role === "SUPER_ADMIN" });
+      }),
     verifyPayment: protectedProcedure
       .input(z.object({ reference: z.string() }))
-      .mutation(async ({ input }) => processVerifiedPayment(input.reference)),
+      .mutation(async ({ ctx, input }) => processAuthorizedVerifiedPayment(input.reference, ctx.user.id, ctx.user.role === "admin" || ctx.user.role === "SUPER_ADMIN")),
     addBankAccount: protectedProcedure
       .input(z.object({ bankName: z.string(), bankCode: z.string(), accountNumber: z.string(), accountName: z.string() }))
       .mutation(async ({ ctx, input }) => addOrVerifyProfessionalBank({ userId: ctx.user.id, ...input })),

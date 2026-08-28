@@ -12,6 +12,7 @@ describe("payment routing and country-aware provider configuration", () => {
     expect(app).toContain('const PaymentCallback = lazy(() => import("./pages/PaymentCallback"));');
     expect(app).toContain('<Route path="/payment/callback" component={PaymentCallback} />');
     expect(callbackPage).toContain("trpc.escrow.verifyPaystack.useMutation");
+    expect(callbackPage).toContain("trpc.finance.verifyPayment.useMutation");
     expect(callbackPage).toContain("Payment not confirmed");
   });
 
@@ -29,9 +30,8 @@ describe("payment routing and country-aware provider configuration", () => {
     expect(paystack).toContain('"/charge"');
     expect(paystack).toContain('currency: "ZAR"');
     expect(paystack).toContain('eft: { provider: "ozow" }');
-    expect(modal).toContain("South African EFT");
-    expect(modal).toContain("No local bank account details are collected or hardcoded here.");
-    expect(modal).toContain('method === "bank_transfer" ? handleBankTransferInit : handlePaystackInit');
+    expect(modal).toContain("South Africa — ZAR EFT via Paystack/Ozow");
+    expect(modal).not.toContain("bank_details");
   });
 
   it("reuses pending provider transactions to prevent duplicate escrow initiation", () => {
@@ -50,11 +50,12 @@ describe("payment routing and country-aware provider configuration", () => {
     expect(webhook).toContain("verifyPaystackWebhookSignature(rawBodyString, signature)");
   });
 
-  it("keeps Nigeria bank listing and manual transfer controls scoped to Nigeria", () => {
+  it("keeps unconfigured manual bank transfer disabled and removes hardcoded instructions", () => {
     const modal = read("client/src/components/EscrowPaymentModal.tsx");
     const routers = read("server/routers.ts");
     expect(routers).toContain('return listPaystackBanks("nigeria")');
-    expect(modal).toContain('country === "nigeria" && method === "bank_transfer"');
-    expect(modal).toContain('method === "bank_transfer" && country === "nigeria"');
+    expect(routers).toContain("Manual bank transfer is not configured. Use the secure Paystack payment method.");
+    expect(routers).not.toContain("1234567890");
+    expect(modal).not.toContain("bank_transfer");
   });
 });

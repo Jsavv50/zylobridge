@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { 
   Home, Briefcase, Users, MessageSquare, Shield, Settings, 
   LogOut, Menu, X, Bell, ChevronRight, CheckCircle2, AlertTriangle, 
-  Search, Building2, BarChart3, DollarSign 
+  Search, Building2, BarChart3, DollarSign, HelpCircle, UserCircle
 } from "lucide-react";
 import { useAuth } from "../../_core/hooks/useAuth";
 import { ZylobridgeLogo } from "../ZylobridgeLogo";
@@ -108,6 +108,9 @@ export function ApplicationShell({ children, role = "user" }: { children: React.
         { href: "/enterprise", label: "Enterprise Org", icon: Building2 },
         { href: "/payments", label: "Escrow & Funding", icon: DollarSign },
         { href: "/notifications", label: "Notifications", icon: Bell },
+        { href: "/notifications/settings", label: "Settings", icon: Settings },
+        { href: "/how-it-works", label: "Help & Support", icon: HelpCircle },
+        { href: "/profile", label: "Profile", icon: UserCircle },
       ];
     }
     return [

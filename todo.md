@@ -1123,3 +1123,13 @@
 - [x] Preserve contractor/client and enterprise ownership enforcement, applicant privacy, confirmation for destructive actions, truthful metrics, and no fabricated jobs or candidate activity.
 - [x] Add focused regression tests and validate TypeScript, full Vitest, client/server builds, runtime routes, authoritative database compatibility, and desktop/mobile UX.
 - [x] Save the verified My Job Postings checkpoint.
+
+## Attached specification: pasted_content_38.txt
+- [x] Read and normalize the complete Contractor/Client Escrow & Funding specification.
+- [x] Audit `/payments`, employer authorization, accepted-candidate funding, jobs, applications, engagements, milestones, escrow, transactions, payouts, disputes, Paystack initialization, callback/webhook verification, and reusable financial UI.
+- [x] Define canonical employer financial totals, actionable funding eligibility, lifecycle labels, transaction filters, and privacy-safe response contracts from existing records.
+- [x] Implement a protected real-data employer financial command center with overview, security, action required, active escrow, ready-to-fund, engagements, transactions, and supported dispute/payment-method states.
+- [x] Implement or reuse the secure Fund Escrow review and payment initialization flow without trusting frontend amounts or marking funds successful before authoritative verification.
+- [x] Preserve professional earnings behavior, payment authorization, accepted-candidate checks, organization permissions, callbacks, webhooks, Paystack safeguards, and non-sensitive errors.
+- [x] Add focused regression tests and validate TypeScript, full Vitest, client/server builds, authoritative database compatibility, runtime health, callbacks, and desktop/mobile UX.
+- [x] Save the verified Escrow & Funding checkpoint.

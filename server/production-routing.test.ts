@@ -14,7 +14,7 @@ describe("production route registry", () => {
     expect(app).toContain('<Route path="/enterprise" component={EnterpriseDashboard} />');
     expect(app).toContain('<Route path="/organization" component={EnterpriseDashboard} />');
     expect(read("client/src/pages/Notifications.tsx")).toContain("trpc.notifications.listUnread.useQuery");
-    expect(read("client/src/pages/Payments.tsx")).toContain("trpc.jobs.myJobs.useQuery");
+    expect(read("client/src/pages/Payments.tsx")).toContain("trpc.finance.employerDashboard.useQuery");
   });
 
   it("keeps affected navigation targets aligned with registered routes", () => {

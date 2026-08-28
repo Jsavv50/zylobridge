@@ -49,9 +49,11 @@ describe("Professional Earnings & Payouts command center", () => {
     expect(pageSource).not.toContain("withdraw.mutate");
   });
 
-  it("preserves the employer escrow branch and country-aware legacy job currency formatting", () => {
-    expect(pageSource).toContain("Funding stays inside the authorized job flow");
-    expect(pageSource).toContain("formatJobBudget(job.budget, job.currency)");
+  it("preserves the employer escrow branch as a real-data country-aware financial command center", () => {
+    expect(pageSource).toContain("trpc.finance.employerDashboard.useQuery");
+    expect(pageSource).toContain("trpc.finance.employerTransactions.useQuery");
+    expect(pageSource).toContain('item.currency === "ZAR"');
+    expect(pageSource).toContain("Paystack");
     expect(pageSource).toContain("<ApplicationShell");
   });
 });
