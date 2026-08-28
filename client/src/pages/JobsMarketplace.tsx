@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
+import { useEffect } from "react";
 import { ArrowLeft, ArrowRight, Bell, Bookmark, BriefcaseBusiness, CheckCircle2, Clock3, MapPin, RotateCcw, Search, SlidersHorizontal, Sparkles, Trash2, X, Zap } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -12,6 +13,7 @@ import JobCard from "@/components/JobCard";
 import { ApplicationShell, EmptyState } from "@/components/shell/ZyloShell";
 import { VOCATION_CATEGORIES, VOCATION_KEYS, VOCATION_LABELS, type VocationKey } from "@shared/vocations";
 import { toast } from "sonner";
+import { isHiringAccount } from "@shared/marketplaceNavigation";
 
 type SortValue = "newest" | "budget_desc" | "deadline";
 type ViewValue = "recommended" | "nearby" | "newest" | "urgent" | "highpay" | "remote" | "saved";
@@ -49,7 +51,7 @@ function formatBudget(value: string | number) {
 
 export default function JobsMarketplace() {
   const [, navigate] = useLocation();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
   const initial = useMemo(readSearchParams, []);
   const [q, setQ] = useState(initial.q);
   const [vocation, setVocation] = useState(initial.vocation);
@@ -65,6 +67,10 @@ export default function JobsMarketplace() {
   const [alertName, setAlertName] = useState("");
 
   const professionalEnabled = isAuthenticated && user?.userType === "professional";
+  const hiringAccount = isAuthenticated && isHiringAccount(user);
+  useEffect(() => {
+    if (!authLoading && hiringAccount) navigate("/talent");
+  }, [authLoading, hiringAccount, navigate]);
   const profileQuery = trpc.profiles.me.useQuery(undefined, { enabled: professionalEnabled });
   const savedIdsQuery = trpc.savedJobs.ids.useQuery(undefined, { enabled: professionalEnabled });
   const utils = trpc.useUtils();
@@ -89,12 +95,12 @@ export default function JobsMarketplace() {
     limit: 12,
     offset,
   }), [q, vocation, location, minBudget, maxBudget, urgentOnly, view, sort, offset]);
-  const jobsQuery = trpc.jobs.search.useQuery(input, { enabled: !(professionalEnabled && view === "recommended") });
+  const jobsQuery = trpc.jobs.search.useQuery(input, { enabled: !hiringAccount && !(professionalEnabled && view === "recommended") });
   const recommendedInput = useMemo(() => {
     const { sort: _sort, status: _status, ...rest } = input;
     return rest;
   }, [input]);
-  const recommendationQuery = trpc.jobs.recommended.useQuery(recommendedInput, { enabled: professionalEnabled && view === "recommended" });
+  const recommendationQuery = trpc.jobs.recommended.useQuery(recommendedInput, { enabled: !hiringAccount && professionalEnabled && view === "recommended" });
   const activityQuery = trpc.jobs.activity.useQuery(undefined, { enabled: professionalEnabled });
   const alertsQuery = trpc.jobAlerts.list.useQuery(undefined, { enabled: professionalEnabled });
   const createAlert = trpc.jobAlerts.create.useMutation({ onSuccess: () => { toast.success("Job alert saved."); setAlertName(""); void alertsQuery.refetch(); }, onError: (error) => toast.error(error.message || "We couldn't save this alert.") });
@@ -151,6 +157,8 @@ export default function JobsMarketplace() {
   };
 
   const filters = <FilterPanel q={q} setQ={setQ} vocation={vocation} setVocation={setVocation} location={location} setLocation={setLocation} sort={sort} setSort={setSort} minBudget={minBudget} setMinBudget={setMinBudget} maxBudget={maxBudget} setMaxBudget={setMaxBudget} urgentOnly={urgentOnly} setUrgentOnly={setUrgentOnly} onApply={applyFilters} onReset={resetFilters} />;
+
+  if (authLoading || hiringAccount) return <div className="min-h-screen bg-background text-foreground"><ApplicationShell><div className="h-40 animate-pulse rounded-3xl bg-muted/50" /><div className="mt-6 grid gap-4 md:grid-cols-2"><div className="h-64 animate-pulse rounded-2xl bg-muted/50" /><div className="h-64 animate-pulse rounded-2xl bg-muted/50" /></div></ApplicationShell></div>;
 
   return (
     <ApplicationShell>

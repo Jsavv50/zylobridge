@@ -136,6 +136,10 @@ import {
   deleteJobAlert,
   searchJobs,
   searchProfessionals,
+  getEmployerTalentContext,
+  saveProfessionalForEmployer,
+  removeSavedProfessionalForEmployer,
+  createTalentJobInvitation,
   getPublicProfessionalProfile,
   getPublicOrganizationBySlug,
   updateOrganizationProfile,
@@ -1775,6 +1779,8 @@ export const appRouter = router({
         minRate: z.number().nonnegative().optional(),
         maxRate: z.number().nonnegative().optional(),
         minExperience: z.number().int().nonnegative().optional(),
+        maxExperience: z.number().int().nonnegative().optional(),
+        minRating: z.number().min(1).max(5).optional(),
         sort: z.enum(["relevance", "rating", "experience", "newest"]).optional().default("relevance"),
         limit: z.number().int().min(1).max(MAX_PAGE_SIZE).optional().default(20),
         offset: z.number().int().nonnegative().optional().default(0),
@@ -1786,6 +1792,92 @@ export const appRouter = router({
         const profile = await getPublicProfessionalProfile(input.userId);
         if (!profile) throw new TRPCError({ code: "NOT_FOUND", message: "Professional profile not found." });
         return profile;
+      }),
+    employerContext: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user.userType !== "client" && ctx.user.userType !== "enterprise" && ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Talent hiring tools are available to contractor, client, and enterprise accounts." });
+      }
+      return getEmployerTalentContext(ctx.user.id);
+    }),
+    saved: protectedProcedure
+      .input(z.object({
+        q: z.string().max(120).optional(),
+        vocation: z.string().max(64).optional(),
+        location: z.string().max(128).optional(),
+        availableOnly: z.boolean().optional().default(false),
+        verifiedOnly: z.boolean().optional().default(false),
+        minExperience: z.number().int().nonnegative().optional(),
+        maxExperience: z.number().int().nonnegative().optional(),
+        minRating: z.number().min(1).max(5).optional(),
+        sort: z.enum(["relevance", "rating", "experience", "newest"]).optional().default("relevance"),
+        limit: z.number().int().min(1).max(MAX_PAGE_SIZE).optional().default(20),
+        offset: z.number().int().nonnegative().optional().default(0),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.userType !== "client" && ctx.user.userType !== "enterprise" && ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "My Shortlist is available to hiring accounts." });
+        }
+        const context = await getEmployerTalentContext(ctx.user.id);
+        return searchProfessionals({ ...input, vocation: canonicalizeVocation(input.vocation), professionalIds: context.savedProfessionalIds });
+      }),
+    setSaved: protectedProcedure
+      .input(z.object({ professionalId: z.number().int().positive(), saved: z.boolean() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.userType !== "client" && ctx.user.userType !== "enterprise" && ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Only hiring accounts can save professionals." });
+        }
+        if (ctx.user.id === input.professionalId) throw new TRPCError({ code: "BAD_REQUEST", message: "You cannot save your own profile." });
+        const professional = await getPublicProfessionalProfile(input.professionalId);
+        if (!professional) throw new TRPCError({ code: "NOT_FOUND", message: "Professional profile not found." });
+        if (input.saved) await saveProfessionalForEmployer(ctx.user.id, input.professionalId);
+        else await removeSavedProfessionalForEmployer(ctx.user.id, input.professionalId);
+        return { saved: input.saved };
+      }),
+    contact: protectedProcedure
+      .input(z.object({ jobId: z.number().int().positive(), professionalId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.userType !== "client" && ctx.user.userType !== "enterprise" && ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Only hiring accounts can contact professionals from talent discovery." });
+        }
+        const job = await getJobById(input.jobId);
+        if (!job || job.status !== "open") throw new TRPCError({ code: "NOT_FOUND", message: "Select an open job you manage." });
+        let canManage = job.clientId === ctx.user.id || ctx.user.role === "admin" || ctx.user.role === "SUPER_ADMIN";
+        if (!canManage && job.organizationId) {
+          const member = await requireOrganizationAccess(ctx.user.id, job.organizationId);
+          canManage = ["OWNER", "ADMIN", "HIRING_MANAGER", "RECRUITER"].includes(member.role);
+        }
+        if (!canManage) throw new TRPCError({ code: "FORBIDDEN", message: "You cannot contact talent for this job." });
+        const professional = await getPublicProfessionalProfile(input.professionalId);
+        if (!professional) throw new TRPCError({ code: "NOT_FOUND", message: "Professional profile not found." });
+        if (professional.profile.profileMetadata.allowEmployerContact === false) throw new TRPCError({ code: "FORBIDDEN", message: "This professional is not accepting direct employer contact." });
+        return getOrCreateConversation(job.id, job.clientId, input.professionalId);
+      }),
+    invite: protectedProcedure
+      .input(z.object({ jobId: z.number().int().positive(), professionalId: z.number().int().positive(), message: z.string().trim().max(1200).optional() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.userType !== "client" && ctx.user.userType !== "enterprise" && ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Only hiring accounts can invite professionals." });
+        }
+        const job = await getJobById(input.jobId);
+        if (!job || job.status !== "open") throw new TRPCError({ code: "NOT_FOUND", message: "Select an open job you manage." });
+        let canManage = job.clientId === ctx.user.id || ctx.user.role === "admin" || ctx.user.role === "SUPER_ADMIN";
+        if (!canManage && job.organizationId) {
+          const member = await requireOrganizationAccess(ctx.user.id, job.organizationId);
+          canManage = ["OWNER", "ADMIN", "HIRING_MANAGER", "RECRUITER"].includes(member.role);
+        }
+        if (!canManage) throw new TRPCError({ code: "FORBIDDEN", message: "You cannot invite talent to this job." });
+        const professional = await getPublicProfessionalProfile(input.professionalId);
+        if (!professional) throw new TRPCError({ code: "NOT_FOUND", message: "Professional profile not found." });
+        const result = await createTalentJobInvitation({ jobId: job.id, employerId: ctx.user.id, professionalId: input.professionalId, message: input.message });
+        await createShortlist({ jobId: job.id, employerId: ctx.user.id, professionalId: input.professionalId, notes: "Invited from Find Talent" });
+        if (result.created) {
+          await createInAppNotification({ userId: input.professionalId, title: "You received a job invitation", content: `You were invited to review ${job.title}.`, category: "job", referenceType: "job", referenceId: String(job.id) });
+          if (input.message) {
+            const conversation = await getOrCreateConversation(job.id, job.clientId, input.professionalId);
+            await createMessage(conversation.id, ctx.user.id, input.message);
+          }
+        }
+        return result;
       }),
   }),
   companies: router({

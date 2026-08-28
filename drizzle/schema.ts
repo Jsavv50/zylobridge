@@ -15,6 +15,7 @@ import {
   bigint,
   jsonb,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 export const roleEnum = pgEnum("role", ["user", "admin", "SUPER_ADMIN"]);
@@ -692,6 +693,35 @@ export const shortlists = pgTable("shortlists", {
 }));
 export type Shortlist = typeof shortlists.$inferSelect;
 export type InsertShortlist = typeof shortlists.$inferInsert;
+
+export const savedProfessionals = pgTable("saved_professionals", {
+  id: serial("id").primaryKey(),
+  employerId: integer("employerId").notNull(),
+  professionalId: integer("professionalId").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  employerProfessionalUnique: uniqueIndex("saved_professionals_employer_professional_unique").on(table.employerId, table.professionalId),
+  employerCreatedAtIdx: index("saved_professionals_employer_created_at_idx").on(table.employerId, table.createdAt),
+}));
+export type SavedProfessional = typeof savedProfessionals.$inferSelect;
+export type InsertSavedProfessional = typeof savedProfessionals.$inferInsert;
+
+export const jobInvitations = pgTable("job_invitations", {
+  id: serial("id").primaryKey(),
+  jobId: integer("jobId").notNull(),
+  employerId: integer("employerId").notNull(),
+  professionalId: integer("professionalId").notNull(),
+  message: text("message"),
+  status: varchar("status", { length: 32 }).default("pending").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+}, (table) => ({
+  activeJobProfessionalUnique: uniqueIndex("job_invitations_active_job_professional_unique").on(table.jobId, table.professionalId).where(sql`${table.status} = 'pending'`),
+  employerCreatedAtIdx: index("job_invitations_employer_created_at_idx").on(table.employerId, table.createdAt),
+  professionalStatusIdx: index("job_invitations_professional_status_idx").on(table.professionalId, table.status, table.createdAt),
+}));
+export type JobInvitation = typeof jobInvitations.$inferSelect;
+export type InsertJobInvitation = typeof jobInvitations.$inferInsert;
 
 export const interviews = pgTable("interviews", {
   id: serial("id").primaryKey(),

@@ -1103,3 +1103,13 @@
 - [x] Audit task, milestone, update, and file coverage; reuse existing milestone/storage/message/payment systems and explicitly scope unsupported task/update/file workflows to truthful states.
 - [x] Add focused regression tests and validate privacy, role isolation, no-fabrication safeguards, responsive UX, TypeScript, full Vitest, client/server builds, runtime, and deployment flows.
 - [x] Save the verified My Work checkpoint.
+
+## Attached specification: pasted_content_36.txt
+- [x] Read and normalize the complete role-aware Find Talent specification.
+- [x] Audit homepage Browse Jobs actions, authentication/session role loading, `/jobs`, `/talent`, dashboard routes, professional search, filters, profile verification/availability/rating data, shortlist/messaging/invitation/escrow flows, and responsive shells.
+- [x] Implement role-aware homepage Browse Jobs routing without breaking professional `/jobs` navigation or unauthenticated flow.
+- [x] Enforce consistent role-aware `/jobs` and `/talent` access behavior without redirect loops.
+- [x] Upgrade `/talent` into a real-data contractor/client talent discovery and hiring workspace with search, vocation filters, contextual open-job criteria, recommendations, insights, advanced filters, shortlist, compare, messaging, invitation, and supported hiring actions.
+- [x] Preserve strict privacy, role isolation, truthful metrics, deterministic explanations, and no fabricated professionals, ratings, reviews, companies, or hiring states.
+- [x] Add focused regression coverage and validate TypeScript, full Vitest, client/server builds, authoritative database behavior, and responsive UX.
+- [x] Save the verified role-aware Find Talent checkpoint.

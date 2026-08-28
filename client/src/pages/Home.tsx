@@ -9,6 +9,7 @@ import { VOCATION_CATEGORIES, VOCATION_KEYS, getVocationLabel, type VocationKey 
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { ZylobridgeLogo } from "@/components/ZylobridgeLogo";
+import { marketplaceBrowseDestination, marketplaceBrowseLabel } from "@shared/marketplaceNavigation";
 
 const CATEGORY_ICONS = [Layers3, Zap, Droplets, Route, Cog, Truck, Sparkles, BriefcaseBusiness, ShieldCheck, CircleDot];
 
@@ -97,7 +98,7 @@ function LiveJobCard({ job }: { job: any }) {
 }
 
 export default function Home() {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, loading: authLoading } = useAuth();
   const [, navigate] = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
   const [searchLocation, setSearchLocation] = useState("");
@@ -115,6 +116,8 @@ export default function Home() {
   const categoryCards = useMemo(() => VOCATION_CATEGORIES.slice(0, 6), []);
   const postJobHref = isAuthenticated && (user?.userType === "client" || user?.userType === "enterprise" || user?.role === "admin" || user?.role === "SUPER_ADMIN") ? "/jobs/new" : "/sign-in";
   const dashboardHref = user?.role === "admin" || user?.role === "SUPER_ADMIN" ? "/dashboard/admin" : user?.userType === "professional" ? "/dashboard/professional" : user?.userType === "enterprise" ? "/dashboard/enterprise" : "/dashboard/client";
+  const browseHref = marketplaceBrowseDestination(user);
+  const browseLabel = marketplaceBrowseLabel(user);
 
   const submitSearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -138,7 +141,7 @@ export default function Home() {
               <div className="mt-9 flex flex-col gap-3 sm:flex-row">
                 <Link href="/talent"><Button size="lg" className="h-12 w-full bg-violet-600 px-6 font-semibold hover:bg-violet-500 sm:w-auto">Find a Professional <ArrowRight className="ml-2 h-4 w-4" /></Button></Link>
                 <Link href={postJobHref}><Button variant="outline" size="lg" className="h-12 w-full border-white/15 bg-transparent px-6 text-gray-200 hover:border-violet-400/50 hover:bg-white/5 sm:w-auto">Post a Job</Button></Link>
-                <Link href="/jobs" className="inline-flex h-12 items-center justify-center rounded-md px-4 text-sm font-semibold text-cyan-200 transition hover:text-cyan-100">Find Work <ArrowRight className="ml-2 h-4 w-4" /></Link>
+                {authLoading ? <span className="inline-flex h-12 items-center justify-center rounded-md px-4 text-sm font-semibold text-gray-500" aria-live="polite">Checking workspace…</span> : <Link href={browseHref} className="inline-flex h-12 items-center justify-center rounded-md px-4 text-sm font-semibold text-cyan-200 transition hover:text-cyan-100">{browseLabel} <ArrowRight className="ml-2 h-4 w-4" /></Link>}
               </div>
               <Link href="/how-it-works" className="mt-4 inline-flex items-center gap-2 text-sm text-gray-400 transition hover:text-white">See how ZYLOBRIDGE works <ChevronRight className="h-4 w-4" /></Link>
               {isAuthenticated && <Link href={dashboardHref} className="mt-5 inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white">Open your workspace <ChevronRight className="h-4 w-4" /></Link>}

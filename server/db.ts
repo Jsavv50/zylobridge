@@ -56,6 +56,8 @@ import {
   organizations,
   organizationMembers,
   notifications,
+  savedProfessionals,
+  jobInvitations,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { deriveApplicationStage, type ApplicationStage } from "../shared/applicationLifecycle";
@@ -459,15 +461,22 @@ export type TalentSearchFilters = {
   minRate?: number;
   maxRate?: number;
   minExperience?: number;
+  maxExperience?: number;
+  minRating?: number;
   sort?: "relevance" | "rating" | "experience" | "newest";
   limit?: number;
   offset?: number;
+  professionalIds?: number[];
 };
 
 export async function searchProfessionals(filters: TalentSearchFilters) {
   const db = await getDb();
-  if (!db) return { items: [], nextOffset: 0, hasMore: false };
+  if (!db) return { items: [], nextOffset: 0, hasMore: false, total: 0, insights: { available: 0, verified: 0, reviewed: 0 } };
   const conditions = [eq(users.userType, "professional"), sql`(${profiles.profileMetadata} IS NULL OR ${profiles.profileMetadata}->>'visibility' IS DISTINCT FROM 'hidden')` as any];
+  if (filters.professionalIds) {
+    if (filters.professionalIds.length === 0) return { items: [], nextOffset: null, hasMore: false, total: 0, insights: { available: 0, verified: 0, reviewed: 0 } };
+    conditions.push(inArray(profiles.userId, filters.professionalIds));
+  }
   const queryText = filters.q?.trim();
   if (queryText) {
     const pattern = `%${queryText}%`;
@@ -480,15 +489,21 @@ export async function searchProfessionals(filters: TalentSearchFilters) {
   if (filters.minRate !== undefined) conditions.push(gte(profiles.hourlyRate, String(filters.minRate)));
   if (filters.maxRate !== undefined) conditions.push(lte(profiles.hourlyRate, String(filters.maxRate)));
   if (filters.minExperience !== undefined) conditions.push(gte(profiles.yearsExperience, filters.minExperience));
+  if (filters.maxExperience !== undefined) conditions.push(lte(profiles.yearsExperience, filters.maxExperience));
+  if (filters.minRating !== undefined) conditions.push(and(gte(profiles.averageRating, String(filters.minRating)), gte(profiles.totalReviews, 1)) as any);
 
   const limit = clampPageSize(filters.limit);
   const offset = clampOffset(filters.offset);
   const orderBy = filters.sort === "rating"
-    ? desc(profiles.averageRating)
+    ? [desc(profiles.averageRating), desc(profiles.totalReviews), desc(profiles.updatedAt)]
     : filters.sort === "experience"
-      ? desc(profiles.yearsExperience)
-      : desc(profiles.updatedAt);
-  const rows = await db.select({
+      ? [desc(profiles.yearsExperience), desc(profiles.updatedAt)]
+      : filters.sort === "newest"
+        ? [desc(profiles.createdAt)]
+        : queryText
+          ? [desc(sql<number>`CASE WHEN ${users.name} ILIKE ${queryText} THEN 4 WHEN ${profiles.vocation}::text ILIKE ${queryText} THEN 3 WHEN ${profiles.skills} ILIKE ${`%${queryText}%`} THEN 2 ELSE 1 END`), desc(profiles.isAvailable), desc(users.isVerified), desc(profiles.updatedAt)]
+          : [desc(profiles.isAvailable), desc(users.isVerified), desc(profiles.updatedAt)];
+  const [rows, aggregateRows] = await Promise.all([db.select({
     profile: profiles,
     user: {
       id: users.id,
@@ -500,16 +515,62 @@ export async function searchProfessionals(filters: TalentSearchFilters) {
     .from(profiles)
     .innerJoin(users, eq(profiles.userId, users.id))
     .where(and(...conditions))
-    .orderBy(orderBy)
+    .orderBy(...orderBy)
     .limit(limit + 1)
-    .offset(offset);
+    .offset(offset), db.select({
+      total: sql<number>`count(*)`,
+      available: sql<number>`count(*) filter (where ${profiles.isAvailable} = true)`,
+      verified: sql<number>`count(*) filter (where ${users.isVerified} = true)`,
+      reviewed: sql<number>`count(*) filter (where ${profiles.totalReviews} > 0)`,
+    }).from(profiles).innerJoin(users, eq(profiles.userId, users.id)).where(and(...conditions))]);
   const hasMore = rows.length > limit;
   const visibleItems = (hasMore ? rows.slice(0, limit) : rows).map((item) => ({ ...item, profile: { ...item.profile, profileMetadata: publicProfileMetadata(item.profile.profileMetadata) } }));
   return {
     items: visibleItems,
     nextOffset: hasMore ? offset + limit : null,
     hasMore,
+    total: Number(aggregateRows[0]?.total ?? 0),
+    insights: {
+      available: Number(aggregateRows[0]?.available ?? 0),
+      verified: Number(aggregateRows[0]?.verified ?? 0),
+      reviewed: Number(aggregateRows[0]?.reviewed ?? 0),
+    },
   };
+}
+
+export async function getEmployerTalentContext(employerId: number) {
+  const db = await getDb();
+  if (!db) return { openJobs: [], savedProfessionalIds: [], invitations: [] };
+  const managedJobs = await getManagedJobsByUserId(employerId, MAX_PAGE_SIZE, 0);
+  const openJobs = managedJobs.filter((job) => job.status === "open");
+  const [savedRows, invitationRows] = await Promise.all([
+    db.select({ professionalId: savedProfessionals.professionalId }).from(savedProfessionals).where(eq(savedProfessionals.employerId, employerId)).orderBy(desc(savedProfessionals.createdAt)).limit(MAX_PAGE_SIZE),
+    db.select().from(jobInvitations).where(eq(jobInvitations.employerId, employerId)).orderBy(desc(jobInvitations.createdAt)).limit(MAX_PAGE_SIZE),
+  ]);
+  return { openJobs, savedProfessionalIds: savedRows.map((row) => row.professionalId), invitations: invitationRows };
+}
+
+export async function saveProfessionalForEmployer(employerId: number, professionalId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const [inserted] = await db.insert(savedProfessionals).values({ employerId, professionalId }).onConflictDoNothing().returning();
+  return inserted ?? (await db.select().from(savedProfessionals).where(and(eq(savedProfessionals.employerId, employerId), eq(savedProfessionals.professionalId, professionalId))).limit(1))[0];
+}
+
+export async function removeSavedProfessionalForEmployer(employerId: number, professionalId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  await db.delete(savedProfessionals).where(and(eq(savedProfessionals.employerId, employerId), eq(savedProfessionals.professionalId, professionalId)));
+  return true;
+}
+
+export async function createTalentJobInvitation(data: { jobId: number; employerId: number; professionalId: number; message?: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const [inserted] = await db.insert(jobInvitations).values({ ...data, message: data.message?.trim() || null }).onConflictDoNothing().returning();
+  if (inserted) return { invitation: inserted, created: true };
+  const [existing] = await db.select().from(jobInvitations).where(and(eq(jobInvitations.jobId, data.jobId), eq(jobInvitations.professionalId, data.professionalId), eq(jobInvitations.status, "pending"))).limit(1);
+  return { invitation: existing, created: false };
 }
 
 export async function getPublicProfileByUserId(userId: number) {

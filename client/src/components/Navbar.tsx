@@ -15,10 +15,11 @@ import { Menu, X, ChevronDown, Briefcase, LayoutDashboard, Building2, Shield, Me
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { ZylobridgeLogo } from "@/components/ZylobridgeLogo";
 import { trpc } from "@/lib/trpc";
+import { isHiringAccount, isProfessionalAccount, marketplaceBrowseDestination, marketplaceBrowseLabel } from "@shared/marketplaceNavigation";
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, loading: authLoading, logout } = useAuth();
   const [location, navigate] = useLocation();
 
   const handleLogout = async () => {
@@ -43,8 +44,9 @@ export default function Navbar() {
   const notificationUnreadCount = notificationUnread.length;
 
   const navLinks = [
-    { href: "/jobs", label: "Browse Jobs" },
-    { href: "/talent", label: "Find Professionals" },
+    { href: marketplaceBrowseDestination(user), label: marketplaceBrowseLabel(user), roleAware: true },
+    ...(!isAuthenticated ? [{ href: "/talent", label: "Find Professionals", roleAware: false }] : []),
+    ...(isAuthenticated && !isProfessionalAccount(user) && !isHiringAccount(user) ? [{ href: "/talent", label: "Find Professionals", roleAware: false }] : []),
     { href: "/how-it-works", label: "How It Works" },
     { href: "/enterprise", label: "Enterprise" },
     { href: "/shop", label: "Shop" },
@@ -63,7 +65,7 @@ export default function Navbar() {
 
           {/* Desktop Nav */}
           <div className="hidden md:flex items-center gap-6">
-            {navLinks.map((link) => (
+            {navLinks.map((link) => authLoading && link.roleAware ? <span key="marketplace-loading" className="text-sm font-medium text-gray-600" aria-live="polite">Loading…</span> : (
               <Link
                 key={link.href}
                 href={link.href}
@@ -226,7 +228,7 @@ export default function Navbar() {
       {/* Mobile Menu */}
       {mobileOpen && (
         <div className="md:hidden border-t border-white/5 bg-[#0d1117] px-4 py-4 space-y-3">
-          {navLinks.map((link) => (
+          {navLinks.map((link) => authLoading && link.roleAware ? <span key="marketplace-loading-mobile" className="block py-2 text-sm font-medium text-gray-600" aria-live="polite">Loading…</span> : (
             <Link
               key={link.href}
               href={link.href}
