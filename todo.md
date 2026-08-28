@@ -1194,6 +1194,6 @@
 - [x] Make successful incomplete-account signup and every Complete Profile action use `/onboarding`, while completed users retain correct role dashboards without redirect races, loops, flashes, blank pages, authorization failures, or hook-order errors.
 - [x] Integrate existing vocation taxonomy, profile metadata, verification, organization setup, role-specific preferences, dashboard destinations, notifications where applicable, and safe multi-role/additional-role handling.
 - [x] Add regression coverage and validate TypeScript, full Vitest, client/server builds, migration compatibility, auth transitions, resumability, ownership, accessibility, mobile/desktop UX, runtime logs, and production routes.
-- [ ] Save and auto-publish the final production-verified adaptive onboarding checkpoint.
+- [x] Save and auto-publish the final production-verified adaptive onboarding checkpoint.
 - [x] Fix the unauthenticated `/onboarding` null render by redirecting to SignIn through the existing safe `next` contract while preserving profile-mode intent.
 - [x] Replace the unsupported SignIn marketplace-scale claim exposed during onboarding handoff QA with truthful, non-quantified copy.
