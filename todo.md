@@ -1154,3 +1154,12 @@
 - [x] Preserve job ownership, organization permissions, privacy boundaries, truthful metrics, no-fabrication safeguards, idempotency, and mobile-first accessibility.
 - [x] Add focused regression coverage and validate TypeScript, full Vitest, client/server builds, database compatibility, runtime logs, responsive UX, and the live production route’s authenticated ownership boundary.
 - [x] Save and auto-publish the verified Candidate Pipeline checkpoint.
+
+## Attached specification: pasted_content_41.txt
+- [x] Read and normalize the complete world-class How It Works page specification.
+- [x] Audit the existing `/how-it-works` route, page, global header/footer, branding, design tokens, authentication and role detection, and all linked marketplace workflows.
+- [x] Reconcile every stated contractor/client and professional lifecycle step with current production capabilities, payment terminology, verification, messaging, reviews, notifications, support, and valid routes.
+- [x] Implement a premium, responsive, conversion-focused How It Works page with role CTAs, accessible journey switching, six-step role workflows, lifecycle visualization, clearly labeled illustrative story, escrow education, safety guidance, trust content, FAQs, and final CTAs.
+- [x] Preserve official ZYLOBRIDGE branding, truthful claims, WCAG-friendly keyboard/focus behavior, semantic structure, mobile containment, route-based loading, and no fabricated customer reviews, ratings, testimonials, or marketplace activity.
+- [x] Add focused regression coverage and validate TypeScript, full Vitest, client/server builds, route correctness, desktop/mobile visual QA, and runtime logs; live production behavior remains pending deployment.
+- [ ] Save and auto-publish the verified How It Works checkpoint.

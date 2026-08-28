@@ -232,7 +232,7 @@ export default function Navbar() {
             <Link
               key={link.href}
               href={link.href}
-              className="block text-sm font-medium text-gray-400 hover:text-white py-2"
+              className={`block py-2 text-sm font-medium transition-colors ${location === link.href ? "text-violet-400" : "text-gray-400 hover:text-white"}`}
               onClick={() => setMobileOpen(false)}
             >
               {link.label}
