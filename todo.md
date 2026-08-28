@@ -1144,3 +1144,13 @@
 - [x] Validate available lint/type checks, full Vitest, client/server builds, runtime logs, and local refresh/direct navigation.
 - [x] Verify live production behavior for `/employer` and `/dashboard/contractor` after auto-deployment.
 - [x] Save the final verified React #310 fix checkpoint and confirm GitHub auto-push/deployment.
+
+## Attached specification: pasted_content_40.txt
+- [x] Read and normalize the complete Contractor/Client Candidate Pipeline specification.
+- [x] Audit the existing candidate route, application lifecycle, job ownership, profiles, matching, verification, messaging, interviews, offers, engagements, payments, notifications, and responsive components.
+- [x] Define the canonical application-to-hire lifecycle using existing ZYLOBRIDGE entities without creating duplicate systems.
+- [x] Implement a role-protected, real-data Candidate Pipeline at `/employer/jobs/:jobId/candidates` with job context, metrics, funnel, deterministic attention states, URL-synchronized stages, server-side search/filter/sort/pagination, candidate cards, and comparison.
+- [x] Implement only supported candidate actions, including profile review, shortlist, messaging, interview management, rejection, offers, hiring, and downstream engagement/funding integration with confirmations and audit-safe state transitions.
+- [x] Preserve job ownership, organization permissions, privacy boundaries, truthful metrics, no-fabrication safeguards, idempotency, and mobile-first accessibility.
+- [x] Add focused regression coverage and validate TypeScript, full Vitest, client/server builds, database compatibility, runtime logs, and responsive UX; live production route verification remains pending deployment.
+- [ ] Save and auto-publish the verified Candidate Pipeline checkpoint.

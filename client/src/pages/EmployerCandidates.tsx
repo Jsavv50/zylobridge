@@ -1,228 +1,245 @@
-import React, { useState } from "react";
-import { trpc } from "../lib/trpc";
-import { ApplicationShell, PageHeader, StatusBadge, EmptyState } from "../components/shell/ZyloShell";
-import { Users, Briefcase, Mail, CheckCircle2, XCircle, ChevronRight, ShieldCheck, Star } from "lucide-react";
-import { useRoute, useLocation } from "wouter";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useLocation, useRoute } from "wouter";
+import { toast } from "sonner";
+import {
+  ArrowLeft,
+  ArrowRight,
+  BadgeCheck,
+  BriefcaseBusiness,
+  CalendarClock,
+  Check,
+  CheckCircle2,
+  ChevronRight,
+  CircleDollarSign,
+  Clock3,
+  Columns3,
+  Filter,
+  Grid2X2,
+  List,
+  Loader2,
+  MapPin,
+  MessageSquare,
+  RotateCcw,
+  Search,
+  Send,
+  ShieldCheck,
+  Sparkles,
+  Star,
+  UserCheck,
+  Users,
+  X,
+  XCircle,
+} from "lucide-react";
+import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { ApplicationShell, EmptyState, StatusBadge } from "@/components/shell/ZyloShell";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { getVocationLabel } from "@shared/vocations";
+import { isHiringAccount } from "@shared/marketplaceNavigation";
+
+type Stage = "all" | "new" | "shortlisted" | "interview" | "offer" | "hired" | "rejected";
+type Sort = "best_match" | "newest" | "rating" | "experience" | "bid_low" | "match_high" | "updated";
+type View = "list" | "pipeline";
+type ActionState =
+  | { kind: "interview"; candidate: any }
+  | { kind: "offer"; candidate: any }
+  | { kind: "reject"; candidate: any }
+  | { kind: "hire"; candidate: any }
+  | null;
+
+const PAGE_SIZE = 25;
+const STAGES: Array<{ id: Stage; label: string }> = [
+  { id: "all", label: "All" },
+  { id: "new", label: "New" },
+  { id: "shortlisted", label: "Shortlisted" },
+  { id: "interview", label: "Interview" },
+  { id: "offer", label: "Offer" },
+  { id: "hired", label: "Hired" },
+  { id: "rejected", label: "Rejected" },
+];
+
+function initialFilters() {
+  const params = new URLSearchParams(typeof window === "undefined" ? "" : window.location.search);
+  const stage = params.get("stage");
+  const sort = params.get("sort");
+  return {
+    q: params.get("q") ?? "",
+    stage: (STAGES.some((item) => item.id === stage) ? stage : "all") as Stage,
+    skill: params.get("skill") ?? "",
+    location: params.get("location") ?? "",
+    minExperience: Number(params.get("experience") ?? 0) || undefined,
+    verifiedOnly: params.get("verified") === "1",
+    availableOnly: params.get("available") === "1",
+    minRating: params.get("rating") === "4" ? 4 : undefined,
+    minBid: Number(params.get("minBid") ?? 0) || undefined,
+    maxBid: Number(params.get("maxBid") ?? 0) || undefined,
+    sort: (["best_match", "newest", "rating", "experience", "bid_low", "match_high", "updated"].includes(sort ?? "") ? sort : "best_match") as Sort,
+    view: params.get("view") === "pipeline" ? "pipeline" as View : "list" as View,
+    offset: Math.max(0, Number(params.get("offset") ?? 0) || 0),
+  };
+}
+
+function useDebouncedValue<T>(value: T, delay = 300) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => { const timer = window.setTimeout(() => setDebounced(value), delay); return () => window.clearTimeout(timer); }, [delay, value]);
+  return debounced;
+}
+
+function initials(name?: string | null) {
+  return name?.trim().split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "ZY";
+}
+
+function formatMoney(value: string | number | null | undefined, currency = "NGN") {
+  const amount = Number(value ?? 0);
+  return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 0 }).format(Number.isFinite(amount) ? amount : 0);
+}
+
+function formatDate(value: Date | string | null | undefined) {
+  if (!value) return "Not set";
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "Not set";
+}
+
+function formatDateTime(value: Date | string | null | undefined) {
+  if (!value) return "Not set";
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" }) : "Not set";
+}
+
+function stageTone(stage: string) {
+  if (stage === "hired") return "success" as const;
+  if (stage === "rejected") return "error" as const;
+  if (stage === "offer" || stage === "interview") return "info" as const;
+  if (stage === "shortlisted") return "warning" as const;
+  return "neutral" as const;
+}
+
+function stageLabel(stage: string) {
+  return stage === "new" ? "New applicant" : stage.charAt(0).toUpperCase() + stage.slice(1);
+}
+
+function CandidateSkeleton() {
+  return <div className="grid gap-4 xl:grid-cols-2">{Array.from({ length: 6 }).map((_, index) => <div key={index} className="h-80 animate-pulse rounded-3xl border border-border bg-card" />)}</div>;
+}
 
 export default function EmployerCandidates() {
   const [, params] = useRoute("/employer/jobs/:jobId/candidates");
-  const [, setLocation] = useLocation();
+  const [, navigate] = useLocation();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
   const jobId = Number(params?.jobId ?? 0);
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [selectedCandidate, setSelectedCandidate] = useState<any | null>(null);
+  const hiringAccount = Boolean(isAuthenticated && (isHiringAccount(user) || user?.role === "admin" || user?.role === "SUPER_ADMIN"));
+  const initial = useMemo(initialFilters, []);
+  const [q, setQ] = useState(initial.q);
+  const [stage, setStage] = useState<Stage>(initial.stage);
+  const [skill, setSkill] = useState(initial.skill);
+  const [location, setLocation] = useState(initial.location);
+  const [minExperience, setMinExperience] = useState<number | undefined>(initial.minExperience);
+  const [verifiedOnly, setVerifiedOnly] = useState(initial.verifiedOnly);
+  const [availableOnly, setAvailableOnly] = useState(initial.availableOnly);
+  const [minRating, setMinRating] = useState<number | undefined>(initial.minRating);
+  const [minBid, setMinBid] = useState<number | undefined>(initial.minBid);
+  const [maxBid, setMaxBid] = useState<number | undefined>(initial.maxBid);
+  const [sort, setSort] = useState<Sort>(initial.sort);
+  const [view, setView] = useState<View>(initial.view);
+  const [offset, setOffset] = useState(initial.offset);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [selectedApplicationId, setSelectedApplicationId] = useState<number | null>(null);
+  const [compareIds, setCompareIds] = useState<number[]>([]);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [action, setAction] = useState<ActionState>(null);
+  const [interviewAt, setInterviewAt] = useState("");
+  const [interviewLocation, setInterviewLocation] = useState("");
+  const [interviewNotes, setInterviewNotes] = useState("");
+  const [offerCompensation, setOfferCompensation] = useState("");
+  const [offerStartDate, setOfferStartDate] = useState("");
+  const [offerDuration, setOfferDuration] = useState("");
+  const [offerDescription, setOfferDescription] = useState("");
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [privateNote, setPrivateNote] = useState("");
+  const debouncedQ = useDebouncedValue(q);
+  const debouncedSkill = useDebouncedValue(skill);
+  const debouncedLocation = useDebouncedValue(location);
+  const utils = trpc.useUtils();
 
-  const { data: applications = [], isLoading, refetch } = trpc.applications.listForJob.useQuery(
-    { jobId, status: statusFilter },
-    { enabled: jobId > 0 }
-  );
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) navigate("/sign-in");
+    else if (!authLoading && isAuthenticated && !hiringAccount) navigate("/dashboard");
+  }, [authLoading, hiringAccount, isAuthenticated, navigate]);
 
-  const updateStatusMutation = trpc.applications.updateStatus.useMutation({
-    onSuccess: () => {
-      refetch();
-      setSelectedCandidate(null);
-    },
-  });
+  useEffect(() => {
+    const search = new URLSearchParams();
+    if (q.trim()) search.set("q", q.trim());
+    if (stage !== "all") search.set("stage", stage);
+    if (skill.trim()) search.set("skill", skill.trim());
+    if (location.trim()) search.set("location", location.trim());
+    if (minExperience) search.set("experience", String(minExperience));
+    if (verifiedOnly) search.set("verified", "1");
+    if (availableOnly) search.set("available", "1");
+    if (minRating) search.set("rating", String(minRating));
+    if (minBid) search.set("minBid", String(minBid));
+    if (maxBid) search.set("maxBid", String(maxBid));
+    if (sort !== "best_match") search.set("sort", sort);
+    if (view !== "list") search.set("view", view);
+    if (offset) search.set("offset", String(offset));
+    window.history.replaceState(null, "", `/employer/jobs/${jobId}/candidates${search.toString() ? `?${search.toString()}` : ""}`);
+  }, [availableOnly, jobId, location, maxBid, minBid, minExperience, minRating, offset, q, skill, sort, stage, verifiedOnly, view]);
 
-  const tabs = [
-    { id: "all", label: "All Applicants" },
-    { id: "pending", label: "Pending" },
-    { id: "accepted", label: "Accepted / Hired" },
-    { id: "rejected", label: "Rejected" },
-  ];
+  const queryInput = useMemo(() => ({ jobId, q: debouncedQ.trim() || undefined, stage, skill: debouncedSkill.trim() || undefined, location: debouncedLocation.trim() || undefined, minExperience, availableOnly, verifiedOnly, minRating, minBid, maxBid, sort, limit: PAGE_SIZE, offset }), [availableOnly, debouncedLocation, debouncedQ, debouncedSkill, jobId, location, maxBid, minBid, minExperience, minRating, offset, sort, stage, verifiedOnly]);
+  const pipeline = trpc.candidatePipeline.get.useQuery(queryInput, { enabled: hiringAccount && jobId > 0, staleTime: 10_000, placeholderData: (previous) => previous, retry: 1 });
+  const items = pipeline.data?.items ?? [];
+  const selectedCandidate: any = items.find((item) => item.application.id === selectedApplicationId) ?? null;
+  const compared = items.filter((item) => compareIds.includes(item.application.id));
 
-  return (
-    <ApplicationShell>
-      <div className="space-y-6">
-        <PageHeader
-          title="Candidate Pipeline"
-          description={`Review and manage applications submitted for Job #${jobId}.`}
-        />
+  const refresh = async () => {
+    await Promise.all([
+      utils.candidatePipeline.get.invalidate(),
+      utils.employerJobsPortfolio.invalidate(),
+      utils.employerDashboard.invalidate(),
+      utils.notifications.invalidate(),
+    ]);
+  };
+  const mutationOptions = (success: string) => ({ onSuccess: async () => { toast.success(success); setAction(null); await refresh(); }, onError: (error: { message?: string }) => toast.error(error.message || "We couldn't update this candidate right now.") });
+  const shortlist = trpc.candidatePipeline.shortlist.useMutation(mutationOptions("Candidate shortlisted."));
+  const removeShortlist = trpc.candidatePipeline.removeShortlist.useMutation(mutationOptions("Candidate removed from the shortlist."));
+  const saveNote = trpc.candidatePipeline.updatePrivateNote.useMutation(mutationOptions("Private shortlist note saved."));
+  const message = trpc.candidatePipeline.message.useMutation({ onSuccess: (conversation) => navigate(`/messages/${conversation.id}`), onError: (error) => toast.error(error.message || "We couldn't open this conversation.") });
+  const scheduleInterview = trpc.candidatePipeline.scheduleInterview.useMutation(mutationOptions("Interview scheduled."));
+  const updateInterview = trpc.candidatePipeline.updateInterview.useMutation(mutationOptions("Interview updated."));
+  const createOffer = trpc.candidatePipeline.createOffer.useMutation(mutationOptions("Offer created."));
+  const reject = trpc.candidatePipeline.reject.useMutation(mutationOptions("Candidate moved to Rejected."));
+  const hire = trpc.candidatePipeline.hire.useMutation(mutationOptions("Candidate hired. The engagement is now available in My Work."));
+  const mutationPending = shortlist.isPending || removeShortlist.isPending || saveNote.isPending || message.isPending || scheduleInterview.isPending || updateInterview.isPending || createOffer.isPending || reject.isPending || hire.isPending;
 
-        {/* Status Filters */}
-        <div className="flex flex-wrap gap-2 border-b border-border pb-4">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setStatusFilter(tab.id)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                statusFilter === tab.id
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "bg-card text-muted-foreground hover:bg-muted hover:text-foreground border border-border"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+  const resetFilters = () => { setQ(""); setStage("all"); setSkill(""); setLocation(""); setMinExperience(undefined); setVerifiedOnly(false); setAvailableOnly(false); setMinRating(undefined); setMinBid(undefined); setMaxBid(undefined); setSort("best_match"); setOffset(0); };
+  const selectStage = (next: Stage) => { setStage(next); setOffset(0); };
+  const toggleCompare = (applicationId: number) => setCompareIds((current) => current.includes(applicationId) ? current.filter((id) => id !== applicationId) : current.length >= 4 ? (toast.info("Compare up to four candidates at once."), current) : [...current, applicationId]);
+  const openAction = (kind: NonNullable<ActionState>["kind"], candidate: any) => {
+    setAction({ kind, candidate } as ActionState);
+    if (kind === "interview") { setInterviewAt(""); setInterviewLocation(""); setInterviewNotes(""); }
+    if (kind === "offer") { setOfferCompensation(String(candidate.application.bidAmount ?? "")); setOfferStartDate(""); setOfferDuration(""); setOfferDescription(`Engagement for ${pipeline.data?.job.title ?? "this opportunity"}.`); }
+    if (kind === "reject") setRejectionReason("");
+  };
 
-        {/* Candidate List */}
-        {isLoading ? (
-          <div className="grid grid-cols-1 gap-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-40 rounded-xl bg-card border border-border animate-pulse" />
-            ))}
-          </div>
-        ) : applications.length === 0 ? (
-          <EmptyState
-            title="No candidates in this view"
-            description="No applications match the current filter criteria for this job posting."
-            action={<button onClick={() => setLocation("/employer/jobs")} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">Back to Employer Jobs</button>}
-          />
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {applications.map((app: any) => {
-              const prof = app.professional;
-              const profile = app.profile;
-              const badgeTone = app.status === "accepted" ? "success" : app.status === "rejected" ? "error" : "warning";
+  const summary = pipeline.data?.summary ?? { applicants: 0, new: 0, shortlisted: 0, interviews: 0, offers: 0, hired: 0, rejected: 0 };
+  const job = pipeline.data?.job;
+  const currency = job?.currency || "NGN";
+  const filtersPanel = <div className="space-y-5"><div className="flex items-center justify-between"><div className="flex items-center gap-2"><Filter className="h-4 w-4 text-primary" /><h2 className="font-semibold">Refine candidates</h2></div><button type="button" onClick={resetFilters} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><RotateCcw className="h-3.5 w-3.5" />Reset</button></div><div><Label htmlFor="candidate-skill">Skill</Label><Input id="candidate-skill" value={skill} onChange={(event) => { setSkill(event.target.value); setOffset(0); }} placeholder="e.g. installation" className="mt-1.5" /></div><div><Label htmlFor="candidate-location">Location</Label><Input id="candidate-location" value={location} onChange={(event) => { setLocation(event.target.value); setOffset(0); }} placeholder="City or region" className="mt-1.5" /></div><div><Label htmlFor="candidate-experience">Minimum experience</Label><Select value={minExperience ? String(minExperience) : "any"} onValueChange={(value) => { setMinExperience(value === "any" ? undefined : Number(value)); setOffset(0); }}><SelectTrigger id="candidate-experience" className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="any">Any experience</SelectItem><SelectItem value="1">1+ years</SelectItem><SelectItem value="3">3+ years</SelectItem><SelectItem value="5">5+ years</SelectItem><SelectItem value="10">10+ years</SelectItem></SelectContent></Select></div><div className="grid grid-cols-2 gap-3"><div><Label htmlFor="candidate-min-bid">Minimum bid</Label><Input id="candidate-min-bid" type="number" min="0" value={minBid ?? ""} onChange={(event) => { setMinBid(event.target.value ? Number(event.target.value) : undefined); setOffset(0); }} className="mt-1.5" /></div><div><Label htmlFor="candidate-max-bid">Maximum bid</Label><Input id="candidate-max-bid" type="number" min="0" value={maxBid ?? ""} onChange={(event) => { setMaxBid(event.target.value ? Number(event.target.value) : undefined); setOffset(0); }} className="mt-1.5" /></div></div><label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border p-3 text-sm"><input type="checkbox" checked={availableOnly} onChange={(event) => { setAvailableOnly(event.target.checked); setOffset(0); }} className="mt-0.5 h-4 w-4 accent-violet-600" /><span><span className="block font-medium">Available now</span><span className="text-xs text-muted-foreground">Uses the professional's current availability.</span></span></label><label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border p-3 text-sm"><input type="checkbox" checked={verifiedOnly} onChange={(event) => { setVerifiedOnly(event.target.checked); setOffset(0); }} className="mt-0.5 h-4 w-4 accent-violet-600" /><span><span className="block font-medium">Verified accounts</span><span className="text-xs text-muted-foreground">Uses recorded account verification.</span></span></label><label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border p-3 text-sm"><input type="checkbox" checked={minRating === 4} onChange={(event) => { setMinRating(event.target.checked ? 4 : undefined); setOffset(0); }} className="mt-0.5 h-4 w-4 accent-violet-600" /><span><span className="block font-medium">Rated 4.0+</span><span className="text-xs text-muted-foreground">Only candidates with at least one review.</span></span></label></div>;
 
-              return (
-                <div key={app.id} className="bg-card border border-border rounded-xl p-6 shadow-sm hover:border-primary/50 transition-all flex flex-col justify-between gap-4">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">
-                          {prof?.name?.[0] ?? "P"}
-                        </div>
-                        <div>
-                          <h4 className="font-semibold text-foreground flex items-center gap-1.5">
-                            {prof?.name ?? `Professional #${app.professionalId}`}
-                            {prof?.isVerified && <ShieldCheck className="w-4 h-4 text-emerald-500" aria-label="Verified Professional" />}
-                          </h4>
-                          <p className="text-xs text-muted-foreground">{profile?.vocation ?? "Specialist"}</p>
-                        </div>
-                      </div>
-                      <StatusBadge status={badgeTone} label={app.status} />
-                    </div>
+  const renderCandidateCard = (candidate: any, compact = false) => {
+    const selected = compareIds.includes(candidate.application.id);
+    const metadata = candidate.profile?.profileMetadata ?? {};
+    const ratingAvailable = Number(candidate.profile?.totalReviews ?? 0) > 0;
+    const primaryReason = candidate.match.reasons?.[0]?.detail || "Match is based on recorded profile and job fields.";
+    return <article key={candidate.application.id} className={`rounded-3xl border border-border bg-card ${compact ? "p-4" : "p-5 sm:p-6"} transition hover:border-violet-400/35 hover:shadow-xl`}><div className="flex items-start gap-4"><button type="button" onClick={() => { setSelectedApplicationId(candidate.application.id); setPrivateNote(candidate.shortlist?.notes ?? ""); }} className="flex min-w-0 flex-1 items-start gap-4 text-left"><div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-violet-500/15 font-bold text-violet-200">{candidate.professional.avatarUrl ? <img src={candidate.professional.avatarUrl} alt="" loading="lazy" className="h-full w-full object-cover" /> : initials(candidate.professional.name)}</div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate font-semibold">{candidate.professional.name || "Professional"}</h2>{candidate.professional.isVerified && <BadgeCheck className="h-4 w-4 text-emerald-400" aria-label="Verified account" />}<StatusBadge status={stageTone(candidate.stage)} label={stageLabel(candidate.stage)} /></div><p className="mt-1 text-sm text-primary">{metadata.headline || (candidate.profile?.vocation ? getVocationLabel(candidate.profile.vocation) : "Skilled professional")}</p><div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"><span className="inline-flex items-center gap-1"><MapPin className="h-3.5 w-3.5" />{candidate.profile?.location || "Location not provided"}</span><span>{candidate.profile?.yearsExperience == null ? "Experience not provided" : `${candidate.profile.yearsExperience} years experience`}</span>{ratingAvailable ? <span className="inline-flex items-center gap-1 text-amber-400"><Star className="h-3.5 w-3.5 fill-current" />{Number(candidate.profile.averageRating).toFixed(1)} ({candidate.profile.totalReviews})</span> : <span>No reviews yet</span>}</div></div></button><label className="flex shrink-0 cursor-pointer items-center gap-2 text-xs text-muted-foreground"><input type="checkbox" checked={selected} onChange={() => toggleCompare(candidate.application.id)} aria-label={`${selected ? "Remove" : "Add"} ${candidate.professional.name || "candidate"} ${selected ? "from" : "to"} comparison`} className="h-4 w-4 accent-violet-600" /><span className="hidden sm:inline">Compare</span></label></div><div className="mt-5 grid gap-3 sm:grid-cols-3"><div className="rounded-2xl border border-violet-400/15 bg-violet-500/[.05] p-3"><p className="text-[10px] font-semibold uppercase tracking-[.14em] text-violet-300">Match</p><p className="mt-1 text-xl font-bold text-white">{candidate.match.score}%</p><p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{primaryReason}</p></div><div className="rounded-2xl border border-border bg-background/30 p-3"><p className="text-[10px] uppercase tracking-[.14em] text-muted-foreground">Bid</p><p className="mt-1 text-lg font-semibold">{formatMoney(candidate.application.bidAmount, currency)}</p><p className="mt-1 text-xs text-muted-foreground">Submitted {formatDate(candidate.application.createdAt)}</p></div><div className="rounded-2xl border border-border bg-background/30 p-3"><p className="text-[10px] uppercase tracking-[.14em] text-muted-foreground">Trust</p><p className="mt-1 text-lg font-semibold">{candidate.verifiedCount} verified item{candidate.verifiedCount === 1 ? "" : "s"}</p><p className="mt-1 text-xs text-muted-foreground">{candidate.completedJobs} completed job{candidate.completedJobs === 1 ? "" : "s"}</p></div></div>{!compact && <><p className="mt-4 line-clamp-2 text-sm leading-6 text-muted-foreground">{candidate.application.coverLetter}</p>{candidate.profile?.skillsList?.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{candidate.profile.skillsList.slice(0, 5).map((item: string) => <span key={item} className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">{item}</span>)}</div>}</>}<div className="mt-5 flex flex-wrap items-center gap-2 border-t border-border pt-4"><Button size="sm" variant="outline" onClick={() => { setSelectedApplicationId(candidate.application.id); setPrivateNote(candidate.shortlist?.notes ?? ""); }}>Review</Button>{candidate.actions.canMessage && <Button size="sm" variant="outline" onClick={() => message.mutate({ jobId, applicationId: candidate.application.id })} disabled={message.isPending}><MessageSquare className="mr-1.5 h-3.5 w-3.5" />Message</Button>}{candidate.actions.canShortlist && <Button size="sm" variant="outline" onClick={() => shortlist.mutate({ jobId, applicationId: candidate.application.id })} disabled={shortlist.isPending}><Star className="mr-1.5 h-3.5 w-3.5" />Shortlist</Button>}{candidate.actions.canInterview && <Button size="sm" variant="outline" onClick={() => openAction("interview", candidate)}><CalendarClock className="mr-1.5 h-3.5 w-3.5" />Interview</Button>}{candidate.actions.canOffer && <Button size="sm" variant="outline" onClick={() => openAction("offer", candidate)}><Send className="mr-1.5 h-3.5 w-3.5" />Make offer</Button>}{candidate.actions.canHire && <Button size="sm" onClick={() => openAction("hire", candidate)}><UserCheck className="mr-1.5 h-3.5 w-3.5" />Hire</Button>}{candidate.stage === "hired" && <Link href={`/payments?jobId=${jobId}`}><Button size="sm"><CircleDollarSign className="mr-1.5 h-3.5 w-3.5" />Escrow & Funding</Button></Link>}{candidate.actions.canReject && <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => openAction("reject", candidate)}><XCircle className="mr-1.5 h-3.5 w-3.5" />Reject</Button>}</div></article>;
+  };
 
-                    <p className="text-sm text-foreground/90 bg-muted/30 p-3 rounded-lg border border-border/50 line-clamp-3">
-                      <span className="font-medium text-xs text-muted-foreground uppercase tracking-wider block mb-1">Cover Note</span>
-                      {app.coverLetter}
-                    </p>
+  if (authLoading || (isAuthenticated && !user)) return <ApplicationShell role="employer"><CandidateSkeleton /></ApplicationShell>;
+  if (!isAuthenticated || !hiringAccount) return <ApplicationShell role="employer"><EmptyState icon={ShieldCheck} title="Hiring account required" description="Sign in with an authorized contractor, client, or enterprise account to manage candidates." action={<Button onClick={() => navigate("/sign-in")}>Sign in</Button>} /></ApplicationShell>;
+  if (!Number.isInteger(jobId) || jobId <= 0) return <ApplicationShell role="employer"><EmptyState icon={BriefcaseBusiness} title="Invalid job link" description="Return to My Job Postings and select a valid opportunity." action={<Button onClick={() => navigate("/employer/jobs")}>My Job Postings</Button>} /></ApplicationShell>;
 
-                    <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t border-border/50">
-                      <span>Bid: <strong className="text-foreground font-mono">₦{Number(app.bidAmount).toLocaleString()}</strong></span>
-                      <span>Applied {new Date(app.createdAt).toLocaleDateString()}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-end gap-2 pt-2">
-                    <button
-                      onClick={() => setSelectedCandidate(app)}
-                      className="px-3 py-1.5 border border-border hover:bg-muted rounded-lg text-xs font-medium transition-colors"
-                    >
-                      Review Profile
-                    </button>
-                    {app.status === "pending" && (
-                      <>
-                        <button
-                          onClick={() => updateStatusMutation.mutate({ id: app.id, status: "rejected" })}
-                          disabled={updateStatusMutation.isPending}
-                          className="px-3 py-1.5 bg-destructive/10 text-destructive hover:bg-destructive/20 rounded-lg text-xs font-medium transition-colors flex items-center gap-1"
-                        >
-                          <XCircle className="w-3.5 h-3.5" /> Reject
-                        </button>
-                        <button
-                          onClick={() => updateStatusMutation.mutate({ id: app.id, status: "accepted" })}
-                          disabled={updateStatusMutation.isPending}
-                          className="px-3 py-1.5 bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg text-xs font-medium transition-colors flex items-center gap-1"
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5" /> Accept
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Candidate Detail Modal / Drawer */}
-        {selectedCandidate && (
-          <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-card border border-border rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-6">
-              <div className="flex items-center justify-between border-b border-border pb-4">
-                <div>
-                  <h3 className="text-xl font-bold text-foreground">{selectedCandidate.professional?.name}</h3>
-                  <p className="text-sm text-muted-foreground">{selectedCandidate.profile?.vocation ?? "Specialist"}</p>
-                </div>
-                <button
-                  onClick={() => setSelectedCandidate(null)}
-                  className="p-2 hover:bg-muted rounded-lg text-muted-foreground hover:text-foreground"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <div className="space-y-4 text-sm">
-                <div>
-                  <h4 className="font-semibold text-foreground mb-1">Professional Bio</h4>
-                  <p className="text-muted-foreground">{selectedCandidate.profile?.bio ?? "No bio provided."}</p>
-                </div>
-
-                <div>
-                  <h4 className="font-semibold text-foreground mb-1">Skills & Expertise</h4>
-                  <div className="flex flex-wrap gap-1.5">
-                    {Array.isArray(selectedCandidate.profile?.skills) ? (
-                      selectedCandidate.profile.skills.map((skill: string, idx: number) => (
-                        <span key={idx} className="px-2.5 py-1 rounded-md bg-muted text-foreground text-xs font-medium">{skill}</span>
-                      ))
-                    ) : (
-                      <span className="text-muted-foreground">No skills listed.</span>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <h4 className="font-semibold text-foreground mb-1">Application Cover Letter</h4>
-                  <p className="bg-muted/50 p-4 rounded-xl text-foreground/90 border border-border/50">{selectedCandidate.coverLetter}</p>
-                </div>
-
-                <div className="flex items-center justify-between bg-muted/30 p-4 rounded-xl border border-border/50">
-                  <div>
-                    <span className="text-xs text-muted-foreground block">Proposed Bid Amount</span>
-                    <span className="text-lg font-bold font-mono text-primary">₦{Number(selectedCandidate.bidAmount).toLocaleString()}</span>
-                  </div>
-                  <div>
-                    <span className="text-xs text-muted-foreground block">Application Status</span>
-                    <StatusBadge
-                      status={selectedCandidate.status === "accepted" ? "success" : selectedCandidate.status === "rejected" ? "error" : "warning"}
-                      label={selectedCandidate.status}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
-                <button
-                  onClick={() => setSelectedCandidate(null)}
-                  className="px-4 py-2 border border-border rounded-lg text-sm font-medium hover:bg-muted transition-colors"
-                >
-                  Close
-                </button>
-                {selectedCandidate.status === "pending" && (
-                  <>
-                    <button
-                      onClick={() => updateStatusMutation.mutate({ id: selectedCandidate.id, status: "rejected" })}
-                      disabled={updateStatusMutation.isPending}
-                      className="px-4 py-2 bg-destructive/10 text-destructive hover:bg-destructive/20 rounded-lg text-sm font-medium transition-colors"
-                    >
-                      Reject Candidate
-                    </button>
-                    <button
-                      onClick={() => updateStatusMutation.mutate({ id: selectedCandidate.id, status: "accepted" })}
-                      disabled={updateStatusMutation.isPending}
-                      className="px-4 py-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg text-sm font-medium transition-colors"
-                    >
-                      Accept & Hire
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </ApplicationShell>
-  );
+  return <ApplicationShell role={user?.userType === "enterprise" ? "enterprise" : "employer"}><div className="space-y-6"><nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><Link href="/employer/jobs" className="hover:text-foreground">My Job Postings</Link><ChevronRight className="h-3.5 w-3.5" /><span className="max-w-[220px] truncate">{job?.title || `Job #${jobId}`}</span><ChevronRight className="h-3.5 w-3.5" /><span className="text-foreground">Candidate Pipeline</span></nav><header className="relative overflow-hidden rounded-[2rem] border border-violet-400/20 bg-gradient-to-br from-violet-950/70 via-[#111827] to-cyan-950/40 p-6 sm:p-8"><div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-violet-500/15 blur-3xl" /><div className="relative flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between"><div className="max-w-3xl"><p className="text-xs font-semibold uppercase tracking-[.2em] text-violet-300">Hiring command center</p><h1 className="mt-2 text-3xl font-bold tracking-tight text-white sm:text-4xl">Candidate Pipeline</h1><p className="mt-2 text-sm text-gray-300 sm:text-base">{job ? `${job.title} · Job #${job.id}` : `Job #${jobId}`}</p><p className="mt-4 max-w-2xl text-sm leading-6 text-gray-400">Review, compare, and manage candidates for this opportunity with data-backed trust and hiring signals.</p></div><div className="flex flex-wrap gap-2"><Link href="/employer/jobs"><Button variant="outline" className="border-white/15 bg-white/5 text-white"><ArrowLeft className="mr-2 h-4 w-4" />My Job Postings</Button></Link><Link href={`/talent?jobId=${jobId}`}><Button variant="outline" className="border-white/15 bg-white/5 text-white"><Users className="mr-2 h-4 w-4" />Find More Talent</Button></Link><Link href={`/talent?jobId=${jobId}`}><Button className="bg-violet-600 hover:bg-violet-500"><Send className="mr-2 h-4 w-4" />Invite Talent</Button></Link></div></div></header>{pipeline.isLoading ? <CandidateSkeleton /> : pipeline.isError ? <EmptyState icon={Users} title={pipeline.error.data?.code === "FORBIDDEN" ? "Candidate access unavailable" : pipeline.error.data?.code === "NOT_FOUND" ? "Job not found" : "We couldn't load your candidates right now"} description={pipeline.error.data?.code === "FORBIDDEN" ? "Only authorized job owners and hiring team members can manage this pipeline." : "Retry the request without losing your route."} action={<div className="flex flex-wrap justify-center gap-2"><Button variant="outline" onClick={() => navigate("/employer/jobs")}>Back to jobs</Button><Button onClick={() => void pipeline.refetch()}>Try again</Button></div>} /> : job && pipeline.data ? <><section className="rounded-3xl border border-border bg-card p-5 sm:p-6"><div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_auto]"><div><div className="flex flex-wrap items-center gap-2"><StatusBadge status={job.status === "open" ? "success" : job.status === "in_progress" ? "info" : job.status === "completed" ? "success" : "error"} label={job.status.replaceAll("_", " ")} />{job.isUrgent && <StatusBadge status="warning" label="Urgent" />}</div><h2 className="mt-3 text-xl font-semibold">{job.title}</h2><p className="mt-2 line-clamp-3 text-sm leading-6 text-muted-foreground">{job.description}</p><div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground"><span className="inline-flex items-center gap-1.5"><MapPin className="h-4 w-4" />{job.location}</span><span className="inline-flex items-center gap-1.5"><CircleDollarSign className="h-4 w-4" />{formatMoney(job.budget, currency)}</span><span className="inline-flex items-center gap-1.5"><Clock3 className="h-4 w-4" />Deadline {formatDate(job.deadline)}</span><span className="inline-flex items-center gap-1.5"><BriefcaseBusiness className="h-4 w-4" />{getVocationLabel(job.vocation)}</span></div></div><div className="flex flex-wrap items-start gap-2"><Link href={`/jobs/${job.id}?from=employerJobs`}><Button variant="outline">View Job</Button></Link>{job.assignedProfessionalId && <Link href={`/payments?jobId=${job.id}`}><Button>Manage Funding</Button></Link>}</div></div></section><section aria-label="Hiring overview" className="grid grid-cols-2 gap-3 lg:grid-cols-5">{[{ id: "all", label: "Applicants", value: summary.applicants, icon: Users }, { id: "shortlisted", label: "Shortlisted", value: summary.shortlisted, icon: Star }, { id: "interview", label: "Interviews", value: summary.interviews, icon: CalendarClock }, { id: "offer", label: "Offers", value: summary.offers, icon: Send }, { id: "hired", label: "Hired", value: summary.hired, icon: UserCheck }].map((metric) => <button key={metric.id} type="button" onClick={() => selectStage(metric.id as Stage)} className={`rounded-2xl border p-4 text-left transition ${stage === metric.id ? "border-violet-400/50 bg-violet-500/10" : "border-border bg-card hover:border-violet-400/30"}`}><metric.icon className="h-5 w-5 text-violet-300" /><p className="mt-3 text-2xl font-semibold">{metric.value}</p><p className="text-xs text-muted-foreground">{metric.label}</p></button>)}</section><section className="overflow-x-auto rounded-3xl border border-border bg-card p-5"><div className="flex min-w-[660px] items-center gap-2">{[{ id: "all", label: "Applicants", value: summary.applicants }, { id: "shortlisted", label: "Shortlisted", value: summary.shortlisted }, { id: "interview", label: "Interview", value: summary.interviews }, { id: "offer", label: "Offer", value: summary.offers }, { id: "hired", label: "Hired", value: summary.hired }].map((item, index) => <div key={item.id} className="contents"><button type="button" onClick={() => selectStage(item.id as Stage)} className={`min-w-[105px] flex-1 rounded-xl border px-3 py-3 text-center ${stage === item.id ? "border-violet-400/50 bg-violet-500/10" : "border-border bg-background/30"}`}><span className="block text-lg font-semibold">{item.value}</span><span className="text-xs text-muted-foreground">{item.label}</span></button>{index < 4 && <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />}</div>)}</div></section>{pipeline.data.attention.length > 0 && <section className="rounded-3xl border border-amber-400/20 bg-amber-500/[.04] p-5 sm:p-6"><div className="flex items-center gap-2"><Sparkles className="h-5 w-5 text-amber-300" /><div><p className="text-xs font-semibold uppercase tracking-[.16em] text-amber-300">Stay ahead</p><h2 className="text-xl font-semibold">Needs Your Attention</h2></div></div><div className="mt-4 grid gap-3 md:grid-cols-2">{pipeline.data.attention.map((item) => <button key={item.id} type="button" onClick={() => selectStage(item.stage)} className="rounded-2xl border border-amber-400/15 bg-background/40 p-4 text-left hover:border-amber-300/35"><p className="font-medium">{item.title}</p><p className="mt-1 text-sm text-muted-foreground">{item.detail}</p><p className="mt-3 text-xs font-semibold text-amber-300">{item.action} →</p></button>)}</div></section>}<section><div className="flex gap-2 overflow-x-auto pb-2" aria-label="Candidate stages">{STAGES.map((item) => { const count = item.id === "all" ? summary.applicants : item.id === "new" ? summary.new : item.id === "shortlisted" ? summary.shortlisted : item.id === "interview" ? summary.interviews : item.id === "offer" ? summary.offers : item.id === "hired" ? summary.hired : summary.rejected; return <button key={item.id} type="button" onClick={() => selectStage(item.id)} className={`shrink-0 rounded-full border px-4 py-2 text-sm font-semibold ${stage === item.id ? "border-violet-400/50 bg-violet-500/15 text-violet-200" : "border-border bg-card text-muted-foreground hover:text-foreground"}`}>{item.label} <span className="ml-1 text-xs">{count}</span></button>; })}</div><div className="mt-4 grid items-start gap-6 lg:grid-cols-[280px_minmax(0,1fr)]"><aside className="hidden rounded-3xl border border-border bg-card p-5 lg:sticky lg:top-24 lg:block">{filtersPanel}</aside><div className="min-w-0"><div className="mb-4 flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 xl:flex-row xl:items-center"><label className="relative min-w-0 flex-1"><span className="sr-only">Search candidates</span><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={q} onChange={(event) => { setQ(event.target.value); setOffset(0); }} placeholder="Search by name, skill, experience..." className="pl-9" /></label><div className="flex flex-wrap gap-2"><Button variant="outline" className="lg:hidden" onClick={() => setMobileFiltersOpen(true)}><Filter className="mr-2 h-4 w-4" />Filters</Button><Select value={sort} onValueChange={(value) => { setSort(value as Sort); setOffset(0); }}><SelectTrigger className="w-[170px]" aria-label="Sort candidates"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="best_match">Best match</SelectItem><SelectItem value="newest">Newest</SelectItem><SelectItem value="rating">Highest rated</SelectItem><SelectItem value="experience">Most experienced</SelectItem><SelectItem value="bid_low">Lowest bid</SelectItem><SelectItem value="match_high">Highest match</SelectItem><SelectItem value="updated">Recently updated</SelectItem></SelectContent></Select><div className="flex rounded-xl border border-border p-1"><button type="button" aria-label="List view" onClick={() => setView("list")} className={`rounded-lg p-2 ${view === "list" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}><List className="h-4 w-4" /></button><button type="button" aria-label="Pipeline view" onClick={() => setView("pipeline")} className={`rounded-lg p-2 ${view === "pipeline" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}><Grid2X2 className="h-4 w-4" /></button></div>{compareIds.length > 1 && <Button onClick={() => setCompareOpen(true)}><Columns3 className="mr-2 h-4 w-4" />Compare {compareIds.length}</Button>}</div></div><div className="mb-4 flex flex-wrap items-center justify-between gap-2"><p className="text-sm text-muted-foreground">Showing {items.length ? offset + 1 : 0}–{offset + items.length} of {pipeline.data.total} candidates</p>{pipeline.isFetching && !pipeline.isLoading && <p className="text-xs text-primary">Refreshing candidates…</p>}</div>{items.length === 0 ? <EmptyState icon={Users} title={stage === "all" ? "No applications yet" : `No ${stageLabel(stage).toLowerCase()} candidates`} description={stage === "all" ? "Your job may be live, but no professionals have applied yet." : "No candidates currently match this stage and filter combination."} action={<div className="flex flex-wrap justify-center gap-2"><Button variant="outline" onClick={resetFilters}>Clear filters</Button><Link href={`/talent?jobId=${jobId}`}><Button>Find Talent</Button></Link></div>} /> : view === "pipeline" ? <div className="grid gap-4 xl:grid-cols-5">{(["new", "shortlisted", "interview", "offer", "hired"] as Stage[]).map((column) => <section key={column} className="min-w-0 rounded-2xl border border-border bg-background/25 p-3"><div className="mb-3 flex items-center justify-between"><h3 className="text-sm font-semibold">{stageLabel(column)}</h3><span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{items.filter((item) => item.stage === column).length}</span></div><div className="space-y-3">{items.filter((item) => item.stage === column).map((candidate) => renderCandidateCard(candidate, true))}{items.every((item) => item.stage !== column) && <p className="rounded-xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground">No candidates</p>}</div></section>)}</div> : <div className="grid gap-4 xl:grid-cols-2">{items.map((candidate) => renderCandidateCard(candidate))}</div>}<div className="mt-6 flex items-center justify-between gap-3"><Button variant="outline" disabled={offset === 0 || pipeline.isFetching} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>Previous</Button><span className="text-xs text-muted-foreground">Page {Math.floor(offset / PAGE_SIZE) + 1}</span><Button variant="outline" disabled={!pipeline.data.hasMore || pipeline.isFetching} onClick={() => setOffset(pipeline.data.nextOffset ?? offset + PAGE_SIZE)}>Next</Button></div></div></div></section></> : null}</div><Dialog open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}><DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg"><DialogHeader><DialogTitle>Filter candidates</DialogTitle><DialogDescription>Refine this job's real applicant records.</DialogDescription></DialogHeader>{filtersPanel}<Button onClick={() => setMobileFiltersOpen(false)}>View candidates</Button></DialogContent></Dialog><Dialog open={Boolean(selectedCandidate)} onOpenChange={(open) => !open && setSelectedApplicationId(null)}><DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl"><DialogHeader><DialogTitle>{selectedCandidate?.professional.name || "Candidate review"}</DialogTitle><DialogDescription>Review recorded profile, application, trust, and hiring activity without losing your pipeline state.</DialogDescription></DialogHeader>{selectedCandidate && <div className="space-y-6"><div className="flex flex-col gap-4 sm:flex-row sm:items-start"><div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-violet-500/15 text-lg font-bold text-violet-200">{selectedCandidate.professional.avatarUrl ? <img src={selectedCandidate.professional.avatarUrl} alt="" className="h-full w-full object-cover" /> : initials(selectedCandidate.professional.name)}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="text-xl font-semibold">{selectedCandidate.professional.name || "Professional"}</h3>{selectedCandidate.professional.isVerified && <BadgeCheck className="h-4 w-4 text-emerald-400" />}<StatusBadge status={stageTone(selectedCandidate.stage)} label={stageLabel(selectedCandidate.stage)} /></div><p className="mt-1 text-sm text-primary">{selectedCandidate.profile?.profileMetadata?.headline || (selectedCandidate.profile?.vocation ? getVocationLabel(selectedCandidate.profile.vocation) : "Skilled professional")}</p><p className="mt-2 text-sm text-muted-foreground">{selectedCandidate.profile?.bio || "No public summary provided."}</p></div><div className="rounded-2xl border border-violet-400/20 bg-violet-500/[.05] px-4 py-3 text-center"><p className="text-2xl font-bold text-violet-200">{selectedCandidate.match.score}%</p><p className="text-xs text-muted-foreground">Explainable match</p></div></div><div className="grid gap-3 sm:grid-cols-3"><div className="rounded-xl border border-border p-3"><p className="text-xs text-muted-foreground">Experience</p><p className="mt-1 font-medium">{selectedCandidate.profile?.yearsExperience == null ? "Not provided" : `${selectedCandidate.profile.yearsExperience} years`}</p></div><div className="rounded-xl border border-border p-3"><p className="text-xs text-muted-foreground">Reputation</p><p className="mt-1 font-medium">{Number(selectedCandidate.profile?.totalReviews ?? 0) > 0 ? `${Number(selectedCandidate.profile.averageRating).toFixed(1)} from ${selectedCandidate.profile.totalReviews} reviews` : "No reviews yet"}</p></div><div className="rounded-xl border border-border p-3"><p className="text-xs text-muted-foreground">Completed work</p><p className="mt-1 font-medium">{selectedCandidate.completedJobs}</p></div></div><section><h4 className="font-semibold">Why this candidate matches</h4><div className="mt-3 grid gap-2 sm:grid-cols-2">{selectedCandidate.match.reasons.length ? selectedCandidate.match.reasons.map((reason: any) => <div key={`${reason.label}-${reason.points}`} className="rounded-xl border border-border bg-background/30 p-3"><p className="text-sm font-medium">{reason.label} <span className="text-violet-300">+{reason.points}</span></p><p className="mt-1 text-xs text-muted-foreground">{reason.detail}</p></div>) : <p className="text-sm text-muted-foreground">There are not enough recorded profile signals to calculate a stronger match.</p>}</div></section><section><h4 className="font-semibold">Verification & credentials</h4><div className="mt-3 flex flex-wrap gap-2">{selectedCandidate.professional.isVerified && <StatusBadge status="success" label="Identity verified" />}{selectedCandidate.verifications.filter((item: any) => item.status === "verified").map((item: any) => <StatusBadge key={item.verificationType} status="success" label={`${item.verificationType.replaceAll("_", " ")} verified`} />)}{!selectedCandidate.professional.isVerified && selectedCandidate.verifiedCount === 0 && <span className="text-sm text-muted-foreground">No verified credentials are currently displayed.</span>}</div>{selectedCandidate.qualifications.length > 0 && <div className="mt-3 space-y-2">{selectedCandidate.qualifications.slice(0, 4).map((item: any) => <div key={item.id} className="rounded-xl border border-border p-3"><p className="text-sm font-medium">{item.title}</p><p className="text-xs text-muted-foreground">{item.issuingOrg}</p></div>)}</div>}</section>{selectedCandidate.portfolio.length > 0 && <section><h4 className="font-semibold">Portfolio preview</h4><div className="mt-3 grid gap-3 sm:grid-cols-3">{selectedCandidate.portfolio.map((item: any) => <div key={item.id} className="overflow-hidden rounded-xl border border-border">{item.imageUrl && <img src={item.imageUrl} alt="" loading="lazy" className="h-28 w-full object-cover" />}<div className="p-3"><p className="text-sm font-medium">{item.title}</p><p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.description || "No description provided."}</p></div></div>)}</div></section>}<section><h4 className="font-semibold">Application</h4><div className="mt-3 rounded-2xl border border-border bg-background/30 p-4"><p className="text-sm leading-6 text-muted-foreground">{selectedCandidate.application.coverLetter}</p><div className="mt-4 flex flex-wrap gap-4 text-sm"><span>Bid <strong>{formatMoney(selectedCandidate.application.bidAmount, currency)}</strong></span><span>Applied <strong>{formatDate(selectedCandidate.application.createdAt)}</strong></span><span>Availability <strong>{selectedCandidate.profile?.isAvailable ? "Available" : "Not currently available"}</strong></span></div></div></section>{selectedCandidate.experience.length > 0 && <section><h4 className="font-semibold">Work history</h4><div className="mt-3 space-y-2">{selectedCandidate.experience.slice(0, 5).map((item: any) => <div key={item.id} className="rounded-xl border border-border p-3"><p className="text-sm font-medium">{item.title} · {item.companyName}</p><p className="mt-1 text-xs text-muted-foreground">{item.location || "Location not provided"} · {formatDate(item.startDate)} – {item.isCurrent ? "Present" : formatDate(item.endDate)}</p>{item.description && <p className="mt-2 text-xs leading-5 text-muted-foreground">{item.description}</p>}</div>)}</div></section>}<section><h4 className="font-semibold">Hiring activity</h4><div className="mt-3 space-y-2">{selectedCandidate.activity.map((item: any) => <div key={`${item.type}-${item.occurredAt}`} className="flex items-start gap-3 rounded-xl border border-border p-3"><CheckCircle2 className="mt-0.5 h-4 w-4 text-violet-300" /><div><p className="text-sm font-medium">{item.label}</p><p className="text-xs text-muted-foreground">{formatDateTime(item.occurredAt)}</p></div></div>)}</div></section>{selectedCandidate.shortlist && <section><Label htmlFor="candidate-private-note">Private shortlist note</Label><textarea id="candidate-private-note" value={privateNote} onChange={(event) => setPrivateNote(event.target.value)} maxLength={2000} rows={3} className="mt-2 w-full rounded-xl border border-border bg-background p-3 text-sm outline-none focus:border-primary" placeholder="Only authorized hiring users can see this note." /><Button size="sm" variant="outline" className="mt-2" disabled={saveNote.isPending} onClick={() => saveNote.mutate({ jobId, applicationId: selectedCandidate.application.id, notes: privateNote })}>Save private note</Button></section>}<div className="flex flex-wrap gap-2 border-t border-border pt-4"><Link href={`/professionals/${selectedCandidate.professional.id}`}><Button variant="outline">View Full Profile</Button></Link>{selectedCandidate.actions.canMessage && <Button variant="outline" onClick={() => message.mutate({ jobId, applicationId: selectedCandidate.application.id })}>Message</Button>}{selectedCandidate.actions.canShortlist && <Button variant="outline" onClick={() => shortlist.mutate({ jobId, applicationId: selectedCandidate.application.id })}>Shortlist</Button>}{selectedCandidate.actions.canRemoveShortlist && <Button variant="ghost" onClick={() => removeShortlist.mutate({ jobId, applicationId: selectedCandidate.application.id })}>Remove shortlist</Button>}{selectedCandidate.actions.canInterview && <Button variant="outline" onClick={() => openAction("interview", selectedCandidate)}>Interview</Button>}{selectedCandidate.interview?.status === "proposed" && <Button variant="outline" onClick={() => updateInterview.mutate({ jobId, applicationId: selectedCandidate.application.id, interviewId: selectedCandidate.interview.id, status: "confirmed" })}>Confirm interview</Button>}{selectedCandidate.interview?.status === "confirmed" && <Button variant="outline" onClick={() => updateInterview.mutate({ jobId, applicationId: selectedCandidate.application.id, interviewId: selectedCandidate.interview.id, status: "completed" })}>Mark interview complete</Button>}{selectedCandidate.actions.canOffer && <Button variant="outline" onClick={() => openAction("offer", selectedCandidate)}>Make Offer</Button>}{selectedCandidate.actions.canHire && <Button onClick={() => openAction("hire", selectedCandidate)}>Hire Candidate</Button>}{selectedCandidate.actions.canReject && <Button variant="ghost" className="text-destructive" onClick={() => openAction("reject", selectedCandidate)}>Reject</Button>}</div></div>}</DialogContent></Dialog><Dialog open={compareOpen} onOpenChange={setCompareOpen}><DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-6xl"><DialogHeader><DialogTitle>Compare candidates</DialogTitle><DialogDescription>Compare up to four applicants using real application and profile data.</DialogDescription></DialogHeader><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead><tr className="border-b border-border"><th className="p-3 text-muted-foreground">Attribute</th>{compared.map((candidate) => <th key={candidate.application.id} className="p-3 font-semibold">{candidate.professional.name || "Professional"}</th>)}</tr></thead><tbody>{[["Match", (candidate: any) => `${candidate.match.score}%`], ["Experience", (candidate: any) => candidate.profile?.yearsExperience == null ? "Not provided" : `${candidate.profile.yearsExperience} years`], ["Rating", (candidate: any) => Number(candidate.profile?.totalReviews ?? 0) > 0 ? `${Number(candidate.profile.averageRating).toFixed(1)} (${candidate.profile.totalReviews})` : "No reviews"], ["Completed jobs", (candidate: any) => String(candidate.completedJobs)], ["Bid", (candidate: any) => formatMoney(candidate.application.bidAmount, currency)], ["Availability", (candidate: any) => candidate.profile?.isAvailable ? "Available" : "Not available"], ["Verification", (candidate: any) => candidate.professional.isVerified ? "Verified account" : `${candidate.verifiedCount} verified items`], ["Stage", (candidate: any) => stageLabel(candidate.stage)]].map(([label, render]) => <tr key={label as string} className="border-b border-border"><th className="p-3 font-medium text-muted-foreground">{label as string}</th>{compared.map((candidate) => <td key={candidate.application.id} className="p-3">{(render as (candidate: any) => string)(candidate)}</td>)}</tr>)}</tbody></table></div></DialogContent></Dialog><Dialog open={Boolean(action)} onOpenChange={(open) => !open && setAction(null)}><DialogContent className="sm:max-w-lg"><DialogHeader><DialogTitle>{action?.kind === "interview" ? `Schedule interview with ${action.candidate.professional.name || "candidate"}` : action?.kind === "offer" ? `Make an offer to ${action.candidate.professional.name || "candidate"}` : action?.kind === "hire" ? `Hire ${action.candidate.professional.name || "candidate"}` : `Reject ${action?.candidate.professional.name || "candidate"}?`}</DialogTitle><DialogDescription>{action?.kind === "hire" ? "Confirming creates the engagement used by the professional My Work workspace. Funding remains a separate protected step." : action?.kind === "reject" ? "This updates the application and cancels active interview or offer steps. The internal reason is recorded in the audit log." : action?.kind === "offer" ? "The offer uses this job and application relationship. Complete the interview before sending it." : "The candidate will receive an in-app notification after the interview is scheduled."}</DialogDescription></DialogHeader>{action?.kind === "interview" && <div className="space-y-4"><div><Label htmlFor="interview-date">Date and time</Label><Input id="interview-date" type="datetime-local" value={interviewAt} onChange={(event) => setInterviewAt(event.target.value)} className="mt-1.5" /></div><div><Label htmlFor="interview-place">Location or meeting link</Label><Input id="interview-place" value={interviewLocation} onChange={(event) => setInterviewLocation(event.target.value)} maxLength={500} className="mt-1.5" /></div><div><Label htmlFor="interview-note">Private interview note</Label><textarea id="interview-note" value={interviewNotes} onChange={(event) => setInterviewNotes(event.target.value)} maxLength={2000} rows={3} className="mt-1.5 w-full rounded-xl border border-border bg-background p-3 text-sm" /></div><div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setAction(null)}>Cancel</Button><Button disabled={!interviewAt || mutationPending} onClick={() => scheduleInterview.mutate({ jobId, applicationId: action.candidate.application.id, scheduledAt: new Date(interviewAt).toISOString(), locationOrLink: interviewLocation.trim() || undefined, notes: interviewNotes.trim() || undefined })}>Schedule interview</Button></div></div>}{action?.kind === "offer" && <div className="space-y-4"><div><Label htmlFor="offer-compensation">Compensation ({currency})</Label><Input id="offer-compensation" type="number" min="1" value={offerCompensation} onChange={(event) => setOfferCompensation(event.target.value)} className="mt-1.5" /></div><div><Label htmlFor="offer-start">Start date</Label><Input id="offer-start" type="date" value={offerStartDate} onChange={(event) => setOfferStartDate(event.target.value)} className="mt-1.5" /></div><div><Label htmlFor="offer-duration">Duration (optional)</Label><Input id="offer-duration" value={offerDuration} onChange={(event) => setOfferDuration(event.target.value)} maxLength={128} className="mt-1.5" /></div><div><Label htmlFor="offer-description">Role description</Label><textarea id="offer-description" value={offerDescription} onChange={(event) => setOfferDescription(event.target.value)} maxLength={3000} rows={4} className="mt-1.5 w-full rounded-xl border border-border bg-background p-3 text-sm" /></div><div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setAction(null)}>Cancel</Button><Button disabled={!offerCompensation || !offerStartDate || offerDescription.trim().length < 10 || mutationPending} onClick={() => createOffer.mutate({ jobId, applicationId: action.candidate.application.id, compensation: Number(offerCompensation), roleDescription: offerDescription, startDate: new Date(`${offerStartDate}T00:00:00`).toISOString(), duration: offerDuration.trim() || undefined })}>Create offer</Button></div></div>}{action?.kind === "reject" && <div className="space-y-4"><div><Label htmlFor="rejection-reason">Internal reason (optional)</Label><Select value={rejectionReason || "none"} onValueChange={(value) => setRejectionReason(value === "none" ? "" : value)}><SelectTrigger id="rejection-reason" className="mt-1.5"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">No reason recorded</SelectItem><SelectItem value="Not the right skill level">Not the right skill level</SelectItem><SelectItem value="Rate outside budget">Rate outside budget</SelectItem><SelectItem value="Experience mismatch">Experience mismatch</SelectItem><SelectItem value="Position filled">Position filled</SelectItem><SelectItem value="Other">Other</SelectItem></SelectContent></Select></div><div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setAction(null)}>Cancel</Button><Button variant="destructive" disabled={mutationPending} onClick={() => reject.mutate({ jobId, applicationId: action.candidate.application.id, reason: rejectionReason || undefined })}>Reject Candidate</Button></div></div>}{action?.kind === "hire" && <div className="space-y-4"><div className="rounded-2xl border border-border bg-muted/30 p-4 text-sm"><p><span className="text-muted-foreground">Job:</span> <strong>{job?.title} · Job #{jobId}</strong></p><p className="mt-2"><span className="text-muted-foreground">Candidate:</span> <strong>{action.candidate.professional.name || "Professional"}</strong></p><p className="mt-2"><span className="text-muted-foreground">Offer:</span> <strong>{formatMoney(action.candidate.offer?.compensation, currency)}</strong></p><p className="mt-2"><span className="text-muted-foreground">Start:</span> <strong>{formatDate(action.candidate.offer?.startDate)}</strong></p>{action.candidate.offer?.duration && <p className="mt-2"><span className="text-muted-foreground">Duration:</span> <strong>{action.candidate.offer.duration}</strong></p>}</div><div className="rounded-xl border border-amber-400/20 bg-amber-500/[.05] p-3 text-sm text-amber-100">Hiring creates the engagement shown in the professional's My Work workspace. Before work begins, fund the agreed work through Escrow & Funding.</div><div className="flex justify-end gap-2"><Button variant="outline" onClick={() => setAction(null)}>Cancel</Button><Button disabled={mutationPending} onClick={() => hire.mutate({ jobId, applicationId: action.candidate.application.id, confirmation: "CONFIRM_HIRE" })}>Confirm Hire</Button></div></div>}</DialogContent></Dialog></ApplicationShell>;
 }

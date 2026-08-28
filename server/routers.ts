@@ -156,6 +156,20 @@ import {
 import { getFrontendUrl } from "./_core/env";
 import { normalizeVocation } from "@shared/vocations";
 import { getEmployerCommandCenter, getEmployerJobsPortfolio } from "./analytics";
+import {
+  acceptOfferAndEnsureEngagement,
+  CANDIDATE_PIPELINE_STAGES,
+  createPipelineOffer,
+  getCandidatePipeline,
+  hirePipelineCandidate,
+  rejectPipelineCandidate,
+  requireCandidatePipelineJob,
+  removePipelineShortlist,
+  schedulePipelineInterview,
+  shortlistPipelineCandidate,
+  updatePipelineInterview,
+  updatePipelineShortlistNote,
+} from "./candidatePipeline";
 import { maskPhoneNumber, normalizePhoneNumber, sendPhoneOtpSms, SmsDeliveryError } from "./sms";
 import { getUserNotificationPreference, updateUserNotificationPreference, createInAppNotification, getUnreadNotifications, listNotifications, markNotificationRead, markAllNotificationsRead, generateIcsContent, executeMatchingV2 } from "./phase4";
 import { initializeMilestonePayment, processAuthorizedVerifiedPayment, processVerifiedPayment, verifyPaystackWebhookSignature } from "./finance";
@@ -821,14 +835,158 @@ export const appRouter = router({
             throw new TRPCError({ code: "FORBIDDEN" });
           }
           if (input.status === "accepted") {
-            await updateJob(app.jobId, { status: "in_progress", assignedProfessionalId: app.professionalId });
+            throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Use the Candidate Pipeline offer and hire workflow to accept a candidate." });
           }
         }
         await updateApplicationStatus(input.id, input.status);
         const recipientId = input.status === "withdrawn" ? (await getJobById(app.jobId))?.clientId : app.professionalId;
-        const statusLabel = input.status === "accepted" ? "accepted" : input.status === "rejected" ? "was not selected" : "withdrawn";
+        const statusLabel = input.status === "rejected" ? "was not selected" : "withdrawn";
         if (recipientId) void createInAppNotification({ userId: recipientId, title: `Application ${input.status === "rejected" ? "update" : input.status}`, content: `Your application has ${statusLabel}.`, category: "application", referenceType: "application", referenceId: String(app.id) }).catch(() => undefined);
         return { success: true };
+      }),
+  }),
+
+  candidatePipeline: router({
+    get: protectedProcedure
+      .input(z.object({
+        jobId: z.number().int().positive(),
+        q: z.string().trim().max(160).optional(),
+        stage: z.enum(CANDIDATE_PIPELINE_STAGES).optional().default("all"),
+        skill: z.string().trim().max(120).optional(),
+        location: z.string().trim().max(160).optional(),
+        minExperience: z.number().int().nonnegative().max(80).optional(),
+        availableOnly: z.boolean().optional().default(false),
+        verifiedOnly: z.boolean().optional().default(false),
+        minRating: z.number().min(1).max(5).optional(),
+        minBid: z.number().nonnegative().optional(),
+        maxBid: z.number().nonnegative().optional(),
+        fromDate: z.string().datetime().optional(),
+        toDate: z.string().datetime().optional(),
+        sort: z.enum(["best_match", "newest", "rating", "experience", "bid_low", "match_high", "updated"]).optional().default("best_match"),
+        limit: z.number().int().min(1).max(50).optional().default(25),
+        offset: z.number().int().nonnegative().optional().default(0),
+      }))
+      .query(async ({ ctx, input }) => getCandidatePipeline(
+        { id: ctx.user.id, role: ctx.user.role, userType: ctx.user.userType },
+        input.jobId,
+        { ...input, fromDate: input.fromDate ? new Date(input.fromDate) : undefined, toDate: input.toDate ? new Date(input.toDate) : undefined },
+      )),
+
+    shortlist: protectedProcedure
+      .input(z.object({ jobId: z.number().int().positive(), applicationId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await shortlistPipelineCandidate({ id: ctx.user.id, role: ctx.user.role, userType: ctx.user.userType }, input.jobId, input.applicationId);
+        if (result.changed) {
+          await Promise.all([
+            createAuditLog({ actorUserId: ctx.user.id, actorRole: ctx.user.role, action: "candidate.shortlisted", resourceType: "application", resourceId: String(input.applicationId), newState: "shortlisted", metadata: JSON.stringify({ jobId: input.jobId, professionalId: result.application.professionalId }) }),
+            createInAppNotification({ userId: result.application.professionalId, title: "You were shortlisted", content: "An employer shortlisted your application for further review.", category: "application", referenceType: "application", referenceId: String(input.applicationId) }),
+          ]);
+        }
+        return result;
+      }),
+
+    removeShortlist: protectedProcedure
+      .input(z.object({ jobId: z.number().int().positive(), applicationId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await removePipelineShortlist({ id: ctx.user.id, role: ctx.user.role, userType: ctx.user.userType }, input.jobId, input.applicationId);
+        await createAuditLog({ actorUserId: ctx.user.id, actorRole: ctx.user.role, action: "candidate.shortlist_removed", resourceType: "application", resourceId: String(input.applicationId), previousState: "shortlisted", newState: "new", metadata: JSON.stringify({ jobId: input.jobId, professionalId: result.application.professionalId }) });
+        return result;
+      }),
+
+    updatePrivateNote: protectedProcedure
+      .input(z.object({ jobId: z.number().int().positive(), applicationId: z.number().int().positive(), notes: z.string().trim().max(2000) }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await updatePipelineShortlistNote({ id: ctx.user.id, role: ctx.user.role, userType: ctx.user.userType }, input.jobId, input.applicationId, input.notes);
+        await createAuditLog({ actorUserId: ctx.user.id, actorRole: ctx.user.role, action: "candidate.private_note_updated", resourceType: "application", resourceId: String(input.applicationId), metadata: JSON.stringify({ jobId: input.jobId, professionalId: result.application.professionalId }) });
+        return result;
+      }),
+
+    message: protectedProcedure
+      .input(z.object({ jobId: z.number().int().positive(), applicationId: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        const access = await requireCandidatePipelineJob({ id: ctx.user.id, role: ctx.user.role, userType: ctx.user.userType }, input.jobId);
+        if (!access.permissions.canMessage) throw new TRPCError({ code: "FORBIDDEN", message: "Only the job owner can open this candidate conversation." });
+        const application = await getApplicationById(input.applicationId);
+        if (!application || application.jobId !== input.jobId) throw new TRPCError({ code: "NOT_FOUND", message: "Candidate application not found for this job." });
+        return getOrCreateConversation(input.jobId, access.job.clientId, application.professionalId);
+      }),
+
+    scheduleInterview: protectedProcedure
+      .input(z.object({
+        jobId: z.number().int().positive(),
+        applicationId: z.number().int().positive(),
+        scheduledAt: z.string().datetime().transform((value) => new Date(value)),
+        locationOrLink: z.string().trim().max(500).optional(),
+        notes: z.string().trim().max(2000).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await schedulePipelineInterview({ id: ctx.user.id, role: ctx.user.role, userType: ctx.user.userType }, input.jobId, input.applicationId, input);
+        if (result.created) {
+          await Promise.all([
+            createAuditLog({ actorUserId: ctx.user.id, actorRole: ctx.user.role, action: "candidate.interview_scheduled", resourceType: "application", resourceId: String(input.applicationId), newState: "interview", metadata: JSON.stringify({ jobId: input.jobId, interviewId: result.interview.id, professionalId: result.application.professionalId }) }),
+            createInAppNotification({ userId: result.application.professionalId, title: "Interview scheduled", content: `An interview has been scheduled for ${result.interview.scheduledAt.toLocaleString()}.`, category: "application", referenceType: "application", referenceId: String(input.applicationId) }),
+          ]);
+        }
+        return result;
+      }),
+
+    updateInterview: protectedProcedure
+      .input(z.object({ jobId: z.number().int().positive(), applicationId: z.number().int().positive(), interviewId: z.number().int().positive(), status: z.enum(["proposed", "confirmed", "cancelled", "completed"]) }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await updatePipelineInterview({ id: ctx.user.id, role: ctx.user.role, userType: ctx.user.userType }, input.jobId, input.applicationId, input.interviewId, input.status);
+        if (result.changed) {
+          await Promise.all([
+            createAuditLog({ actorUserId: ctx.user.id, actorRole: ctx.user.role, action: `candidate.interview_${input.status}`, resourceType: "application", resourceId: String(input.applicationId), newState: input.status, metadata: JSON.stringify({ jobId: input.jobId, interviewId: input.interviewId, professionalId: result.application.professionalId }) }),
+            createInAppNotification({ userId: result.application.professionalId, title: "Interview updated", content: `Your interview status is now ${input.status}.`, category: "application", referenceType: "application", referenceId: String(input.applicationId) }),
+          ]);
+        }
+        return result;
+      }),
+
+    createOffer: protectedProcedure
+      .input(z.object({
+        jobId: z.number().int().positive(),
+        applicationId: z.number().int().positive(),
+        compensation: z.number().positive(),
+        roleDescription: z.string().trim().min(10).max(3000),
+        startDate: z.string().datetime().transform((value) => new Date(value)),
+        duration: z.string().trim().max(128).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await createPipelineOffer({ id: ctx.user.id, role: ctx.user.role, userType: ctx.user.userType }, input.jobId, input.applicationId, { ...input, compensation: String(input.compensation) });
+        if (result.created) {
+          await Promise.all([
+            createAuditLog({ actorUserId: ctx.user.id, actorRole: ctx.user.role, action: "candidate.offer_created", resourceType: "application", resourceId: String(input.applicationId), newState: "offer", metadata: JSON.stringify({ jobId: input.jobId, offerId: result.offer.id, professionalId: result.application.professionalId }) }),
+            createInAppNotification({ userId: result.application.professionalId, title: "You received an offer", content: "An employer created an offer for your application. Review the opportunity in your dashboard.", category: "application", referenceType: "application", referenceId: String(input.applicationId) }),
+          ]);
+        }
+        return result;
+      }),
+
+    reject: protectedProcedure
+      .input(z.object({ jobId: z.number().int().positive(), applicationId: z.number().int().positive(), reason: z.string().trim().max(500).optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await rejectPipelineCandidate({ id: ctx.user.id, role: ctx.user.role, userType: ctx.user.userType }, input.jobId, input.applicationId, input.reason);
+        if (result.changed) {
+          await Promise.all([
+            createAuditLog({ actorUserId: ctx.user.id, actorRole: ctx.user.role, action: "candidate.rejected", resourceType: "application", resourceId: String(input.applicationId), previousState: "pending", newState: "rejected", metadata: JSON.stringify({ jobId: input.jobId, professionalId: result.application.professionalId, internalReason: result.reason }) }),
+            createInAppNotification({ userId: result.application.professionalId, title: "Application update", content: "Your application was not selected for this opportunity.", category: "application", referenceType: "application", referenceId: String(input.applicationId) }),
+          ]);
+        }
+        return result;
+      }),
+
+    hire: protectedProcedure
+      .input(z.object({ jobId: z.number().int().positive(), applicationId: z.number().int().positive(), confirmation: z.literal("CONFIRM_HIRE") }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await hirePipelineCandidate({ id: ctx.user.id, role: ctx.user.role, userType: ctx.user.userType }, input.jobId, input.applicationId);
+        if (result.changed) {
+          await Promise.all([
+            createAuditLog({ actorUserId: ctx.user.id, actorRole: ctx.user.role, action: "candidate.hired", resourceType: "application", resourceId: String(input.applicationId), previousState: "pending", newState: "accepted", metadata: JSON.stringify({ jobId: input.jobId, professionalId: result.application.professionalId, engagementId: result.engagement.id, offerId: result.offer.id }) }),
+            createInAppNotification({ userId: result.application.professionalId, title: "You were hired", content: "Your engagement is ready in My Work. Funding remains protected through Escrow & Funding.", category: "application", referenceType: "engagement", referenceId: String(result.engagement.id) }),
+          ]);
+        }
+        return result;
       }),
   }),
 
@@ -1977,18 +2135,9 @@ export const appRouter = router({
     scheduleInterview: protectedProcedure
       .input(z.object({ jobId: z.number().int().positive(), applicationId: z.number().int().positive().optional(), professionalId: z.number().int().positive(), scheduledAt: z.string().transform(v => new Date(v)), locationOrLink: z.string().optional(), notes: z.string().optional() }))
       .mutation(async ({ ctx, input }) => {
-        const job = await getJobById(input.jobId);
-        if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
-        let canManage = job.clientId === ctx.user.id || ctx.user.role === "admin" || ctx.user.role === "SUPER_ADMIN";
-        if (!canManage && job.organizationId) {
-          const member = await requireOrganizationAccess(ctx.user.id, job.organizationId);
-          canManage = ["OWNER", "ADMIN", "HIRING_MANAGER"].includes(member.role);
-        }
-        if (!canManage) throw new TRPCError({ code: "FORBIDDEN", message: "Unauthorized to schedule interviews for this job." });
-        const interview = await createInterview({ ...input, employerId: job.clientId });
-        const application = input.applicationId ? { id: input.applicationId } : await getApplicationByJobAndProfessionalId(input.jobId, input.professionalId);
-        if (application) void createInAppNotification({ userId: input.professionalId, title: "Interview scheduled", content: `An interview was scheduled for ${job.title}.`, category: "application", referenceType: "application", referenceId: String(application.id) }).catch(() => undefined);
-        return interview;
+        const application = input.applicationId ? await getApplicationById(input.applicationId) : await getApplicationByJobAndProfessionalId(input.jobId, input.professionalId);
+        if (!application || application.jobId !== input.jobId || application.professionalId !== input.professionalId) throw new TRPCError({ code: "NOT_FOUND", message: "Candidate application not found for this job." });
+        return schedulePipelineInterview({ id: ctx.user.id, role: ctx.user.role, userType: ctx.user.userType }, input.jobId, application.id, input);
       }),
     updateInterview: protectedProcedure
       .input(z.object({ id: z.number().int().positive(), status: z.enum(["proposed", "confirmed", "cancelled", "completed"]) }))
@@ -2009,16 +2158,11 @@ export const appRouter = router({
     createOffer: protectedProcedure
       .input(z.object({ jobId: z.number().int().positive(), applicationId: z.number().int().positive().optional(), professionalId: z.number().int().positive(), compensation: z.string(), roleDescription: z.string(), startDate: z.string().transform(v => new Date(v)), duration: z.string().optional() }))
       .mutation(async ({ ctx, input }) => {
-        const job = await getJobById(input.jobId);
-        if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
-        let canManage = job.clientId === ctx.user.id || ctx.user.role === "admin" || ctx.user.role === "SUPER_ADMIN";
-        if (!canManage && job.organizationId) {
-          const member = await requireOrganizationAccess(ctx.user.id, job.organizationId);
-          canManage = ["OWNER", "ADMIN", "HIRING_MANAGER"].includes(member.role);
-        }
-        if (!canManage) throw new TRPCError({ code: "FORBIDDEN", message: "Unauthorized to create offers for this job." });
-        const offer = await createOffer({ ...input, employerId: job.clientId });
-        return offer;
+        const application = input.applicationId ? await getApplicationById(input.applicationId) : await getApplicationByJobAndProfessionalId(input.jobId, input.professionalId);
+        if (!application || application.jobId !== input.jobId || application.professionalId !== input.professionalId) throw new TRPCError({ code: "NOT_FOUND", message: "Candidate application not found for this job." });
+        const compensation = Number(input.compensation);
+        if (!Number.isFinite(compensation) || compensation <= 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Offer compensation must be a positive amount." });
+        return createPipelineOffer({ id: ctx.user.id, role: ctx.user.role, userType: ctx.user.userType }, input.jobId, application.id, { ...input, compensation: String(compensation) });
       }),
     updateOffer: protectedProcedure
       .input(z.object({ id: z.number().int().positive(), status: z.enum(["pending", "accepted", "declined"]) }))
@@ -2031,20 +2175,12 @@ export const appRouter = router({
         const isProfessional = offer.professionalId === ctx.user.id;
         const isEmployer = offer.employerId === ctx.user.id || ctx.user.role === "admin" || ctx.user.role === "SUPER_ADMIN";
         if (!isProfessional && !isEmployer) throw new TRPCError({ code: "FORBIDDEN" });
-        const updated = await updateOfferStatus(input.id, input.status);
         if (input.status === "accepted") {
-          // Automatically create engagement and update job
-          await createEngagement({
-            jobId: offer.jobId,
-            offerId: offer.id,
-            employerId: offer.employerId,
-            professionalId: offer.professionalId,
-            compensation: offer.compensation,
-            startDate: offer.startDate,
-          });
-          await updateJob(offer.jobId, { status: "in_progress", assignedProfessionalId: offer.professionalId });
+          if (!isProfessional) throw new TRPCError({ code: "FORBIDDEN", message: "Only the selected professional can accept this offer." });
+          return acceptOfferAndEnsureEngagement(ctx.user.id, offer.id);
         }
-        return updated;
+        if (!isProfessional && input.status === "declined") throw new TRPCError({ code: "FORBIDDEN", message: "Only the selected professional can decline this offer." });
+        return updateOfferStatus(input.id, input.status);
       }),
     listOffers: protectedProcedure
       .input(z.object({ role: z.enum(["employer", "professional"]) }))
@@ -2052,7 +2188,9 @@ export const appRouter = router({
 
     createEngagement: protectedProcedure
       .input(z.object({ jobId: z.number().int().positive(), offerId: z.number().int().positive().optional(), professionalId: z.number().int().positive(), compensation: z.string(), startDate: z.string().transform(v => new Date(v)), endDate: z.string().optional().transform(v => v ? new Date(v) : undefined) }))
-      .mutation(async ({ ctx, input }) => createEngagement({ ...input, employerId: ctx.user.id })),
+      .mutation(async () => {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Create engagements through the Candidate Pipeline hire flow or professional offer acceptance." });
+      }),
     updateEngagement: protectedProcedure
       .input(z.object({ id: z.number().int().positive(), status: z.enum(["active", "completed", "cancelled", "disputed"]) }))
       .mutation(async ({ input }) => updateEngagementStatus(input.id, input.status)),
