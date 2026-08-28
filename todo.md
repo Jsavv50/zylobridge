@@ -1183,3 +1183,17 @@
 - [x] Wait for a successful Railway redeployment and verify the production commerce tRPC procedures.
 - [x] Verify the live Shop, product, cart, account, procurement, seller, and admin routes without checkout, order placement, payment, or customer-data mutation.
 - [x] Record the production configuration outcome and save the final verified checkpoint.
+
+## Attached specification: pasted_content_43.txt
+- [x] Read and normalize the complete 1,167-line adaptive onboarding specification.
+- [x] Audit signup and authentication, Supabase session readiness, user/profile creation, roles, organizations, `/onboarding`, Complete Profile actions, post-auth redirects, route guards, dashboard data, error boundaries, migrations, and tRPC procedures.
+- [x] Define a backward-compatible onboarding state and completion model that reuses existing user, profile, organization, vocation, location, preference, and verification fields without duplicate concepts.
+- [x] Add only necessary additive schema and migration support for durable onboarding status, current step, primary/additional roles, progress, completion time, and resumable role-specific answers.
+- [x] Implement protected onboarding read/save/complete procedures with ownership enforcement, server validation, idempotency, transactional role/profile/organization updates, and safe legacy-user defaults.
+- [x] Replace `/onboarding` with a premium, adaptive, accessible four-stage concierge flow for Contractor/Client, Skilled Professional, and Enterprise roles, including progress, live workspace preview, trust choices, review, resume, and step editing.
+- [x] Make successful incomplete-account signup and every Complete Profile action use `/onboarding`, while completed users retain correct role dashboards without redirect races, loops, flashes, blank pages, authorization failures, or hook-order errors.
+- [x] Integrate existing vocation taxonomy, profile metadata, verification, organization setup, role-specific preferences, dashboard destinations, notifications where applicable, and safe multi-role/additional-role handling.
+- [ ] Add regression coverage and validate TypeScript, full Vitest, client/server builds, migration compatibility, auth transitions, resumability, ownership, accessibility, mobile/desktop UX, runtime logs, and production routes.
+- [ ] Save and auto-publish the final production-verified adaptive onboarding checkpoint.
+- [x] Fix the unauthenticated `/onboarding` null render by redirecting to SignIn through the existing safe `next` contract while preserving profile-mode intent.
+- [x] Replace the unsupported SignIn marketplace-scale claim exposed during onboarding handoff QA with truthful, non-quantified copy.

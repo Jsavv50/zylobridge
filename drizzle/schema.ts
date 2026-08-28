@@ -20,6 +20,7 @@ import { sql } from "drizzle-orm";
 // ─── Enums ────────────────────────────────────────────────────────────────────
 export const roleEnum = pgEnum("role", ["user", "admin", "SUPER_ADMIN"]);
 export const userTypeEnum = pgEnum("user_type", ["client", "professional", "enterprise", "unset"]);
+export const onboardingStatusEnum = pgEnum("onboarding_status", ["not_started", "in_progress", "completed"]);
 export const vocationEnum = pgEnum("vocation", [
   "electrician",
   "carpenter",
@@ -144,6 +145,12 @@ export const users = pgTable("users", {
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: roleEnum("role").default("user").notNull(),
   userType: userTypeEnum("userType").default("unset").notNull(),
+  onboardingStatus: onboardingStatusEnum("onboardingStatus").default("not_started").notNull(),
+  onboardingStep: integer("onboardingStep").default(1).notNull(),
+  onboardingRevision: integer("onboardingRevision").default(0).notNull(),
+  additionalUserTypes: jsonb("additionalUserTypes").$type<Array<"client" | "professional" | "enterprise">>().default(sql`'[]'::jsonb`).notNull(),
+  onboardingData: jsonb("onboardingData").$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+  onboardingCompletedAt: timestamp("onboardingCompletedAt"),
   phone: varchar("phone", { length: 20 }),
   avatarUrl: text("avatarUrl"),
   isVerified: boolean("isVerified").default(false).notNull(),

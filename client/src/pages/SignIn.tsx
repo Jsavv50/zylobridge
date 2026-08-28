@@ -21,13 +21,15 @@ import {
 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { ZylobridgeLogo } from "@/components/ZylobridgeLogo";
+import { resolvePostAuthenticationDestination } from "@shared/onboarding";
 
 type AuthMethod = "choose" | "email_input" | "email_otp" | "phone_input" | "phone_otp" | "name_capture";
 type NameCaptureFor = "email" | "phone";
 
 export default function SignIn() {
   const [, navigate] = useLocation();
-  const { isAuthenticated, refresh } = useAuth();
+  const { isAuthenticated, user, refresh } = useAuth();
+  const requestedDestination = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("next") : null;
 
   const [method, setMethod] = useState<AuthMethod>("choose");
   const [nameCaptureFor, setNameCaptureFor] = useState<NameCaptureFor>("email");
@@ -52,8 +54,8 @@ export default function SignIn() {
 
   // Redirect if already authenticated
   useEffect(() => {
-    if (isAuthenticated) navigate("/");
-  }, [isAuthenticated, navigate]);
+    if (isAuthenticated && user) navigate(resolvePostAuthenticationDestination(user, requestedDestination));
+  }, [isAuthenticated, navigate, requestedDestination, user]);
 
   /**
    * Complete the login handoff only after the backend accepts the new cookie.
@@ -67,7 +69,7 @@ export default function SignIn() {
       return false;
     }
     toast.success(message);
-    navigate("/");
+    navigate(resolvePostAuthenticationDestination(authenticatedUser, requestedDestination));
     return true;
   };
 
@@ -86,7 +88,7 @@ export default function SignIn() {
     try {
       sessionStorage.setItem("zylo_oauth_init_at", Date.now().toString());
     } catch {}
-    const returnPath = window.location.pathname === "/sign-in" ? "/" : window.location.pathname;
+    const returnPath = requestedDestination || (window.location.pathname === "/sign-in" ? "/" : window.location.pathname);
     const targetUrl = `${API_URL}/api/auth/google?returnPath=${encodeURIComponent(returnPath)}`;
     window.location.href = targetUrl;
   };
@@ -214,7 +216,7 @@ export default function SignIn() {
                   Sign In or Get Started
                 </h1>
                 <p className="text-gray-400 text-sm">
-                  Join thousands of contractors and skilled professionals already on the platform.
+            Join contractors, clients, enterprises, and skilled professionals building trusted work relationships.
                 </p>
               </div>
 

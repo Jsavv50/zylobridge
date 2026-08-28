@@ -16,8 +16,8 @@ describe("Enterprise frontend role integration", () => {
 
     expect(schema).toContain('["client", "professional", "enterprise", "unset"]');
     expect(app).toContain('path="/dashboard/enterprise" component={EnterpriseDashboard}');
-    expect(onboarding).toContain('setSelected("enterprise")');
-    expect(onboarding).toContain('navigate("/dashboard/enterprise")');
+    expect(onboarding).toContain('value: "enterprise"');
+    expect(onboarding).toContain("resolveRoleDashboard(user)");
     expect(navbar).toContain('const isEnterprise = user?.userType === "enterprise"');
     expect(navbar).toContain('href="/dashboard/enterprise"');
     expect(dashboard).toContain('const isEnterprise = user?.userType === "enterprise"');

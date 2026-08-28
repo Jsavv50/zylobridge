@@ -1,12 +1,13 @@
 import { Toaster } from "@/components/ui/sonner";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Redirect, Route, Switch } from "wouter";
+import { Redirect, Route, Switch, useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import EmployerDashboardBoundary from "./components/EmployerDashboardBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import { AuthProvider } from "@/_core/hooks/useAuth";
+import { AuthProvider, useAuth } from "@/_core/hooks/useAuth";
+import { isAdministrativeUser, isOnboardingComplete, requiresCompletedOnboarding } from "@shared/onboarding";
 import { CartProvider } from "./contexts/CartContext";
 import Home from "./pages/Home";
 const JobsMarketplace = lazy(() => import("./pages/JobsMarketplace"));
@@ -59,6 +60,27 @@ function RouteFallback() {
 
 function EmployerDashboardRoute() {
   return <EmployerDashboardBoundary><ClientDashboard /></EmployerDashboardBoundary>;
+}
+
+function OnboardingGate({ children }: { children: React.ReactNode }) {
+  const [location, navigate] = useLocation();
+  const { user, loading, isAuthenticated } = useAuth();
+  const shouldRedirect = Boolean(
+    !loading
+    && isAuthenticated
+    && user
+    && !isAdministrativeUser(user)
+    && !isOnboardingComplete(user)
+    && requiresCompletedOnboarding(location),
+  );
+
+  useEffect(() => {
+    if (!shouldRedirect) return;
+    navigate(`/onboarding?next=${encodeURIComponent(location)}`, { replace: true });
+  }, [location, navigate, shouldRedirect]);
+
+  if (shouldRedirect) return <RouteFallback />;
+  return <>{children}</>;
 }
 
 function Router() {
@@ -147,7 +169,7 @@ function App() {
           <AuthProvider>
             <CartProvider>
               <Toaster richColors position="top-right" />
-              <Suspense fallback={<RouteFallback />}><Router /></Suspense>
+              <OnboardingGate><Suspense fallback={<RouteFallback />}><Router /></Suspense></OnboardingGate>
             </CartProvider>
           </AuthProvider>
         </TooltipProvider>

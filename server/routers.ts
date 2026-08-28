@@ -6,6 +6,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { commerceRouter } from "./routers/commerce";
 import { shopExtensionsRouter } from "./routers/shopExtensions";
+import { onboardingRouter } from "./routers/onboarding";
 import { enterpriseProcedure, adminProcedure, superAdminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { storagePut, storageGetSignedUrl } from "./storage";
 import { getDb } from "./db";
@@ -315,6 +316,7 @@ export const appRouter = router({
   system: systemRouter,
   commerce: commerceRouter,
   shopExtensions: shopExtensionsRouter,
+  onboarding: onboardingRouter,
 
   // ── Auth ──────────────────────────────────────────────────────────────────
   auth: router({

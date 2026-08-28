@@ -21,8 +21,9 @@ describe("production auth session handoff architecture", () => {
   it("requires server confirmation before OTP login navigates to the app", () => {
     const signIn = readProjectFile("client/src/pages/SignIn.tsx");
 
-    expect(signIn).toContain("const { isAuthenticated, refresh } = useAuth();");
+    expect(signIn).toContain("const { isAuthenticated, user, refresh } = useAuth();");
     expect(signIn).toContain("const authenticatedUser = await refresh();");
+    expect(signIn).toContain("resolvePostAuthenticationDestination");
     expect(signIn).not.toContain('window.location.href = "/"');
   });
 

@@ -10,6 +10,7 @@ import { ENV, getBaseUrl, getFrontendUrl } from "./env";
 import { sdk } from "./sdk";
 import { oauthTransactions } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
+import { resolvePostAuthenticationDestination } from "../../shared/onboarding";
 
 const STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const OAUTH_STORAGE_TIMEOUT_MS = 1500;
@@ -282,13 +283,15 @@ export function registerGoogleAuthRoutes(app: Express) {
       if (txRecord) {
         if (txRecord.status === "completed") {
           console.warn(`[GoogleAuth] [${oauthRequestId}] Duplicate callback detected — token exchange skipped (already completed)`);
-          res.redirect(302, `${frontend}${decoded.returnPath || "/"}`);
+          const completedUser = txRecord.userId ? await db.getUserById(Number(txRecord.userId)) : null;
+          res.redirect(302, `${frontend}${completedUser ? resolvePostAuthenticationDestination(completedUser, decoded.returnPath) : "/onboarding"}`);
           return;
         }
 
         if (txRecord.authCodeHash && txRecord.authCodeHash === authCodeHash && txRecord.status === "claimed") {
           console.warn(`[GoogleAuth] [${oauthRequestId}] Duplicate callback detected — token exchange skipped (currently processing/claimed)`);
-          res.redirect(302, `${frontend}${decoded.returnPath || "/"}`);
+          const claimedUser = txRecord.userId ? await db.getUserById(Number(txRecord.userId)) : null;
+          res.redirect(302, `${frontend}${claimedUser ? resolvePostAuthenticationDestination(claimedUser, decoded.returnPath) : "/onboarding"}`);
           return;
         }
 
@@ -357,8 +360,7 @@ export function registerGoogleAuthRoutes(app: Express) {
       res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
 
       // 9. Redirect issued
-      const returnPath = decoded.returnPath || "/";
-      const redirectTo = `${frontend}${returnPath.startsWith("/") ? returnPath : `/${returnPath}`}`;
+      const redirectTo = `${frontend}${resolvePostAuthenticationDestination(dbUser ?? { userType: "unset" }, decoded.returnPath)}`;
       console.log(`[GoogleAuth] [${oauthRequestId}] 9. Redirect issued to ${redirectTo}. Total callback duration: ${Date.now() - startTime}ms`);
 
       res.redirect(302, redirectTo);

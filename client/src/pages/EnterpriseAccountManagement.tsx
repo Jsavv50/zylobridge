@@ -20,7 +20,7 @@ export default function EnterpriseAccountManagement() {
 
   if (!isAuthenticated) return null;
   if (!isEnterprise) {
-    return <ApplicationShell><EmptyState icon={LockKeyhole} title="Enterprise access required" description="This account-management workspace is available only to authorized Enterprise organization users." action={<Link href="/onboarding"><Button>Review account setup</Button></Link>} /></ApplicationShell>;
+    return <ApplicationShell><EmptyState icon={LockKeyhole} title="Enterprise access required" description="This account-management workspace is available only to authorized Enterprise organization users." action={<Link href="/onboarding?mode=profile"><Button>Review account setup</Button></Link>} /></ApplicationShell>;
   }
 
   return (

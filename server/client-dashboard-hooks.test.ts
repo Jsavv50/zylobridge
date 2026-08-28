@@ -41,7 +41,7 @@ describe("Contractor and Client dashboard hook-order regression", () => {
     expect(app).not.toContain('path="/employer"><Redirect');
     expect(navbar).not.toContain('href="/dashboard/contractor"');
     expect(home).toContain(': "/employer";');
-    expect(onboarding).toContain('navigate("/employer")');
+    expect(onboarding).toContain("resolveRoleDashboard(user)");
   });
 
   it("retains role isolation and safe loading, unauthorized, error, and empty states", () => {

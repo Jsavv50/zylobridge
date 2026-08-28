@@ -115,7 +115,7 @@ export default function EnterpriseDashboard() {
       <div className="min-h-screen bg-[#0d1117] flex flex-col items-center justify-center gap-4 px-4 text-center text-white">
         <LockKeyhole className="h-8 w-8 text-amber-400" />
         <div><h1 className="text-xl font-bold">Enterprise workspace access required</h1><p className="mt-2 text-sm text-gray-400">This dashboard is available only to Enterprise accounts.</p></div>
-        <Link href="/onboarding"><Button variant="outline" className="border-white/10 bg-transparent text-gray-300">Review account setup</Button></Link>
+        <Link href="/onboarding?mode=profile"><Button variant="outline" className="border-white/10 bg-transparent text-gray-300">Review account setup</Button></Link>
       </div>
     );
   }
