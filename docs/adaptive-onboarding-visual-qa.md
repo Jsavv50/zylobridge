@@ -41,4 +41,16 @@ Before publishing the onboarding changes, `https://zylobridge.com/onboarding?mod
 
 A bounded, read-only metadata query against the active **Zylobridge-db** Supabase project confirmed the applied `users` columns: `onboardingStatus` (`onboarding_status`, required), `onboardingStep` (integer, required), `onboardingRevision` (integer, required), `onboardingData` (JSONB, required), and `onboardingCompletedAt` (nullable timestamp). No account, profile, organization, onboarding, payment, order, or other production record was inserted or updated during verification.
 
+## Post-publish production verification
+
+The first cache-busted request to `https://zylobridge.com/onboarding?mode=profile&release=fda34c13` loaded the new route fallback and then entered the application’s safe unexpected-error boundary. The page did not expose internals and offered Retry Page and Return Home actions, but this is a production verification failure that must be diagnosed and corrected before final acceptance.
+
+Production resource diagnostics confirmed the new hashed application, React, data, Supabase, stylesheet, and onboarding chunks all returned HTTP 200. The cross-domain `auth.me` request also returned HTTP 200 but took approximately 12 seconds. No browser-console output was exposed. Because asset delivery succeeded and the failure followed a slow authentication bootstrap, the next diagnostic focus is the exact runtime boundary event and authentication transition rather than missing deployment files.
+
+The failed lazy asset URL was subsequently confirmed to have been rewritten to a newer HTML shell during the deployment transition, indicating a mixed-manifest race rather than a missing release artifact. A clean navigation after the deployment-success signal no longer entered the recovery boundary. It rendered the full ZYLOBRIDGE navigation and onboarding loading skeleton while the production authentication request continued resolving.
+
+After the production authentication bootstrap completed, the browser navigated exactly once to `/sign-in?next=%2Fonboarding%3Fmode%3Dprofile`. The live SignIn page displayed the corrected non-quantified copy, all three authentication methods, legal links, home escape route, and the production Google authentication URL. The browser console remained empty. This verifies the unauthenticated production boundary and profile-mode return intent without initiating authentication or mutating any account.
+
+Final production route checks returned HTTP 200 for the Railway `/api/health` endpoint, HTTP 401 with the expected `UNAUTHORIZED` tRPC code for unauthenticated `onboarding.state`, and HTTP 200 for both Vercel `/onboarding?mode=profile` and `/sign-in?next=...` shells. This confirms that onboarding persistence is protected server-side and the split frontend/backend routes are reachable.
+
 Further desktop and mobile rendering observations will be appended after diagnosing this fresh-preview rendering state.
