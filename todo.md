@@ -1161,5 +1161,5 @@
 - [x] Reconcile every stated contractor/client and professional lifecycle step with current production capabilities, payment terminology, verification, messaging, reviews, notifications, support, and valid routes.
 - [x] Implement a premium, responsive, conversion-focused How It Works page with role CTAs, accessible journey switching, six-step role workflows, lifecycle visualization, clearly labeled illustrative story, escrow education, safety guidance, trust content, FAQs, and final CTAs.
 - [x] Preserve official ZYLOBRIDGE branding, truthful claims, WCAG-friendly keyboard/focus behavior, semantic structure, mobile containment, route-based loading, and no fabricated customer reviews, ratings, testimonials, or marketplace activity.
-- [x] Add focused regression coverage and validate TypeScript, full Vitest, client/server builds, route correctness, desktop/mobile visual QA, and runtime logs; live production behavior remains pending deployment.
-- [ ] Save and auto-publish the verified How It Works checkpoint.
+- [x] Add focused regression coverage and validate TypeScript, full Vitest, client/server builds, route correctness, desktop/mobile visual QA, runtime logs, live production rendering, role switching, FAQ expansion, and console behavior.
+- [x] Save and auto-publish the verified How It Works checkpoint.
