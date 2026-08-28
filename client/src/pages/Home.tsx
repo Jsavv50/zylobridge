@@ -115,7 +115,7 @@ export default function Home() {
 
   const categoryCards = useMemo(() => VOCATION_CATEGORIES.slice(0, 6), []);
   const postJobHref = isAuthenticated && (user?.userType === "client" || user?.userType === "enterprise" || user?.role === "admin" || user?.role === "SUPER_ADMIN") ? "/jobs/new" : "/sign-in";
-  const dashboardHref = user?.role === "admin" || user?.role === "SUPER_ADMIN" ? "/dashboard/admin" : user?.userType === "professional" ? "/dashboard/professional" : user?.userType === "enterprise" ? "/dashboard/enterprise" : "/dashboard/client";
+  const dashboardHref = user?.role === "admin" || user?.role === "SUPER_ADMIN" ? "/dashboard/admin" : user?.userType === "professional" ? "/dashboard/professional" : user?.userType === "enterprise" ? "/dashboard/enterprise" : "/employer";
   const browseHref = marketplaceBrowseDestination(user);
   const browseLabel = marketplaceBrowseLabel(user);
 

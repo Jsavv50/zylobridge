@@ -18,7 +18,7 @@ export default function Onboarding() {
     onSuccess: () => {
       utils.auth.me.invalidate();
       toast.success("Profile type set successfully!");
-      if (selected === "client") navigate("/dashboard/client");
+      if (selected === "client") navigate("/employer");
       else if (selected === "professional") navigate("/dashboard/professional");
       else navigate("/dashboard/enterprise");
     },
@@ -39,7 +39,7 @@ export default function Onboarding() {
   }
 
   if (user.userType !== "unset") {
-    if (user.userType === "client") navigate("/dashboard/client");
+    if (user.userType === "client") navigate("/employer");
     else if (user.userType === "professional") navigate("/dashboard/professional");
     else navigate("/dashboard/enterprise");
     return null;

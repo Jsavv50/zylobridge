@@ -1133,3 +1133,14 @@
 - [x] Preserve professional earnings behavior, payment authorization, accepted-candidate checks, organization permissions, callbacks, webhooks, Paystack safeguards, and non-sensitive errors.
 - [x] Add focused regression tests and validate TypeScript, full Vitest, client/server builds, authoritative database compatibility, runtime health, callbacks, and desktop/mobile UX.
 - [x] Save the verified Escrow & Funding checkpoint.
+
+## Attached specification: pasted_content_39.txt
+- [x] Trace the exact Rules of Hooks violation in `ClientDashboard` and all components rendered by `/employer` and `/dashboard/contractor`.
+- [x] Audit whether both routes render the same component and define `/employer` as the canonical Contractor/Client dashboard without redirect loops.
+- [x] Refactor every affected hook so all hooks execute unconditionally before loading, authentication, authorization, empty, or error returns.
+- [x] Add stable defaults for undefined, null, empty, loading, unauthorized, network-error, and missing organization/user data transitions.
+- [x] Audit and improve the dashboard recovery boundary with retry and safe navigation without masking the root hook-order fix.
+- [x] Add regression coverage for loading→authenticated, unauthenticated→authenticated, no-data→data, organization-missing→loaded, both routes, and role isolation.
+- [x] Validate available lint/type checks, full Vitest, client/server builds, runtime logs, and local refresh/direct navigation.
+- [ ] Verify live production behavior for `/employer` and `/dashboard/contractor` after auto-deployment.
+- [ ] Save the final verified React #310 fix checkpoint and confirm GitHub auto-push/deployment.

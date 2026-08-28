@@ -98,7 +98,7 @@ export default function Navbar() {
                   </Link>
                 )}
                 {isClient && (
-                  <Link href="/dashboard/contractor">
+                  <Link href="/employer">
                     <Button variant="ghost" size="sm" className="text-gray-300 hover:text-white hover:bg-white/5">
                       <Briefcase className="h-4 w-4 mr-1.5" />
                       Dashboard
@@ -249,7 +249,7 @@ export default function Navbar() {
                   </Link>
                 )}
                 {isClient && (
-                  <Link href="/dashboard/contractor" onClick={() => setMobileOpen(false)}>
+                  <Link href="/employer" onClick={() => setMobileOpen(false)}>
                     <Button variant="outline" size="sm" className="w-full border-white/10 text-gray-300">
                       Client Dashboard
                     </Button>

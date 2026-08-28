@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
-import { AlertTriangle, RotateCcw } from "lucide-react";
-import { Component, ReactNode } from "react";
+import { AlertTriangle, Home, RotateCcw } from "lucide-react";
+import { Component, type ErrorInfo, ReactNode } from "react";
 
 interface Props {
   children: ReactNode;
@@ -21,6 +21,15 @@ class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error };
   }
 
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("[ApplicationErrorBoundary] Render failure", {
+      message: error.message,
+      componentStack: info.componentStack,
+    });
+    const sentry = (window as Window & { Sentry?: { captureException?: (error: Error, context?: Record<string, unknown>) => void } }).Sentry;
+    sentry?.captureException?.(error, { extra: { componentStack: info.componentStack } });
+  }
+
   render() {
     if (this.state.hasError) {
       return (
@@ -33,23 +42,27 @@ class ErrorBoundary extends Component<Props, State> {
 
             <h2 className="text-xl mb-4">An unexpected error occurred.</h2>
 
-            <div className="p-4 w-full rounded bg-muted overflow-auto mb-6">
-              <pre className="text-sm text-muted-foreground whitespace-break-spaces">
-                {this.state.error?.stack}
-              </pre>
-            </div>
+            <p className="mb-6 max-w-md text-center text-sm leading-6 text-muted-foreground">
+              The page could not be displayed. Retry once, or return to the ZYLOBRIDGE home page. Your account data remains protected.
+            </p>
 
-            <button
-              onClick={() => window.location.reload()}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg",
-                "bg-primary text-primary-foreground",
-                "hover:opacity-90 cursor-pointer"
-              )}
-            >
-              <RotateCcw size={16} />
-              Reload Page
-            </button>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button
+                onClick={() => window.location.reload()}
+                className={cn(
+                  "flex items-center justify-center gap-2 px-4 py-2 rounded-lg",
+                  "bg-primary text-primary-foreground",
+                  "hover:opacity-90 cursor-pointer"
+                )}
+              >
+                <RotateCcw size={16} />
+                Retry Page
+              </button>
+              <a href="/" className="flex items-center justify-center gap-2 rounded-lg border border-border px-4 py-2 text-foreground hover:bg-muted">
+                <Home size={16} />
+                Return Home
+              </a>
+            </div>
           </div>
         </div>
       );

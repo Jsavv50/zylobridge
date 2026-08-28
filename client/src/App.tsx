@@ -2,8 +2,9 @@ import { Toaster } from "@/components/ui/sonner";
 import { lazy, Suspense } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
+import { Redirect, Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
+import EmployerDashboardBoundary from "./components/EmployerDashboardBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AuthProvider } from "@/_core/hooks/useAuth";
 import Home from "./pages/Home";
@@ -47,6 +48,10 @@ function RouteFallback() {
   return <div className="min-h-screen bg-[#0d1117] text-gray-300 flex items-center justify-center px-6"><div className="rounded-2xl border border-white/10 bg-[#131a26] px-6 py-5 text-sm shadow-xl">Loading workspace…</div></div>;
 }
 
+function EmployerDashboardRoute() {
+  return <EmployerDashboardBoundary><ClientDashboard /></EmployerDashboardBoundary>;
+}
+
 function Router() {
   return (
     <Switch>
@@ -66,10 +71,10 @@ function Router() {
       <Route path="/employer/jobs/:jobId/candidates" component={EmployerCandidates} />
       <Route path="/onboarding" component={Onboarding} />
       <Route path="/dashboard" component={ProfessionalDashboard} />
-      <Route path="/employer" component={ClientDashboard} />
+      <Route path="/employer" component={EmployerDashboardRoute} />
       <Route path="/admin" component={AdminDashboard} />
-      <Route path="/dashboard/contractor" component={ClientDashboard} />
-      <Route path="/dashboard/client" component={ClientDashboard} />
+      <Route path="/dashboard/contractor"><Redirect to="/employer" replace /></Route>
+      <Route path="/dashboard/client"><Redirect to="/employer" replace /></Route>
       <Route path="/dashboard/professional" component={ProfessionalDashboard} />
       <Route path="/dashboard/enterprise" component={EnterpriseDashboard} />
       <Route path="/enterprise" component={EnterpriseDashboard} />

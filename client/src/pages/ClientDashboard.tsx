@@ -40,7 +40,8 @@ export default function ClientDashboard() {
   const { user } = useAuth({ redirectOnUnauthenticated: true });
   const [postJobOpen, setPostJobOpen] = useState(false);
   const [form, setForm] = useState({ title: "", description: "", vocation: "", budget: "", location: "", deadline: "", isUrgent: false });
-  const dashboardQuery = trpc.employerDashboard.useQuery(undefined, { enabled: Boolean(user && ["client", "enterprise"].includes(user.userType)) });
+  const hasEmployerAccess = Boolean(user && (["client", "enterprise"].includes(user.userType) || ["admin", "SUPER_ADMIN"].includes(user.role)));
+  const dashboardQuery = trpc.employerDashboard.useQuery(undefined, { enabled: hasEmployerAccess });
   const utils = trpc.useUtils();
   const createJob = trpc.jobs.create.useMutation({
     onSuccess: () => { toast.success("Job posted successfully."); setPostJobOpen(false); setForm({ title: "", description: "", vocation: "", budget: "", location: "", deadline: "", isUrgent: false }); void dashboardQuery.refetch(); },
@@ -48,22 +49,36 @@ export default function ClientDashboard() {
   });
   const updateStatus = trpc.jobs.updateStatus.useMutation({ onSuccess: () => { toast.success("Job status updated."); void Promise.all([dashboardQuery.refetch(), utils.jobs.myJobs.invalidate()]); }, onError: (error) => toast.error(error.message || "We couldn't update this job.") });
 
+  const attention = useMemo(() => {
+    const dashboard = dashboardQuery.data;
+    if (!dashboard) return [];
+
+    const { summary } = dashboard;
+    const items: Array<{ title: string; detail: string; href: string; icon: typeof UsersRound; tone: string }> = [];
+    if (summary.pendingApplications > 0) items.push({ title: "New applicants", detail: `${summary.pendingApplications} application${summary.pendingApplications === 1 ? "" : "s"} waiting for review.`, href: "/employer/jobs", icon: UsersRound, tone: "text-violet-300" });
+    if (summary.unreadMessages > 0) items.push({ title: "Unread messages", detail: `${summary.unreadMessages} conversation${summary.unreadMessages === 1 ? "" : "s"} need your attention.`, href: "/messages", icon: MessageCircle, tone: "text-cyan-300" });
+    if (summary.unreadNotifications > 0) items.push({ title: "Unread notifications", detail: `${summary.unreadNotifications} marketplace update${summary.unreadNotifications === 1 ? "" : "s"} to review.`, href: "/notifications", icon: Bell, tone: "text-amber-300" });
+    const expiring = (dashboard.jobs ?? []).find((job) => job.status === "open" && job.deadline && new Date(job.deadline).getTime() - Date.now() < 7 * 86_400_000 && new Date(job.deadline).getTime() > Date.now());
+    if (expiring) items.push({ title: "Job closing soon", detail: `${expiring.title} closes ${formatDate(expiring.deadline)}.`, href: `/employer/jobs/${expiring.id}/candidates`, icon: Clock3, tone: "text-rose-300" });
+    return items;
+  }, [dashboardQuery.data]);
+
   if (!user) return <ApplicationShell><div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div></ApplicationShell>;
   if (!["client", "enterprise"].includes(user.userType) && !["admin", "SUPER_ADMIN"].includes(user.role)) return <ApplicationShell><EmptyState icon={ShieldCheck} title="Employer workspace required" description="This command center is available to client and enterprise accounts." action={<Link href="/jobs"><Button variant="outline">Browse the marketplace</Button></Link>} /></ApplicationShell>;
   if (dashboardQuery.isLoading) return <ApplicationShell role={user.userType === "enterprise" ? "enterprise" : "employer"}><div className="space-y-6"><div className="h-44 animate-pulse rounded-3xl bg-muted/50" /><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[1, 2, 3, 4].map((item) => <div key={item} className="h-32 animate-pulse rounded-2xl bg-muted/50" />)}</div><div className="h-80 animate-pulse rounded-3xl bg-muted/50" /></div></ApplicationShell>;
   if (dashboardQuery.isError || !dashboardQuery.data) return <ApplicationShell role="employer"><EmptyState icon={BriefcaseBusiness} title="We couldn't load your dashboard" description="Your employer workspace could not be retrieved. Try again to continue." action={<Button onClick={() => void dashboardQuery.refetch()}>Try again</Button>} /></ApplicationShell>;
 
-  const dashboard = dashboardQuery.data;
-  const { summary, pipeline, financial } = dashboard;
-  const attention = useMemo(() => {
-    const items: Array<{ title: string; detail: string; href: string; icon: typeof UsersRound; tone: string }> = [];
-    if (summary.pendingApplications > 0) items.push({ title: "New applicants", detail: `${summary.pendingApplications} application${summary.pendingApplications === 1 ? "" : "s"} waiting for review.`, href: "/employer/jobs", icon: UsersRound, tone: "text-violet-300" });
-    if (summary.unreadMessages > 0) items.push({ title: "Unread messages", detail: `${summary.unreadMessages} conversation${summary.unreadMessages === 1 ? "" : "s"} need your attention.`, href: "/messages", icon: MessageCircle, tone: "text-cyan-300" });
-    if (summary.unreadNotifications > 0) items.push({ title: "Unread notifications", detail: `${summary.unreadNotifications} marketplace update${summary.unreadNotifications === 1 ? "" : "s"} to review.`, href: "/notifications", icon: Bell, tone: "text-amber-300" });
-    const expiring = dashboard.jobs.find((job) => job.status === "open" && job.deadline && new Date(job.deadline).getTime() - Date.now() < 7 * 86_400_000 && new Date(job.deadline).getTime() > Date.now());
-    if (expiring) items.push({ title: "Job closing soon", detail: `${expiring.title} closes ${formatDate(expiring.deadline)}.`, href: `/employer/jobs/${expiring.id}/candidates`, icon: Clock3, tone: "text-rose-300" });
-    return items;
-  }, [dashboard.jobs, summary]);
+  const dashboard = {
+    ...dashboardQuery.data,
+    jobs: dashboardQuery.data.jobs ?? [],
+    candidates: dashboardQuery.data.candidates ?? [],
+    messages: dashboardQuery.data.messages ?? [],
+    recommendedProfessionals: dashboardQuery.data.recommendedProfessionals ?? [],
+    account: dashboardQuery.data.account ?? { name: null, email: null, avatarUrl: null, isVerified: false },
+  };
+  const summary = dashboardQuery.data.summary ?? { activeJobs: 0, openJobs: 0, completedJobs: 0, hiredCount: 0, pendingApplications: 0, unreadMessages: 0, unreadNotifications: 0 };
+  const pipeline = dashboardQuery.data.pipeline ?? { applied: 0, shortlisted: 0, interviews: 0, offers: 0, hired: 0 };
+  const financial = dashboardQuery.data.financial ?? { activeEscrow: 0, pendingEscrow: 0, releasedEscrow: 0, currencies: [] };
 
   const handlePostJob = () => {
     if (!form.title.trim() || form.description.trim().length < 10 || !form.vocation || Number(form.budget) <= 0 || !form.location.trim()) { toast.error("Add a title, description, vocation, positive budget, and location."); return; }
