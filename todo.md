@@ -1152,5 +1152,5 @@
 - [x] Implement a role-protected, real-data Candidate Pipeline at `/employer/jobs/:jobId/candidates` with job context, metrics, funnel, deterministic attention states, URL-synchronized stages, server-side search/filter/sort/pagination, candidate cards, and comparison.
 - [x] Implement only supported candidate actions, including profile review, shortlist, messaging, interview management, rejection, offers, hiring, and downstream engagement/funding integration with confirmations and audit-safe state transitions.
 - [x] Preserve job ownership, organization permissions, privacy boundaries, truthful metrics, no-fabrication safeguards, idempotency, and mobile-first accessibility.
-- [x] Add focused regression coverage and validate TypeScript, full Vitest, client/server builds, database compatibility, runtime logs, and responsive UX; live production route verification remains pending deployment.
-- [ ] Save and auto-publish the verified Candidate Pipeline checkpoint.
+- [x] Add focused regression coverage and validate TypeScript, full Vitest, client/server builds, database compatibility, runtime logs, responsive UX, and the live production route’s authenticated ownership boundary.
+- [x] Save and auto-publish the verified Candidate Pipeline checkpoint.
