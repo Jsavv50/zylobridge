@@ -1113,3 +1113,13 @@
 - [x] Preserve strict privacy, role isolation, truthful metrics, deterministic explanations, and no fabricated professionals, ratings, reviews, companies, or hiring states.
 - [x] Add focused regression coverage and validate TypeScript, full Vitest, client/server builds, authoritative database behavior, and responsive UX.
 - [x] Save the verified role-aware Find Talent checkpoint.
+
+## Attached specification: pasted_content_37.txt
+- [x] Read and normalize the complete Contractor/Client My Job Postings specification.
+- [x] Audit `/employer/jobs`, route guards, job ownership, statuses, urgency, applications, candidate stages, engagements, messaging, notifications, escrow, payments, and reusable shells.
+- [x] Identify canonical lifecycle mappings and next-action rules without creating duplicate status or hiring systems.
+- [x] Implement a real-data Job Lifecycle Command Center with dynamic header insights, interactive summaries, priority items, URL-preserved search/filter/sort controls, lifecycle tabs, and responsive views.
+- [x] Implement context-aware job cards and actions for candidates, talent discovery, job details, close/reopen, work context, messaging, and funding using existing authorized flows.
+- [x] Preserve contractor/client and enterprise ownership enforcement, applicant privacy, confirmation for destructive actions, truthful metrics, and no fabricated jobs or candidate activity.
+- [x] Add focused regression tests and validate TypeScript, full Vitest, client/server builds, runtime routes, authoritative database compatibility, and desktop/mobile UX.
+- [x] Save the verified My Job Postings checkpoint.

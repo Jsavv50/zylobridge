@@ -272,3 +272,200 @@ export async function getEmployerCommandCenter(clientId: number) {
     generatedAt: new Date(),
   };
 }
+
+export type EmployerJobsPortfolioFilters = {
+  q?: string;
+  status?: "all" | "open" | "hiring" | "attention" | "in_progress" | "completed" | "cancelled";
+  vocation?: string;
+  location?: string;
+  priority?: "all" | "urgent" | "standard";
+  candidateActivity?: "all" | "awaiting_review" | "has_applicants" | "no_applicants" | "shortlisted" | "hired";
+  sort?: "recent" | "newest" | "oldest" | "applicants" | "budget_desc" | "budget_asc";
+  limit?: number;
+  offset?: number;
+};
+
+/**
+ * Returns the employer job portfolio as one authorization-scoped contract.
+ * Jobs are visible only when owned by the user or attached to an organization
+ * where the user has an active membership. Applicant data is aggregated into
+ * counts; the only person record returned is the already-hired professional.
+ */
+export async function getEmployerJobsPortfolio(userId: number, filters: EmployerJobsPortfolioFilters = {}) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const memberships = await db.select({ organizationId: organizationMembers.organizationId })
+    .from(organizationMembers)
+    .where(and(eq(organizationMembers.userId, userId), eq(organizationMembers.status, "active")));
+  const organizationIds = memberships.map((membership) => membership.organizationId);
+  const ownershipScope = organizationIds.length
+    ? or(eq(jobs.clientId, userId), inArray(jobs.organizationId, organizationIds))
+    : eq(jobs.clientId, userId);
+
+  const managedJobs = await db.select({
+    id: jobs.id,
+    clientId: jobs.clientId,
+    title: jobs.title,
+    vocation: jobs.vocation,
+    budget: jobs.budget,
+    currency: jobs.currency,
+    location: jobs.location,
+    deadline: jobs.deadline,
+    status: jobs.status,
+    assignedProfessionalId: jobs.assignedProfessionalId,
+    organizationId: jobs.organizationId,
+    isUrgent: jobs.isUrgent,
+    createdAt: jobs.createdAt,
+    updatedAt: jobs.updatedAt,
+  }).from(jobs).where(ownershipScope).orderBy(desc(jobs.updatedAt));
+
+  const jobIds = managedJobs.map((job) => job.id);
+  const [applicationRows, shortlistRows, interviewRows, offerRows, engagementRows, escrowRows, conversationRows] = await Promise.all([
+    jobIds.length ? db.select({ id: applications.id, jobId: applications.jobId, status: applications.status, createdAt: applications.createdAt, updatedAt: applications.updatedAt }).from(applications).where(inArray(applications.jobId, jobIds)) : Promise.resolve([]),
+    jobIds.length ? db.select({ jobId: shortlists.jobId }).from(shortlists).where(inArray(shortlists.jobId, jobIds)) : Promise.resolve([]),
+    jobIds.length ? db.select({ jobId: interviews.jobId, status: interviews.status }).from(interviews).where(inArray(interviews.jobId, jobIds)) : Promise.resolve([]),
+    jobIds.length ? db.select({ jobId: offers.jobId, status: offers.status }).from(offers).where(inArray(offers.jobId, jobIds)) : Promise.resolve([]),
+    jobIds.length ? db.select({ id: engagements.id, jobId: engagements.jobId, professionalId: engagements.professionalId, status: engagements.status, startDate: engagements.startDate, endDate: engagements.endDate, updatedAt: engagements.updatedAt }).from(engagements).where(inArray(engagements.jobId, jobIds)) : Promise.resolve([]),
+    jobIds.length ? db.select({ id: escrowPayments.id, jobId: escrowPayments.jobId, amount: escrowPayments.amount, currency: escrowPayments.currency, status: escrowPayments.status, updatedAt: escrowPayments.updatedAt }).from(escrowPayments).where(inArray(escrowPayments.jobId, jobIds)) : Promise.resolve([]),
+    jobIds.length ? db.select({ id: conversations.id, jobId: conversations.jobId, clientId: conversations.clientId, professionalId: conversations.professionalId, lastMessageAt: conversations.lastMessageAt }).from(conversations).where(and(eq(conversations.clientId, userId), inArray(conversations.jobId, jobIds))).orderBy(desc(conversations.lastMessageAt)) : Promise.resolve([]),
+  ]);
+
+  const hiredProfessionalIds = Array.from(new Set([
+    ...managedJobs.map((job) => job.assignedProfessionalId),
+    ...engagementRows.filter((engagement) => engagement.status !== "cancelled").map((engagement) => engagement.professionalId),
+  ].filter((id): id is number => typeof id === "number")));
+  const hiredProfessionals = hiredProfessionalIds.length
+    ? await db.select({ id: users.id, name: users.name, avatarUrl: users.avatarUrl, isVerified: users.isVerified }).from(users).where(inArray(users.id, hiredProfessionalIds))
+    : [];
+  const hiredProfessionalById = new Map(hiredProfessionals.map((professional) => [professional.id, professional]));
+
+  const groupByJob = <T extends { jobId: number }>(rows: T[]) => {
+    const grouped = new Map<number, T[]>();
+    for (const row of rows) grouped.set(row.jobId, [...(grouped.get(row.jobId) ?? []), row]);
+    return grouped;
+  };
+  const applicationsByJob = groupByJob(applicationRows);
+  const shortlistsByJob = groupByJob(shortlistRows);
+  const interviewsByJob = groupByJob(interviewRows);
+  const offersByJob = groupByJob(offerRows);
+  const engagementsByJob = groupByJob(engagementRows);
+  const escrowsByJob = groupByJob(escrowRows);
+  const conversationsByJob = groupByJob(conversationRows);
+  const now = Date.now();
+
+  const portfolio = managedJobs.map((job) => {
+    const jobApplications = applicationsByJob.get(job.id) ?? [];
+    const jobShortlists = shortlistsByJob.get(job.id) ?? [];
+    const jobInterviews = interviewsByJob.get(job.id) ?? [];
+    const jobOffers = offersByJob.get(job.id) ?? [];
+    const jobEngagements = engagementsByJob.get(job.id) ?? [];
+    const jobEscrows = escrowsByJob.get(job.id) ?? [];
+    const activeEngagement = jobEngagements.find((engagement) => engagement.status === "active") ?? jobEngagements.find((engagement) => engagement.status === "completed") ?? null;
+    const currentEscrow = [...jobEscrows].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0] ?? null;
+    const hiredProfessionalId = activeEngagement?.professionalId ?? job.assignedProfessionalId;
+    const hiredProfessional = hiredProfessionalId ? hiredProfessionalById.get(hiredProfessionalId) ?? null : null;
+    const applicationCount = jobApplications.length;
+    const awaitingReviewCount = jobApplications.filter((application) => application.status === "pending").length;
+    const acceptedCount = jobApplications.filter((application) => application.status === "accepted").length;
+    const shortlistCount = jobShortlists.length;
+    const interviewCount = jobInterviews.filter((interview) => interview.status !== "cancelled").length;
+    const offerCount = jobOffers.filter((offer) => offer.status === "pending" || offer.status === "accepted").length;
+    const hiredCount = hiredProfessionalId || acceptedCount > 0 || jobEngagements.some((engagement) => engagement.status !== "cancelled") ? 1 : 0;
+    const hasHiringActivity = shortlistCount > 0 || interviewCount > 0 || offerCount > 0 || acceptedCount > 0;
+    const isInProgress = job.status === "in_progress" || Boolean(activeEngagement?.status === "active");
+    const isCompleted = job.status === "completed" || Boolean(activeEngagement?.status === "completed");
+    const fundingRequired = Boolean(activeEngagement?.status === "active") && (!currentEscrow || currentEscrow.status === "pending");
+    const ageDays = Math.max(0, Math.floor((now - job.createdAt.getTime()) / 86_400_000));
+    const staleWithoutApplicants = job.status === "open" && applicationCount === 0 && ageDays >= 7;
+    const attention = fundingRequired
+      ? { priority: 1, reason: "Escrow funding is required before protected work can proceed.", action: "Fund Escrow", href: `/payments?jobId=${job.id}` }
+      : awaitingReviewCount > 0
+        ? { priority: 2, reason: `${awaitingReviewCount} application${awaitingReviewCount === 1 ? "" : "s"} awaiting review.`, action: "Review Candidates", href: `/employer/jobs/${job.id}/candidates` }
+        : staleWithoutApplicants
+          ? { priority: 5, reason: `Open for ${ageDays} days without applications.`, action: "Find Talent", href: `/talent?jobId=${job.id}` }
+          : null;
+    const primaryAction = fundingRequired
+      ? { label: "Fund Escrow", href: `/payments?jobId=${job.id}`, kind: "funding" as const }
+      : job.status === "open" && applicationCount > 0
+        ? { label: "Review Candidates", href: `/employer/jobs/${job.id}/candidates`, kind: "candidates" as const }
+        : job.status === "open"
+          ? { label: "Find Talent", href: `/talent?jobId=${job.id}`, kind: "talent" as const }
+          : { label: isInProgress ? "View Active Job" : isCompleted ? "View Summary" : "View Job", href: `/jobs/${job.id}`, kind: "job" as const };
+    const currentConversation = (conversationsByJob.get(job.id) ?? [])[0] ?? null;
+    return {
+      ...job,
+      applicationCount,
+      awaitingReviewCount,
+      shortlistCount,
+      interviewCount,
+      offerCount,
+      hiredCount,
+      hasHiringActivity,
+      isInProgress,
+      isCompleted,
+      ageDays,
+      engagement: activeEngagement,
+      hiredProfessional,
+      escrow: currentEscrow,
+      fundingRequired,
+      attention,
+      primaryAction,
+      conversationId: currentConversation?.id ?? null,
+    };
+  });
+
+  const summary = {
+    total: portfolio.length,
+    open: portfolio.filter((job) => job.status === "open").length,
+    hiring: portfolio.filter((job) => job.status === "open" && job.hasHiringActivity).length,
+    needsAttention: portfolio.filter((job) => Boolean(job.attention)).length,
+    inProgress: portfolio.filter((job) => job.isInProgress).length,
+    completed: portfolio.filter((job) => job.isCompleted).length,
+    closed: portfolio.filter((job) => job.status === "cancelled").length,
+    awaitingReview: portfolio.reduce((total, job) => total + job.awaitingReviewCount, 0),
+    fundingRequired: portfolio.filter((job) => job.fundingRequired).length,
+  };
+
+  const normalizedQ = filters.q?.trim().toLowerCase();
+  const normalizedLocation = filters.location?.trim().toLowerCase();
+  let filtered = portfolio.filter((job) => {
+    if (normalizedQ && ![job.title, job.vocation, job.location, String(job.id)].some((value) => value.toLowerCase().includes(normalizedQ))) return false;
+    if (filters.status && filters.status !== "all") {
+      if (filters.status === "hiring" ? !(job.status === "open" && job.hasHiringActivity) : filters.status === "attention" ? !job.attention : filters.status === "in_progress" ? !job.isInProgress : filters.status === "completed" ? !job.isCompleted : job.status !== filters.status) return false;
+    }
+    if (filters.vocation && job.vocation !== filters.vocation) return false;
+    if (normalizedLocation && !job.location.toLowerCase().includes(normalizedLocation)) return false;
+    if (filters.priority === "urgent" && !job.isUrgent) return false;
+    if (filters.priority === "standard" && job.isUrgent) return false;
+    if (filters.candidateActivity === "awaiting_review" && job.awaitingReviewCount === 0) return false;
+    if (filters.candidateActivity === "has_applicants" && job.applicationCount === 0) return false;
+    if (filters.candidateActivity === "no_applicants" && job.applicationCount !== 0) return false;
+    if (filters.candidateActivity === "shortlisted" && job.shortlistCount === 0) return false;
+    if (filters.candidateActivity === "hired" && job.hiredCount === 0) return false;
+    return true;
+  });
+  filtered = [...filtered].sort((a, b) => {
+    if (filters.sort === "newest") return b.createdAt.getTime() - a.createdAt.getTime();
+    if (filters.sort === "oldest") return a.createdAt.getTime() - b.createdAt.getTime();
+    if (filters.sort === "applicants") return b.applicationCount - a.applicationCount || b.updatedAt.getTime() - a.updatedAt.getTime();
+    if (filters.sort === "budget_desc") return Number(b.budget) - Number(a.budget);
+    if (filters.sort === "budget_asc") return Number(a.budget) - Number(b.budget);
+    return b.updatedAt.getTime() - a.updatedAt.getTime();
+  });
+
+  const limit = Math.min(50, Math.max(1, filters.limit ?? 20));
+  const offset = Math.max(0, filters.offset ?? 0);
+  const items = filtered.slice(offset, offset + limit);
+  return {
+    items,
+    total: filtered.length,
+    hasMore: offset + limit < filtered.length,
+    nextOffset: offset + limit < filtered.length ? offset + limit : null,
+    summary,
+    attention: portfolio.filter((job) => Boolean(job.attention)).sort((a, b) => (a.attention?.priority ?? 99) - (b.attention?.priority ?? 99)).slice(0, 8),
+    locations: Array.from(new Set(portfolio.map((job) => job.location).filter(Boolean))).sort(),
+    vocations: Array.from(new Set(portfolio.map((job) => job.vocation).filter(Boolean))).sort(),
+    generatedAt: new Date(),
+  };
+}

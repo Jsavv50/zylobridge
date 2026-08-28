@@ -155,7 +155,7 @@ import {
 } from "./paystack";
 import { getFrontendUrl } from "./_core/env";
 import { normalizeVocation } from "@shared/vocations";
-import { getEmployerCommandCenter } from "./analytics";
+import { getEmployerCommandCenter, getEmployerJobsPortfolio } from "./analytics";
 import { maskPhoneNumber, normalizePhoneNumber, sendPhoneOtpSms, SmsDeliveryError } from "./sms";
 import { getUserNotificationPreference, updateUserNotificationPreference, createInAppNotification, getUnreadNotifications, listNotifications, markNotificationRead, markAllNotificationsRead, generateIcsContent, executeMatchingV2 } from "./phase4";
 import { initializeMilestonePayment, processVerifiedPayment, verifyPaystackWebhookSignature } from "./finance";
@@ -468,6 +468,25 @@ export const appRouter = router({
     }
     return getEmployerCommandCenter(ctx.user.id);
   }),
+
+  employerJobsPortfolio: protectedProcedure
+    .input(z.object({
+      q: z.string().max(120).trim().optional(),
+      status: z.enum(["all", "open", "hiring", "attention", "in_progress", "completed", "cancelled"]).optional().default("all"),
+      vocation: z.string().max(64).optional(),
+      location: z.string().max(255).trim().optional(),
+      priority: z.enum(["all", "urgent", "standard"]).optional().default("all"),
+      candidateActivity: z.enum(["all", "awaiting_review", "has_applicants", "no_applicants", "shortlisted", "hired"]).optional().default("all"),
+      sort: z.enum(["recent", "newest", "oldest", "applicants", "budget_desc", "budget_asc"]).optional().default("recent"),
+      limit: z.number().int().min(1).max(50).optional().default(20),
+      offset: z.number().int().nonnegative().optional().default(0),
+    }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.user.userType !== "client" && ctx.user.userType !== "enterprise" && ctx.user.role !== "admin" && ctx.user.role !== "SUPER_ADMIN") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Employer job portfolio access is restricted to hiring accounts." });
+      }
+      return getEmployerJobsPortfolio(ctx.user.id, { ...input, vocation: canonicalizeVocation(input.vocation) });
+    }),
 
   // ── Jobs ──────────────────────────────────────────────────────────────────
   jobs: router({
