@@ -1173,13 +1173,13 @@
 - [x] Implement secure Shopify cart and hosted checkout, order guidance, rental requests, digital access, service procurement, bulk procurement, RFQs, seller onboarding, refund/dispute guidance, and buyer protection using server-authoritative catalog data and idempotent mutations.
 - [x] Integrate notifications, dashboards, profile context, downstream procurement links, accessibility, restricted-goods controls, SEO, analytics hooks, loading/error/empty states, and mobile-first behavior.
 - [x] Add comprehensive regression coverage and validate TypeScript, full Vitest, client/server builds, Shopify/Supabase data compatibility, security, checkout integrity, responsive QA, and local runtime logs.
-- [ ] Verify the auto-published `/shop`, product detail, cart, procurement, seller, and admin routes in production without placing a real order or payment.
-- [ ] Save the final production-verified Shop and Trade Marketplace checkpoint.
+- [x] Verify the auto-published `/shop`, product detail, cart, procurement, seller, and admin routes in production without placing a real order or payment.
+- [x] Save the final production-verified Shop and Trade Marketplace checkpoint.
 
 ### Production Shopify configuration reconciliation
 - [x] Compare the provided Shopify domain and API version with the provisioned development-store integration and current Storefront client contract.
 - [x] Confirm the provided Storefront token can read the specified store through the supported API version without exposing the token.
 - [x] Add the approved Shopify domain, Storefront token, and API version to the Railway production service.
 - [x] Wait for a successful Railway redeployment and verify the production commerce tRPC procedures.
-- [ ] Verify the live Shop, product, cart, account, procurement, seller, and admin routes without checkout, order placement, payment, or customer-data mutation.
-- [ ] Record the production configuration outcome and save the final verified checkpoint.
+- [x] Verify the live Shop, product, cart, account, procurement, seller, and admin routes without checkout, order placement, payment, or customer-data mutation.
+- [x] Record the production configuration outcome and save the final verified checkpoint.

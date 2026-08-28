@@ -49,6 +49,8 @@ describe("ZYLOBRIDGE Shop and Trade Marketplace", () => {
     expect(detail).toContain("Price, availability, cart, checkout, payment confirmation, order creation, tax, and fulfillment are authoritative in Shopify");
     expect(commerceRouter).toContain("products: router");
     expect(commerceRouter).toContain("cart: router");
+    expect(shop).toContain("finalized by the connected Shopify store in hosted checkout");
+    expect(shop).not.toContain("connected development store currently uses ZAR");
   });
 
   it("keeps only ZYLOBRIDGE-specific extension data in PostgreSQL", () => {
