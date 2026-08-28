@@ -7,6 +7,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import EmployerDashboardBoundary from "./components/EmployerDashboardBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AuthProvider } from "@/_core/hooks/useAuth";
+import { CartProvider } from "./contexts/CartContext";
 import Home from "./pages/Home";
 const JobsMarketplace = lazy(() => import("./pages/JobsMarketplace"));
 const JobDetail = lazy(() => import("./pages/JobDetail"));
@@ -35,6 +36,14 @@ const PaymentCallback = lazy(() => import("./pages/PaymentCallback"));
 const VerificationRequest = lazy(() => import("./pages/VerificationRequest"));
 const HowItWorks = lazy(() => import("./pages/HowItWorks"));
 const Shop = lazy(() => import("./pages/Shop"));
+const ShopProductDetail = lazy(() => import("./pages/ShopProductDetail"));
+const ShopProductAliasRedirect = lazy(() => import("./pages/ShopProductAliasRedirect"));
+const ShopCompare = lazy(() => import("./pages/ShopCompare"));
+const ShopDepartmentRedirect = lazy(() => import("./pages/ShopDepartmentRedirect"));
+const ShopWorkspace = lazy(() => import("./pages/ShopWorkspace"));
+const ShopCartPage = lazy(() => import("./pages/ShopCartPage"));
+const ShopSellerCenter = lazy(() => import("./pages/ShopSellerCenter"));
+const ShopAdmin = lazy(() => import("./pages/ShopAdmin"));
 const Orders = lazy(() => import("./pages/Orders"));
 const PhoneLogin = lazy(() => import("./pages/PhoneLogin"));
 const SignIn = lazy(() => import("./pages/SignIn"));
@@ -91,6 +100,29 @@ function Router() {
       <Route path="/payment/callback" component={PaymentCallback} />
       <Route path="/verification" component={VerificationRequest} />
       <Route path="/how-it-works" component={HowItWorks} />
+      <Route path="/shop/products/:slug" component={ShopProductAliasRedirect} />
+      <Route path="/shop/product/:handle" component={ShopProductDetail} />
+      <Route path="/shop/department/:slug" component={ShopDepartmentRedirect} />
+      <Route path="/shop/compare" component={ShopCompare} />
+      <Route path="/shop/cart" component={ShopCartPage} />
+      <Route path="/shop/checkout" component={ShopCartPage} />
+      <Route path="/shop/account" component={ShopWorkspace} />
+      <Route path="/shop/wishlist" component={ShopWorkspace} />
+      <Route path="/shop/requests" component={ShopWorkspace} />
+      <Route path="/shop/procurement" component={ShopWorkspace} />
+      <Route path="/shop/digital" component={ShopWorkspace} />
+      <Route path="/shop/downloads"><Redirect to="/shop/digital" replace /></Route>
+      <Route path="/shop/orders" component={ShopWorkspace} />
+      <Route path="/shop/transactions"><Redirect to="/shop/account" replace /></Route>
+      <Route path="/shop/quotes"><Redirect to="/shop/procurement" replace /></Route>
+      <Route path="/shop/seller" component={ShopSellerCenter} />
+      <Route path="/shop/become-a-seller"><Redirect to="/shop/seller" replace /></Route>
+      <Route path="/shop/admin" component={ShopAdmin} />
+      <Route path="/shop/rentals"><Redirect to="/shop?modality=rental" replace /></Route>
+      <Route path="/shop/rentals/requests"><Redirect to="/shop/requests" replace /></Route>
+      <Route path="/shop/training"><Redirect to="/shop?modality=training" replace /></Route>
+      <Route path="/shop/services"><Redirect to="/shop?modality=service" replace /></Route>
+      <Route path="/shop/digital-resources"><Redirect to="/shop?modality=digital" replace /></Route>
       <Route path="/shop" component={Shop} />
       <Route path="/orders" component={Orders} />
       <Route path="/orders/verify" component={Orders} />
@@ -113,8 +145,10 @@ function App() {
       <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
           <AuthProvider>
-            <Toaster richColors position="top-right" />
-            <Suspense fallback={<RouteFallback />}><Router /></Suspense>
+            <CartProvider>
+              <Toaster richColors position="top-right" />
+              <Suspense fallback={<RouteFallback />}><Router /></Suspense>
+            </CartProvider>
           </AuthProvider>
         </TooltipProvider>
       </ThemeProvider>

@@ -116,6 +116,11 @@ export const jobStatusEnum = pgEnum("job_status", ["open", "in_progress", "compl
 export const applicationStatusEnum = pgEnum("application_status", ["pending", "accepted", "rejected", "withdrawn"]);
 export const paymentMethodEnum = pgEnum("payment_method", ["paystack", "bank_transfer"]);
 export const escrowStatusEnum = pgEnum("escrow_status", ["pending", "funded", "released", "refunded", "disputed"]);
+export const commerceRequestTypeEnum = pgEnum("commerce_request_type", ["rental", "service", "training", "digital"]);
+export const commerceRequestStatusEnum = pgEnum("commerce_request_status", ["submitted", "reviewing", "approved", "declined", "cancelled", "completed"]);
+export const commerceSellerStatusEnum = pgEnum("commerce_seller_status", ["pending", "under_review", "approved", "rejected", "suspended"]);
+export const commerceProcurementStatusEnum = pgEnum("commerce_procurement_status", ["draft", "open", "reviewing", "awarded", "closed", "cancelled"]);
+export const commerceQuoteStatusEnum = pgEnum("commerce_quote_status", ["submitted", "accepted", "rejected", "withdrawn"]);
 export const documentTypeEnum = pgEnum("document_type", [
   "trade_licence",
   "certification",
@@ -1064,3 +1069,131 @@ export const notificationDeliveryLogs = pgTable("notification_delivery_logs", {
 }));
 export type NotificationDeliveryLog = typeof notificationDeliveryLogs.$inferSelect;
 export type InsertNotificationDeliveryLog = typeof notificationDeliveryLogs.$inferInsert;
+
+// ─── Shopify storefront extensions ───────────────────────────────────────────
+// Shopify remains authoritative for catalog, variants, price, inventory, carts,
+// checkout, payments, orders, and fulfillment. These tables store only
+// ZYLOBRIDGE-specific authenticated workflows around that commerce system.
+export const commerceSavedProducts = pgTable("commerce_saved_products", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  shopifyProductId: varchar("shopifyProductId", { length: 255 }).notNull(),
+  productHandle: varchar("productHandle", { length: 255 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  ownerProductUnique: uniqueIndex("commerce_saved_products_owner_product_uq").on(table.userId, table.shopifyProductId),
+  ownerIdx: index("commerce_saved_products_owner_idx").on(table.userId),
+}));
+export type CommerceSavedProduct = typeof commerceSavedProducts.$inferSelect;
+export type InsertCommerceSavedProduct = typeof commerceSavedProducts.$inferInsert;
+
+export const commerceRequests = pgTable("commerce_requests", {
+  id: serial("id").primaryKey(),
+  requesterId: integer("requesterId").notNull(),
+  shopifyProductId: varchar("shopifyProductId", { length: 255 }).notNull(),
+  productHandle: varchar("productHandle", { length: 255 }).notNull(),
+  requestType: commerceRequestTypeEnum("requestType").notNull(),
+  quantity: integer("quantity").default(1).notNull(),
+  startAt: timestamp("startAt"),
+  endAt: timestamp("endAt"),
+  serviceLocation: varchar("serviceLocation", { length: 255 }),
+  message: text("message"),
+  status: commerceRequestStatusEnum("status").default("submitted").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+}, (table) => ({
+  requesterIdx: index("commerce_requests_requester_idx").on(table.requesterId),
+  productIdx: index("commerce_requests_product_idx").on(table.shopifyProductId),
+  statusIdx: index("commerce_requests_status_idx").on(table.status),
+}));
+export type CommerceRequest = typeof commerceRequests.$inferSelect;
+export type InsertCommerceRequest = typeof commerceRequests.$inferInsert;
+
+export const commerceSellerApplications = pgTable("commerce_seller_applications", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  organizationId: integer("organizationId"),
+  businessName: varchar("businessName", { length: 255 }).notNull(),
+  sellerType: varchar("sellerType", { length: 64 }).notNull(),
+  country: varchar("country", { length: 2 }).notNull(),
+  description: text("description").notNull(),
+  status: commerceSellerStatusEnum("status").default("pending").notNull(),
+  reviewedBy: integer("reviewedBy"),
+  reviewedAt: timestamp("reviewedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+}, (table) => ({
+  applicantUnique: uniqueIndex("commerce_seller_applications_user_uq").on(table.userId),
+  statusIdx: index("commerce_seller_applications_status_idx").on(table.status),
+}));
+export type CommerceSellerApplication = typeof commerceSellerApplications.$inferSelect;
+export type InsertCommerceSellerApplication = typeof commerceSellerApplications.$inferInsert;
+
+export const commerceProcurementRequests = pgTable("commerce_procurement_requests", {
+  id: serial("id").primaryKey(),
+  buyerId: integer("buyerId").notNull(),
+  organizationId: integer("organizationId"),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description").notNull(),
+  deliveryLocation: varchar("deliveryLocation", { length: 255 }).notNull(),
+  neededBy: timestamp("neededBy"),
+  currency: varchar("currency", { length: 3 }).default("ZAR").notNull(),
+  status: commerceProcurementStatusEnum("status").default("open").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+}, (table) => ({
+  buyerIdx: index("commerce_procurement_requests_buyer_idx").on(table.buyerId),
+  organizationIdx: index("commerce_procurement_requests_org_idx").on(table.organizationId),
+  statusIdx: index("commerce_procurement_requests_status_idx").on(table.status),
+}));
+export type CommerceProcurementRequest = typeof commerceProcurementRequests.$inferSelect;
+export type InsertCommerceProcurementRequest = typeof commerceProcurementRequests.$inferInsert;
+
+export const commerceProcurementItems = pgTable("commerce_procurement_items", {
+  id: serial("id").primaryKey(),
+  requestId: integer("requestId").notNull(),
+  shopifyProductId: varchar("shopifyProductId", { length: 255 }),
+  productHandle: varchar("productHandle", { length: 255 }),
+  title: varchar("title", { length: 255 }).notNull(),
+  specifications: text("specifications"),
+  quantity: integer("quantity").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  requestIdx: index("commerce_procurement_items_request_idx").on(table.requestId),
+}));
+export type CommerceProcurementItem = typeof commerceProcurementItems.$inferSelect;
+export type InsertCommerceProcurementItem = typeof commerceProcurementItems.$inferInsert;
+
+export const commerceProcurementQuotes = pgTable("commerce_procurement_quotes", {
+  id: serial("id").primaryKey(),
+  requestId: integer("requestId").notNull(),
+  sellerUserId: integer("sellerUserId").notNull(),
+  amountMinor: bigint("amountMinor", { mode: "number" }).notNull(),
+  currency: varchar("currency", { length: 3 }).default("ZAR").notNull(),
+  fulfillmentDays: integer("fulfillmentDays").notNull(),
+  message: text("message"),
+  status: commerceQuoteStatusEnum("status").default("submitted").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+}, (table) => ({
+  requestSellerUnique: uniqueIndex("commerce_procurement_quotes_request_seller_uq").on(table.requestId, table.sellerUserId),
+  sellerIdx: index("commerce_procurement_quotes_seller_idx").on(table.sellerUserId),
+}));
+export type CommerceProcurementQuote = typeof commerceProcurementQuotes.$inferSelect;
+export type InsertCommerceProcurementQuote = typeof commerceProcurementQuotes.$inferInsert;
+
+export const commerceAccessGrants = pgTable("commerce_access_grants", {
+  id: serial("id").primaryKey(),
+  userId: integer("userId").notNull(),
+  shopifyProductId: varchar("shopifyProductId", { length: 255 }).notNull(),
+  productHandle: varchar("productHandle", { length: 255 }).notNull(),
+  grantType: varchar("grantType", { length: 32 }).notNull(),
+  resourceUrl: text("resourceUrl"),
+  expiresAt: timestamp("expiresAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  ownerProductUnique: uniqueIndex("commerce_access_grants_owner_product_uq").on(table.userId, table.shopifyProductId),
+  ownerIdx: index("commerce_access_grants_owner_idx").on(table.userId),
+}));
+export type CommerceAccessGrant = typeof commerceAccessGrants.$inferSelect;
+export type InsertCommerceAccessGrant = typeof commerceAccessGrants.$inferInsert;

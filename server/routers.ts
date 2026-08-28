@@ -4,6 +4,8 @@ import { z } from "zod";
 import { COOKIE_NAME } from "../shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
+import { commerceRouter } from "./routers/commerce";
+import { shopExtensionsRouter } from "./routers/shopExtensions";
 import { enterpriseProcedure, adminProcedure, superAdminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { storagePut, storageGetSignedUrl } from "./storage";
 import { getDb } from "./db";
@@ -311,6 +313,8 @@ const reviewCreateSchema = z.object({
 
 export const appRouter = router({
   system: systemRouter,
+  commerce: commerceRouter,
+  shopExtensions: shopExtensionsRouter,
 
   // ── Auth ──────────────────────────────────────────────────────────────────
   auth: router({

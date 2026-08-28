@@ -43,6 +43,11 @@ export const ENV = {
   supabaseAnonKey: process.env.SUPABASE_ANON_KEY ?? "",
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
   supabaseJwtSecret: process.env.SUPABASE_JWT_SECRET ?? "",
+
+  // Shopify Storefront API — catalog, cart, and hosted checkout.
+  shopifyStoreDomain: process.env.SHOPIFY_STORE_DOMAIN ?? "",
+  shopifyStorefrontApiAccessToken:
+    process.env.SHOPIFY_STOREFRONT_API_ACCESS_TOKEN ?? "",
 };
 
 /**

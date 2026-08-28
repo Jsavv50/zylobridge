@@ -1163,3 +1163,15 @@
 - [x] Preserve official ZYLOBRIDGE branding, truthful claims, WCAG-friendly keyboard/focus behavior, semantic structure, mobile containment, route-based loading, and no fabricated customer reviews, ratings, testimonials, or marketplace activity.
 - [x] Add focused regression coverage and validate TypeScript, full Vitest, client/server builds, route correctness, desktop/mobile visual QA, runtime logs, live production rendering, role switching, FAQ expansion, and console behavior.
 - [x] Save and auto-publish the verified How It Works checkpoint.
+
+## Attached specification: pasted_content_42.txt
+- [x] Read and normalize the complete 2,245-line Shop and Trade Marketplace specification.
+- [x] Audit the current `/shop` experience, routing, roles, auth, payments, Paystack, orders, schema, tRPC, notifications, storage, error boundaries, responsive components, and existing commerce logic.
+- [x] Establish the irreversible Shopify integration using a fresh development store because no existing Shopify store was specified, then document Shopify as the catalog, cart, checkout, order, payment, inventory, and fulfillment system of record.
+- [x] Define and implement the canonical commerce domain for 12 departments, products, variants, sellers/providers, inventory, pricing, compliance, product types, rentals, training, services, digital resources, recommendations, saved products, comparisons, and procurement/RFQ workflows without fabricated reviews or ratings.
+- [x] Build the premium responsive `/shop` homepage, department routes, search/filter/sort/pagination, product cards, product details, wishlist, comparison, cart, and role-aware navigation using official ZYLOBRIDGE branding.
+- [x] Implement secure Shopify cart and hosted checkout, order guidance, rental requests, digital access, service procurement, bulk procurement, RFQs, seller onboarding, refund/dispute guidance, and buyer protection using server-authoritative catalog data and idempotent mutations.
+- [x] Integrate notifications, dashboards, profile context, downstream procurement links, accessibility, restricted-goods controls, SEO, analytics hooks, loading/error/empty states, and mobile-first behavior.
+- [x] Add comprehensive regression coverage and validate TypeScript, full Vitest, client/server builds, Shopify/Supabase data compatibility, security, checkout integrity, responsive QA, and local runtime logs.
+- [ ] Verify the auto-published `/shop`, product detail, cart, procurement, seller, and admin routes in production without placing a real order or payment.
+- [ ] Save the final production-verified Shop and Trade Marketplace checkpoint.
