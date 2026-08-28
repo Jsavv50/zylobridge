@@ -1142,5 +1142,5 @@
 - [x] Audit and improve the dashboard recovery boundary with retry and safe navigation without masking the root hook-order fix.
 - [x] Add regression coverage for loading→authenticated, unauthenticated→authenticated, no-data→data, organization-missing→loaded, both routes, and role isolation.
 - [x] Validate available lint/type checks, full Vitest, client/server builds, runtime logs, and local refresh/direct navigation.
-- [ ] Verify live production behavior for `/employer` and `/dashboard/contractor` after auto-deployment.
-- [ ] Save the final verified React #310 fix checkpoint and confirm GitHub auto-push/deployment.
+- [x] Verify live production behavior for `/employer` and `/dashboard/contractor` after auto-deployment.
+- [x] Save the final verified React #310 fix checkpoint and confirm GitHub auto-push/deployment.

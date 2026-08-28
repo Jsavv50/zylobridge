@@ -21,3 +21,11 @@ A direct visit to `/dashboard/contractor` then performed one replacement navigat
 ## Validation
 
 The focused dashboard suites passed 9/9 assertions. The complete repository suite passed 61 files and 262 tests, TypeScript completed without errors, and both client and server production builds succeeded. The repository does not currently define a lint script, so no standalone lint command was available; TypeScript, Vitest, Vite/esbuild compilation, and `git diff --check` supplied the configured static and build validation. Existing non-blocking warnings remain for the pnpm configuration field and the large Vite entry chunk.
+
+## Live production verification
+
+After checkpoint `969925ca` auto-deployed, `https://zylobridge.com/employer` loaded the authenticated Contractor/Client application shell and the dashboard loading skeleton. The browser did not show React error #310, a hook-order warning, a blank page, or either recovery boundary. A subsequent settled-state check is required to confirm the data render, followed by verification of the legacy `/dashboard/contractor` redirect.
+
+The browser then completed an outstanding request using its cached pre-deployment `ClientDashboard-L6bwq0fl.js` and reproduced React #310 in the old global raw-stack fallback. Direct production asset inspection confirmed this was not the deployed release: the current live entry changed to `index-B5br_cXB.js`, references fixed `ClientDashboard-Ck52fI_W.js`, includes the new “Retry dashboard” boundary, and contains the legacy redirect. Cache-busted navigation to `/employer?release=969925ca` loaded the new application shell and loading state without the old fallback. Final settled-state and legacy-route checks remain pending.
+
+The cache-busted canonical route subsequently settled into the complete authenticated Employer Dashboard with real account context and truthful zero-data states. No React #310, hook-order warning, blank page, or recovery boundary appeared. A direct production visit to `https://zylobridge.com/dashboard/contractor?release=969925ca` performed one replacement redirect to `https://zylobridge.com/employer` and retained the authenticated shell. The legacy destination briefly showed its normal dashboard loading skeleton while refreshing data and did not loop or enter an error fallback.
