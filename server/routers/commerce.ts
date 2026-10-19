@@ -8,17 +8,20 @@
  */
 
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import {
   addCartLines,
   createCart,
   getCart,
   getCollectionByHandle,
   getProductByHandle,
+  getProductByVariantId,
   listCollections,
   listProducts,
   removeCartLines,
   updateCartLines,
 } from "../_core/shopify";
+import { getCommerceMode } from "@shared/commerce/classification";
 import { publicProcedure, router } from "../_core/trpc";
 
 const cartLineInputSchema = z.object({
@@ -35,7 +38,7 @@ const cartLineUpdateSchema = z.object({
 const catalogSearchSchema = z.object({
   q: z.string().trim().max(160).optional(),
   department: z.string().trim().max(80).optional(),
-  modality: z.enum(["all", "physical-goods", "rental", "training", "service", "digital"]).default("all"),
+  modality: z.enum(["all", "buy", "quote", "rental", "physical-goods", "training", "service", "digital"]).default("all"),
   minPrice: z.number().nonnegative().optional(),
   maxPrice: z.number().nonnegative().optional(),
   availableOnly: z.boolean().default(false),
@@ -46,6 +49,16 @@ const catalogSearchSchema = z.object({
 
 function productTagValue(tags: string[], key: string) {
   return tags.find((tag) => tag.startsWith(`${key}:`))?.slice(key.length + 1) ?? null;
+}
+
+async function assertRetailCartLines(lines: Array<{ variantId: string; quantity: number }>) {
+  const products = await Promise.all(lines.map((line) => getProductByVariantId(line.variantId)));
+  if (products.some((product) => getCommerceMode(product) !== "buy")) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Quote and rental listings cannot be added to the retail cart.",
+    });
+  }
 }
 
 export const commerceRouter = router({
@@ -76,11 +89,12 @@ export const commerceRouter = router({
           const searchable = [product.title, product.description, product.productType ?? "", product.vendor ?? "", ...product.tags].join(" ").toLocaleLowerCase();
           const department = productTagValue(product.tags, "department");
           const modality = productTagValue(product.tags, "modality") ?? "physical-goods";
+          const commerceMode = getCommerceMode(product);
           const minPrice = Number(product.priceRange.min.amount);
           const available = product.variants.some((variant) => variant.availableForSale);
           if (query && !searchable.includes(query)) return false;
           if (input.department && department !== input.department) return false;
-          if (input.modality !== "all" && modality !== input.modality) return false;
+          if (input.modality !== "all" && (["physical-goods", "training", "service", "digital"].includes(input.modality) ? modality !== input.modality : commerceMode !== input.modality)) return false;
           if (input.minPrice != null && minPrice < input.minPrice) return false;
           if (input.maxPrice != null && minPrice > input.maxPrice) return false;
           if (input.availableOnly && !available) return false;
@@ -95,10 +109,12 @@ export const commerceRouter = router({
         const counts = products.reduce((result, product) => {
           const department = productTagValue(product.tags, "department") ?? "other";
           const modality = productTagValue(product.tags, "modality") ?? "physical-goods";
+          const commerceMode = getCommerceMode(product);
           result.departments[department] = (result.departments[department] ?? 0) + 1;
           result.modalities[modality] = (result.modalities[modality] ?? 0) + 1;
+          result.commerceModes[commerceMode] = (result.commerceModes[commerceMode] ?? 0) + 1;
           return result;
-        }, { departments: {} as Record<string, number>, modalities: {} as Record<string, number> });
+        }, { departments: {} as Record<string, number>, modalities: {} as Record<string, number>, commerceModes: {} as Record<string, number> });
         return {
           items: filtered.slice(input.offset, input.offset + input.limit),
           total: filtered.length,
@@ -126,6 +142,7 @@ export const commerceRouter = router({
     create: publicProcedure
       .input(z.object({ lines: z.array(cartLineInputSchema).min(1).max(50) }))
       .mutation(async ({ input }) => {
+        await assertRetailCartLines(input.lines);
         return createCart(input.lines);
       }),
     get: publicProcedure
@@ -141,6 +158,7 @@ export const commerceRouter = router({
         })
       )
       .mutation(async ({ input }) => {
+        await assertRetailCartLines(input.lines);
         return addCartLines(input.cartId, input.lines);
       }),
     updateLines: publicProcedure

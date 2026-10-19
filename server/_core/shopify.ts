@@ -339,6 +339,20 @@ export async function getProductByHandle(handle: string): Promise<Product> {
   return normalizeProduct(data.productByHandle);
 }
 
+export async function getProductByVariantId(variantId: string): Promise<Product> {
+  const data = await storefrontFetch<{ productVariant: { product: RawProduct } | null }>(
+    `${PRODUCT_FRAGMENT}
+     query productByVariant($id: ID!) {
+       productVariant(id: $id) { product { ...ProductFields } }
+     }`,
+    { id: variantId }
+  );
+  if (!data.productVariant?.product) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Product variant not found." });
+  }
+  return normalizeProduct(data.productVariant.product);
+}
+
 export async function listCollections(first: number = 10): Promise<Collection[]> {
   const data = await storefrontFetch<{ collections: Edges<RawCollection> }>(
     `${COLLECTION_FRAGMENT}

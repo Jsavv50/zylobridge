@@ -36,17 +36,17 @@ describe("ZYLOBRIDGE Shop and Trade Marketplace", () => {
     expect(app).toContain("/shop/transactions");
   });
 
-  it("provides all twelve required departments and five transaction modes", () => {
+  it("provides all twelve required departments and the three commerce modes", () => {
     expect(catalog.match(/slug: /g)?.length).toBe(12);
     for (const department of ["tools-equipment", "construction-materials", "safety-ppe", "electrical", "plumbing-water", "energy-power", "vehicle-parts", "agriculture", "industrial-machinery", "training-certification", "digital-resources", "services"]) expect(catalog).toContain(department);
-    for (const modality of ["physical-goods", "rental", "training", "service", "digital"]) expect(shop + detail).toContain(modality);
+    for (const mode of ["buy", "quote", "rental"]) expect(shop + detail + catalog).toContain(mode);
   });
 
   it("uses the Shopify Storefront API as catalog, cart, checkout, price, inventory, order, and fulfillment authority", () => {
     expect(shop).toContain("Shopify-backed checkout");
     expect(cart).toContain("proceedToCheckout");
     expect(cartPage).toContain("Shipping, tax, payment method, final total, order creation, and confirmation are completed by Shopify");
-    expect(detail).toContain("Price, availability, cart, checkout, payment confirmation, order creation, tax, and fulfillment are authoritative in Shopify");
+    expect(detail).toContain("For retail listings, Price, availability, cart, checkout, payment confirmation, order creation, tax, and fulfillment are authoritative in Shopify");
     expect(commerceRouter).toContain("products: router");
     expect(commerceRouter).toContain("cart: router");
     expect(shop).toContain("finalized by the connected Shopify store in hosted checkout");

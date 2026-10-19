@@ -129,6 +129,7 @@ describe("commerce.products", () => {
 
 describe("commerce.cart", () => {
   it("creates a cart, normalizes lines, and appends channel=online_store to the checkout URL", async () => {
+    ok({ productVariant: { product: { ...rawProduct, tags: ["commerce:buy"] } } });
     ok({
       cartCreate: {
         cart: {
@@ -185,6 +186,7 @@ describe("commerce.cart", () => {
   });
 
   it("maps Shopify userErrors onto a BAD_REQUEST TRPCError", async () => {
+    ok({ productVariant: { product: { ...rawProduct, tags: ["commerce:buy"] } } });
     ok({
       cartCreate: {
         cart: null,

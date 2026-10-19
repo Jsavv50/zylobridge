@@ -15,6 +15,7 @@ import { getDb, createAuditLog } from "../db";
 import { getProductByHandle } from "../_core/shopify";
 import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
 import { createInAppNotification } from "../phase4";
+import { getCommerceMode } from "@shared/commerce/classification";
 
 const productReferenceSchema = z.object({
   shopifyProductId: z.string().min(8).max(255),
@@ -98,7 +99,7 @@ export const shopExtensionsRouter = router({
     }),
     create: protectedProcedure
       .input(productReferenceSchema.extend({
-        requestType: z.enum(["rental", "service", "training", "digital"]),
+        requestType: z.enum(["quote", "rental", "service", "training", "digital"]),
         quantity: z.number().int().min(1).max(100).default(1),
         startAt: z.string().datetime().optional(),
         endAt: z.string().datetime().optional(),
@@ -107,6 +108,13 @@ export const shopExtensionsRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         const product = await requireValidProduct(input);
+        const commerceMode = getCommerceMode(product);
+        if (input.requestType === "quote" && commerceMode !== "quote") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "This listing is not available for quote requests." });
+        }
+        if (input.requestType === "rental" && commerceMode !== "rental") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "This listing is not available for rental requests." });
+        }
         const startAt = input.startAt ? new Date(input.startAt) : null;
         const endAt = input.endAt ? new Date(input.endAt) : null;
         if (startAt && endAt && endAt <= startAt) {

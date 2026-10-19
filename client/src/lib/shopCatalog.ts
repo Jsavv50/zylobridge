@@ -1,4 +1,9 @@
 import type { Product } from "@shared/commerce/types";
+import {
+  COMMERCE_MODE_LABELS,
+  getCommerceMode,
+  type CommerceMode,
+} from "@shared/commerce/classification";
 
 export const SHOP_DEPARTMENTS = [
   { slug: "tools-equipment", label: "Tools & Equipment", description: "Power tools, hand tools, testing equipment, access gear, and trade essentials.", icon: "wrench" },
@@ -37,6 +42,9 @@ export function getProductModality(product: Product) {
   return tagValue(product, "modality") ?? "physical-goods";
 }
 
+export { getCommerceMode };
+export type { CommerceMode };
+
 export function getProductCondition(product: Product) {
   return tagValue(product, "condition") ?? null;
 }
@@ -55,6 +63,8 @@ export const PRODUCT_MODALITY_LABELS: Record<string, string> = {
   service: "Service",
   digital: "Digital",
 };
+
+export const COMMERCE_MODE_DISPLAY_LABELS = COMMERCE_MODE_LABELS;
 
 export const RESTRICTED_PRODUCT_TERMS = [
   "firearm", "ammunition", "explosive", "detonator", "controlled chemical", "medical drug", "stolen", "counterfeit",

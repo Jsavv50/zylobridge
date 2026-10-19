@@ -20,11 +20,9 @@ import { Link, useLocation } from "wouter";
 
 const MODALITIES = [
   { value: "all", label: "All types", description: "Everything available through the trade marketplace", icon: Grid3X3 },
-  { value: "physical-goods", label: "Buy products", description: "Shopify-backed products and variants", icon: Package },
-  { value: "rental", label: "Rent equipment", description: "Request equipment for a defined site period", icon: Wrench },
-  { value: "training", label: "Book training", description: "Professional development and practical instruction", icon: GraduationCap },
-  { value: "service", label: "Hire a service", description: "Installation, inspection, maintenance, and support", icon: BriefcaseBusiness },
-  { value: "digital", label: "Access resources", description: "Controlled digital grants after confirmation", icon: FileText },
+  { value: "buy", label: "Buy verified products", description: "Shopify-backed products with verified pricing", icon: Package },
+  { value: "quote", label: "Request a quote", description: "Machinery and unpriced items reviewed before pricing", icon: FileText },
+  { value: "rental", label: "Request rental", description: "Equipment hire with dates, site, and availability review", icon: Wrench },
 ] as const;
 
 function DepartmentIcon({ slug }: { slug: string }) {
@@ -68,7 +66,7 @@ export default function Shop() {
   const queryInput = useMemo(() => ({
     q: filters.q || undefined,
     department: filters.department || undefined,
-    modality: (["physical-goods", "rental", "training", "service", "digital"].includes(filters.modality) ? filters.modality : "all") as "all" | "physical-goods" | "rental" | "training" | "service" | "digital",
+    modality: (["buy", "quote", "rental"].includes(filters.modality) ? filters.modality : "all") as "all" | "buy" | "quote" | "rental",
     sort: (["newest", "price_asc", "price_desc", "title"].includes(filters.sort) ? filters.sort : "relevance") as "relevance" | "newest" | "price_asc" | "price_desc" | "title",
     availableOnly: false,
     limit: 24,
@@ -112,7 +110,7 @@ export default function Shop() {
             <div>
               <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-violet-400/20 bg-violet-500/10 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.18em] text-violet-200"><Sparkles className="h-3.5 w-3.5" /> Trade marketplace</div>
               <h1 className="max-w-4xl text-4xl font-black leading-[1.04] tracking-tight sm:text-6xl">Trade supply, services, and procurement—<span className="bg-gradient-to-r from-violet-300 to-teal-300 bg-clip-text text-transparent">in one protected workflow.</span></h1>
-              <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">Buy available products through Shopify checkout, request rentals and specialist services, source training and digital resources, or publish a structured procurement request.</p>
+              <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">Buy verified products through Shopify checkout, request a quote for machinery and unpriced items, or request rental equipment for a defined site period.</p>
               <div className="mt-8 flex flex-wrap gap-3"><Button asChild size="lg" className="h-12 bg-violet-600 px-6 text-white hover:bg-violet-500"><a href="#catalog">Browse the catalog <ArrowRight className="ml-2 h-4 w-4" /></a></Button><Button asChild size="lg" variant="outline" className="h-12 border-white/15 bg-white/[0.03] px-6 text-white"><Link href="/shop/procurement">Request a quote</Link></Button><Button asChild size="lg" variant="outline" className="h-12 border-white/15 bg-white/[0.03] px-6 text-white"><Link href="/shop/seller">Become a seller</Link></Button></div>
               <div className="mt-8 grid max-w-xl grid-cols-3 gap-3 text-center">{[{ value: products.data?.total ?? "—", label: "live listings" }, { value: "12", label: "departments" }, { value: "5", label: "product modes" }].map((metric) => <div key={metric.label} className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-4"><p className="text-xl font-black text-white">{metric.value}</p><p className="mt-1 text-xs text-slate-500">{metric.label}</p></div>)}</div>
             </div>
