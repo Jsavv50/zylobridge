@@ -16,7 +16,9 @@ export const COMMERCE_MODE_DESCRIPTIONS: Record<CommerceMode, string> = {
 };
 
 function tagValue(tags: string[], prefix: string) {
-  return tags.find((tag) => tag.toLowerCase().startsWith(`${prefix}:`))?.slice(prefix.length + 1).toLowerCase() ?? null;
+  const normalizedPrefix = `${prefix.toLowerCase()}:`;
+  const tag = tags.find((value) => value.trim().toLowerCase().startsWith(normalizedPrefix));
+  return tag ? tag.trim().slice(normalizedPrefix.length).trim().toLowerCase() : null;
 }
 
 function hasPositivePrice(product: Product) {

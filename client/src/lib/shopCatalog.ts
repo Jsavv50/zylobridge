@@ -23,7 +23,9 @@ export const SHOP_DEPARTMENTS = [
 export type ShopDepartmentSlug = (typeof SHOP_DEPARTMENTS)[number]["slug"];
 
 export function tagValue(product: Pick<Product, "tags">, prefix: string) {
-  return product.tags.find((tag) => tag.startsWith(`${prefix}:`))?.slice(prefix.length + 1) ?? null;
+  const normalizedPrefix = `${prefix.toLowerCase()}:`;
+  const tag = product.tags.find((value) => value.trim().toLowerCase().startsWith(normalizedPrefix));
+  return tag ? tag.trim().slice(normalizedPrefix.length).trim().toLowerCase() : null;
 }
 
 export function getProductDepartment(product: Product): ShopDepartmentSlug | "other" {

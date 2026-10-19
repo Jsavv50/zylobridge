@@ -128,6 +128,21 @@ describe("commerce.products", () => {
 });
 
 describe("commerce.cart", () => {
+  it("rejects quote products before they reach Shopify cart creation", async () => {
+    ok({ productVariant: { product: { ...rawProduct, tags: ["commerce:quote"] } } });
+    const caller = appRouter.createCaller(makeCtx());
+
+    await expect(
+      caller.commerce.cart.create({
+        lines: [{ variantId: rawVariant.id, quantity: 1 }],
+      })
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      message: "Quote and rental listings cannot be added to the retail cart.",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("creates a cart, normalizes lines, and appends channel=online_store to the checkout URL", async () => {
     ok({ productVariant: { product: { ...rawProduct, tags: ["commerce:buy"] } } });
     ok({

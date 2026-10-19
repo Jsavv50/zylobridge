@@ -48,7 +48,9 @@ const catalogSearchSchema = z.object({
 });
 
 function productTagValue(tags: string[], key: string) {
-  return tags.find((tag) => tag.startsWith(`${key}:`))?.slice(key.length + 1) ?? null;
+  const prefix = `${key.toLowerCase()}:`;
+  const tag = tags.find((value) => value.trim().toLowerCase().startsWith(prefix));
+  return tag ? tag.trim().slice(prefix.length).trim().toLowerCase() : null;
 }
 
 async function assertRetailCartLines(lines: Array<{ variantId: string; quantity: number }>) {
@@ -59,6 +61,19 @@ async function assertRetailCartLines(lines: Array<{ variantId: string; quantity:
       message: "Quote and rental listings cannot be added to the retail cart.",
     });
   }
+}
+
+async function assertRetailCart(cartId: string) {
+  const cart = await getCart(cartId);
+  if (!cart) throw new TRPCError({ code: "NOT_FOUND", message: "Cart not found." });
+  const products = await Promise.all(cart.items.map((item) => getProductByVariantId(item.variantId)));
+  if (products.some((product) => getCommerceMode(product) !== "buy")) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "This cart contains a quote or rental listing and cannot be used for retail checkout.",
+    });
+  }
+  return cart;
 }
 
 export const commerceRouter = router({
@@ -148,7 +163,7 @@ export const commerceRouter = router({
     get: publicProcedure
       .input(z.object({ cartId: z.string().min(1) }))
       .query(async ({ input }) => {
-        return getCart(input.cartId);
+        return assertRetailCart(input.cartId);
       }),
     addLines: publicProcedure
       .input(
@@ -158,6 +173,7 @@ export const commerceRouter = router({
         })
       )
       .mutation(async ({ input }) => {
+        await assertRetailCart(input.cartId);
         await assertRetailCartLines(input.lines);
         return addCartLines(input.cartId, input.lines);
       }),
@@ -169,6 +185,7 @@ export const commerceRouter = router({
         })
       )
       .mutation(async ({ input }) => {
+        await assertRetailCart(input.cartId);
         // qty 0 means "remove this line" — split the request so the client
         // never has to call two procedures for a single user gesture.
         const toRemove = input.lines.filter(l => l.quantity === 0).map(l => l.lineId);
