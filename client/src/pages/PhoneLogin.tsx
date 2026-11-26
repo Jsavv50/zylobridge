@@ -10,12 +10,16 @@ import { Loader2, Phone, ShieldCheck, ArrowLeft, KeyRound } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import { resolvePostAuthenticationDestination } from "@shared/onboarding";
 
 type Step = "phone" | "otp" | "name";
 
 export default function PhoneLogin() {
   const [, navigate] = useLocation();
-  const { isAuthenticated, refresh } = useAuth();
+  const { isAuthenticated, user, refresh } = useAuth();
+  const requestedDestination = typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search).get("next")
+    : null;
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
@@ -31,8 +35,10 @@ export default function PhoneLogin() {
   }, [countdown]);
 
   useEffect(() => {
-    if (isAuthenticated) navigate("/");
-  }, [isAuthenticated, navigate]);
+    if (isAuthenticated && user) {
+      navigate(resolvePostAuthenticationDestination(user, requestedDestination));
+    }
+  }, [isAuthenticated, navigate, requestedDestination, user]);
 
   const sendOtpMutation = trpc.phoneAuth.sendOtp.useMutation({
     onSuccess: () => {
@@ -51,7 +57,7 @@ export default function PhoneLogin() {
         return;
       }
       toast.success("Phone verified! Welcome to ZYLOBRIDGE.");
-      navigate("/");
+      navigate(resolvePostAuthenticationDestination(authenticatedUser, requestedDestination));
     },
     onError: (err) => toast.error(err.message || "Invalid OTP. Please try again."),
   });

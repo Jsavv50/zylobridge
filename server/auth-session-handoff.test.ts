@@ -91,9 +91,31 @@ describe("production auth session handoff architecture", () => {
 
   it("uses Railway as the production API fallback when VITE_API_URL is absent", () => {
     const main = readProjectFile("client/src/main.tsx");
+    const signIn = readProjectFile("client/src/pages/SignIn.tsx");
+    const supabase = readProjectFile("client/src/lib/supabase.ts");
 
     expect(main).toContain("import.meta.env.PROD ? \"https://api.zylobridge.com\" : \"\"");
     expect(main).toContain("url: `${API_URL}/api/trpc`");
     expect(main).toContain('credentials: "include"');
+    expect(signIn).toContain("import.meta.env.PROD ? \"https://api.zylobridge.com\" : \"\"");
+    expect(signIn).toContain("const targetUrl = `${API_URL}/api/auth/google");
+    expect(supabase).toContain("import.meta.env.PROD ? \"https://api.zylobridge.com\" : \"\"");
+    expect(supabase).toContain("/api/realtime/token");
+  });
+
+  it("keeps the dedicated phone route on role-aware post-auth navigation", () => {
+    const phoneLogin = readProjectFile("client/src/pages/PhoneLogin.tsx");
+
+    expect(phoneLogin).toContain("resolvePostAuthenticationDestination");
+    expect(phoneLogin).toContain("requestedDestination");
+    expect(phoneLogin).not.toContain('navigate("/")');
+  });
+
+  it("normalizes email OTP identities before Supabase and local persistence", () => {
+    const routers = readProjectFile("server/routers.ts");
+
+    expect(routers).toContain("const email = input.email.trim().toLowerCase();");
+    expect(routers).toContain("email,");
+    expect(routers).toContain("upsertUserByEmail(email, input.name)");
   });
 });

@@ -259,16 +259,17 @@ export function registerGoogleAuthRoutes(app: Express) {
     }
     console.log(`[GoogleAuth] [${oauthRequestId}] 2. State validated`);
 
-    const clientDb = await db.getDb();
-    if (!clientDb) {
-      console.error(`[GoogleAuth] [${oauthRequestId}] Database connection unavailable in callback`);
-      res.redirect(302, `${frontend}/sign-in?error=database_unavailable`);
-      return;
-    }
-
     const authCodeHash = hashToken(code);
+    let clientDb: Awaited<ReturnType<typeof db.getDb>> | null = null;
 
     try {
+      clientDb = await db.getDb();
+      if (!clientDb) {
+        console.error(`[GoogleAuth] [${oauthRequestId}] Database connection unavailable in callback`);
+        res.redirect(302, `${frontend}/sign-in?error=database_unavailable`);
+        return;
+      }
+
       // 3. Atomically claim authorization code
       console.log(`[GoogleAuth] [${oauthRequestId}] 3. Checking transaction and claiming auth code`);
       
@@ -368,11 +369,13 @@ export function registerGoogleAuthRoutes(app: Express) {
       const duration = Date.now() - startTime;
       console.error(`[GoogleAuth] [${oauthRequestId}] Callback failed after ${duration}ms with error:`, err);
 
-      try {
-        await clientDb.update(oauthTransactions)
-          .set({ status: "failed" })
-          .where(eq(oauthTransactions.stateHash, decoded.stateHash));
-      } catch {}
+      if (clientDb) {
+        try {
+          await clientDb.update(oauthTransactions)
+            .set({ status: "failed" })
+            .where(eq(oauthTransactions.stateHash, decoded.stateHash));
+        } catch {}
+      }
 
       const errMsg = err instanceof Error ? encodeURIComponent(err.message.slice(0, 120)) : "unknown";
       const isInvalidGrant = err instanceof Error && err.message.includes("invalid_grant");

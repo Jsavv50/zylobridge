@@ -65,6 +65,7 @@ export const ENV = {
  */
 export function getBaseUrl(): string {
   if (ENV.appBaseUrl) return ENV.appBaseUrl.replace(/\/$/, "");
+  if (ENV.isProduction) return "https://api.zylobridge.com";
   return "http://localhost:3000";
 }
 

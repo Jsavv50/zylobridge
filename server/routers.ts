@@ -1645,6 +1645,7 @@ export const appRouter = router({
         email: z.string().email("Invalid email address."),
       }))
       .mutation(async ({ input }) => {
+        const email = input.email.trim().toLowerCase();
         // Use Supabase Auth native OTP — Supabase sends the email via configured SMTP (Resend)
         const anonClient = getSupabasePublic();
         if (!anonClient) {
@@ -1655,7 +1656,7 @@ export const appRouter = router({
           });
         }
         const { error: otpError } = await anonClient.auth.signInWithOtp({
-          email: input.email,
+          email,
           options: { shouldCreateUser: true },
         });
         if (otpError) {
@@ -1665,7 +1666,7 @@ export const appRouter = router({
             message: otpError.message,
           });
         }
-        console.log(`[EmailAuth] OTP email dispatched via Supabase Auth for ${input.email}`);
+        console.log(`[EmailAuth] OTP email dispatched via Supabase Auth for ${email}`);
         return { success: true, message: "OTP sent to your email address." };
       }),
     verifyOtp: publicProcedure
@@ -1675,6 +1676,7 @@ export const appRouter = router({
         name: z.string().min(2).max(100).trim().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        const email = input.email.trim().toLowerCase();
         // Each request gets a unique ID so duplicate requests are immediately visible in logs
         const requestId = Math.random().toString(36).slice(2, 10).toUpperCase();
         console.log(`[EmailAuth] verifyOtp request ${requestId} started — email present: ${!!input.email}, token length: ${input.otp?.length ?? 0}`);
@@ -1684,7 +1686,7 @@ export const appRouter = router({
         }
         console.log(`[EmailAuth] verifyOtp request ${requestId} calling Supabase`);
         const { data: verifyData, error: verifyError } = await anonClient.auth.verifyOtp({
-          email: input.email,
+          email,
           token: input.otp,
           type: "email",
         });
@@ -1695,7 +1697,7 @@ export const appRouter = router({
         }
         console.log(`[EmailAuth] verifyOtp request ${requestId} SUCCESS — user present: ${!!verifyData.user}`);
         // Upsert user in local DB and issue JWT session cookie
-        const user = await upsertUserByEmail(input.email, input.name);
+        const user = await upsertUserByEmail(email, input.name);
         const { sdk } = await import("./_core/sdk");
         const token = await sdk.createSessionToken(user!.openId, { name: user!.name ?? "" });
         const { COOKIE_NAME: CNAME } = await import("../shared/const");
